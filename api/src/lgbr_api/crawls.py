@@ -414,24 +414,18 @@ def _get_latest_error() -> dict[str, Any] | None:
 
 
 def _db_connect_info() -> dict[str, str]:
-    """Connection details for the unblock SQL (local ops monitor)."""
+    """Non-secret connection details for unblock instructions."""
     url = database_url()
     parsed = urlparse(url)
     host = parsed.hostname or os.environ.get("POSTGRES_HOST", "")
     port = str(parsed.port or os.environ.get("POSTGRES_PORT", ""))
     db = (parsed.path or "/").lstrip("/") or os.environ.get("POSTGRES_DB", "")
     user = unquote(parsed.username or "") or os.environ.get("POSTGRES_USER", "")
-    password = unquote(parsed.password or "") or os.environ.get(
-        "POSTGRES_PASSWORD", ""
-    )
-    psql = f"psql postgresql://{user}:{password}@{host}:{port}/{db}"
     return {
         "host": host,
         "port": port,
         "database": db,
         "user": user,
-        "password": password,
-        "psql": psql,
     }
 
 
@@ -450,15 +444,12 @@ def _unblock_directions(crawl_id: str) -> dict[str, Any]:
         "db": db,
         "unblock_sql": sql,
         "unblock_text": (
-            f"# DB 접속\n"
+            f"# DB 접속 (비밀번호는 서버 .env 의 "
+            f"POSTGRES_PASSWORD / DATABASE_URL 참고)\n"
             f"host={db['host']}\n"
             f"port={db['port']}\n"
             f"database={db['database']}\n"
             f"user={db['user']}\n"
-            f"password={db['password']}\n"
-            f"\n"
-            f"# 접속 후 실행\n"
-            f"{db['psql']}\n"
             f"\n"
             f"# 재실행 허용: fnguide_crawls.state 를 error → ended\n"
             f"{sql}\n"

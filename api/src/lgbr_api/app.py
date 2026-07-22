@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from lgbr_api.auth import ApiKeyMiddleware
 from lgbr_api.crawls import get_current_crawl, request_stop, start_crawl
 from lgbr_api.db import load_database_env
 from lgbr_api.sessions import get_current_session, list_history
@@ -58,7 +60,8 @@ def create_app() -> Starlette:
             Route("/api/crawl", crawl),
             Route("/api/crawl/start", crawl_start, methods=["POST"]),
             Route("/api/crawl/stop", crawl_stop, methods=["POST"]),
-        ]
+        ],
+        middleware=[Middleware(ApiKeyMiddleware)],
     )
 
 

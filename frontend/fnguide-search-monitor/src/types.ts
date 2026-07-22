@@ -48,8 +48,6 @@ export type DbConnectInfo = {
   port: string
   database: string
   user: string
-  password: string
-  psql: string
 }
 
 export type CrawlResponse = {
