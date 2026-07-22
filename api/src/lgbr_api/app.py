@@ -129,6 +129,7 @@ async def reports(request: Request) -> JSONResponse:
         offset = 0
     result = list_reports(
         status=request.query_params.get("status"),
+        quality=request.query_params.get("quality"),
         q=request.query_params.get("q"),
         crawl_id=request.query_params.get("crawl_id"),
         sort=request.query_params.get("sort"),

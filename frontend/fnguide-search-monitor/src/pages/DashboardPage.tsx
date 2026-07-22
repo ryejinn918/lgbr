@@ -148,34 +148,45 @@ export function DashboardPage() {
             <table className="report-table">
               <thead>
                 <tr>
-                  <th>상태</th>
-                  <th>제목</th>
-                  <th>증권사</th>
-                  <th>발행일</th>
-                  <th>페이지</th>
-                  <th>rpt_id</th>
-                  <th>파일</th>
-                  <th title="목록에서 마지막으로 본 시각">최근</th>
+                  <th className="col-status">상태</th>
+                  <th className="col-title">제목</th>
+                  <th className="col-provider">증권사</th>
+                  <th className="col-published">발행일</th>
+                  <th className="col-pages">페이지</th>
+                  <th className="col-rpt">rpt_id</th>
+                  <th className="col-file">파일</th>
+                  <th className="col-seen" title="목록에서 마지막으로 본 시각">
+                    최근
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {activeReports.items.map((item) => (
                   <tr key={item.id}>
-                    <td>
+                    <td className="col-status">
                       <span className={`status-pill status-${item.status}`}>
                         {STATUS_LABEL[item.status] || item.status}
                       </span>
                     </td>
-                    <td className="report-title">{item.title}</td>
-                    <td>{item.provider || '—'}</td>
-                    <td className="mono">
+                    <td className="col-title report-title" title={item.title}>
+                      {item.title}
+                    </td>
+                    <td
+                      className="col-provider"
+                      title={item.provider || undefined}
+                    >
+                      {item.provider || '—'}
+                    </td>
+                    <td className="col-published mono">
                       {formatPublishedAt(item.published_at)}
                     </td>
-                    <td className="mono report-pages">
+                    <td className="col-pages mono report-pages">
                       {item.page_count != null ? item.page_count : '—'}
                     </td>
-                    <td className="mono">{item.source_key}</td>
-                    <td className="report-file">
+                    <td className="col-rpt mono" title={item.source_key}>
+                      {item.source_key}
+                    </td>
+                    <td className="col-file">
                       {item.has_file ? (
                         <a
                           className="report-file-link"
@@ -189,7 +200,10 @@ export function DashboardPage() {
                         '—'
                       )}
                     </td>
-                    <td title={item.last_seen_at || undefined}>
+                    <td
+                      className="col-seen"
+                      title={item.last_seen_at || undefined}
+                    >
                       {formatRelative(item.last_seen_at)}
                     </td>
                   </tr>

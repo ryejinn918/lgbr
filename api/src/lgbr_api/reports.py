@@ -13,6 +13,7 @@ from lgbr_api.db import connect
 VALID_STATUSES = frozenset(
     {"listed", "blind", "downloaded", "no_download", "failed"}
 )
+VALID_QUALITIES = frozenset({"pass", "fail", "pending"})
 VALID_SORTS = frozenset({"published_at", "page_count", "last_seen_at"})
 SORT_SQL = {
     "published_at": "published_at DESC NULLS LAST, id DESC",
@@ -46,6 +47,8 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         attrs = {}
     provider = attrs.get("provider")
     provider_s = str(provider).strip() if provider else None
+    qp = row.get("quality_pass")
+    quality = "pending" if qp is None else ("pass" if qp else "fail")
     return {
         "id": str(row["id"]),
         "source_key": row.get("source_key"),
@@ -63,6 +66,13 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         "provider": provider_s or None,
         "page_count": row.get("page_count"),
         "crawl_id": str(row["crawl_id"]) if row.get("crawl_id") else None,
+        "quality": quality,
+        "quality_pass": qp,
+        "quality_scope": row.get("quality_scope"),
+        "quality_confidence": row.get("quality_confidence"),
+        "quality_at": (
+            row["quality_at"].isoformat() if row.get("quality_at") else None
+        ),
     }
 
 
@@ -86,9 +96,28 @@ def _status_counts(cur: Any) -> dict[str, int]:
     return counts
 
 
+def _quality_counts(cur: Any) -> dict[str, int]:
+    cur.execute(
+        """
+        SELECT
+          count(*) FILTER (WHERE quality_pass IS TRUE)::int AS pass,
+          count(*) FILTER (WHERE quality_pass IS FALSE)::int AS fail,
+          count(*) FILTER (WHERE quality_pass IS NULL)::int AS pending
+        FROM reports
+        """
+    )
+    row = cur.fetchone() or {}
+    return {
+        "pass": int(row.get("pass") or 0),
+        "fail": int(row.get("fail") or 0),
+        "pending": int(row.get("pending") or 0),
+    }
+
+
 def list_reports(
     *,
     status: str | None = None,
+    quality: str | None = None,
     q: str | None = None,
     crawl_id: str | None = None,
     sort: str | None = None,
@@ -107,6 +136,7 @@ def list_reports(
             "items": [],
             "total": 0,
             "counts": {},
+            "quality_counts": {},
             "limit": limit,
             "offset": offset,
             "sort": sort_key,
@@ -123,11 +153,29 @@ def list_reports(
                 "items": [],
                 "total": 0,
                 "counts": {},
+                "quality_counts": {},
                 "limit": limit,
                 "offset": offset,
                 "sort": sort_key,
             }
         status_filter = status
+
+    quality_filter: str | None = None
+    if quality and quality != "all":
+        if quality not in VALID_QUALITIES:
+            return {
+                "ok": False,
+                "message": f"invalid quality: {quality}",
+                "status": 400,
+                "items": [],
+                "total": 0,
+                "counts": {},
+                "quality_counts": {},
+                "limit": limit,
+                "offset": offset,
+                "sort": sort_key,
+            }
+        quality_filter = quality
 
     crawl_uuid: str | None = None
     if crawl_id:
@@ -141,6 +189,7 @@ def list_reports(
                 "items": [],
                 "total": 0,
                 "counts": {},
+                "quality_counts": {},
                 "limit": limit,
                 "offset": offset,
                 "sort": sort_key,
@@ -153,6 +202,12 @@ def list_reports(
     if status_filter:
         where.append("status = %s")
         params.append(status_filter)
+    if quality_filter == "pass":
+        where.append("quality_pass IS TRUE")
+    elif quality_filter == "fail":
+        where.append("quality_pass IS FALSE")
+    elif quality_filter == "pending":
+        where.append("quality_pass IS NULL")
     if crawl_uuid:
         where.append("crawl_id = %s")
         params.append(crawl_uuid)
@@ -167,6 +222,7 @@ def list_reports(
     with connect() as conn:
         with conn.cursor() as cur:
             counts = _status_counts(cur)
+            quality_counts = _quality_counts(cur)
             cur.execute(
                 f"SELECT count(*)::int AS n FROM reports{where_sql}",
                 params,
@@ -176,7 +232,8 @@ def list_reports(
                 f"""
                 SELECT id, source_key, title, status, file_path, file_name,
                        last_seen_at, downloaded_at, published_at, page_count,
-                       crawl_id, attrs
+                       crawl_id, attrs,
+                       quality_pass, quality_scope, quality_confidence, quality_at
                 FROM reports
                 {where_sql}
                 ORDER BY {order_sql}
@@ -191,6 +248,7 @@ def list_reports(
         "items": items,
         "total": total,
         "counts": counts,
+        "quality_counts": quality_counts,
         "limit": limit,
         "offset": offset,
         "sort": sort_key,

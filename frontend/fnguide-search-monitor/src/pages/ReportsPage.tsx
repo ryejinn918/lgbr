@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
-import { STATUS_LABEL, formatPublishedAt, formatRelative } from '../lib/format'
 import {
+  QUALITY_LABEL,
+  STATUS_LABEL,
+  formatPublishedAt,
+  formatRelative,
+} from '../lib/format'
+import {
+  QUALITY_FILTERS,
   STATUS_FILTERS,
   isReportFiltersDirty,
   parseReportFilters,
@@ -11,6 +17,7 @@ import {
   resolveReportSort,
   serializeReportFilters,
   withPage,
+  withQuality,
   withQuery,
   withSort,
   withStatus,
@@ -39,6 +46,7 @@ export function ReportsPage() {
   const query = useMemo(
     () => ({
       status: filters.status,
+      quality: filters.quality,
       q: filters.q,
       sort: resolveReportSort(filters.sort),
       limit: 30,
@@ -52,7 +60,6 @@ export function ReportsPage() {
   function commit(next: ReportFilters) {
     setQDraft(next.q)
     const serialized = serializeReportFilters(next)
-    // 빈 쿼리는 객체로 넘겨 RR가 search를 확실히 지우게 함
     if ([...serialized.keys()].length === 0) {
       setParams({}, { replace: true })
       return
@@ -98,10 +105,27 @@ export function ReportsPage() {
             className="filter-chip filter-reset"
             disabled={!dirty}
             onClick={() => commit(resetReportFilters())}
-            title="상태·검색·정렬·페이지 초기화"
+            title="상태·품질·검색·정렬·페이지 초기화"
           >
             초기화
           </button>
+        </div>
+        <div className="filter-row">
+          {QUALITY_FILTERS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={`filter-chip${filters.quality === key ? ' active' : ''}`}
+              onClick={() => commit(withQuality(filters, key))}
+            >
+              {QUALITY_LABEL[key]}{' '}
+              {key === 'all'
+                ? (reports.qualityCounts.pass ?? 0) +
+                  (reports.qualityCounts.fail ?? 0) +
+                  (reports.qualityCounts.pending ?? 0)
+                : (reports.qualityCounts[key] ?? 0)}
+            </button>
+          ))}
         </div>
         <form className="search-row" onSubmit={onSearch}>
           <input
@@ -140,10 +164,11 @@ export function ReportsPage() {
             <table className="report-table">
               <thead>
                 <tr>
-                  <th>상태</th>
-                  <th>제목</th>
-                  <th>증권사</th>
-                  <th>
+                  <th className="col-status">상태</th>
+                  <th className="col-quality">품질</th>
+                  <th className="col-title">제목</th>
+                  <th className="col-provider">증권사</th>
+                  <th className="col-published">
                     <button
                       type="button"
                       className={`sort-th${filters.sort === 'published_at' ? ' active' : ''}`}
@@ -153,7 +178,7 @@ export function ReportsPage() {
                       발행일{filters.sort === 'published_at' ? ' ↓' : ''}
                     </button>
                   </th>
-                  <th>
+                  <th className="col-pages">
                     <button
                       type="button"
                       className={`sort-th${filters.sort === 'page_count' ? ' active' : ''}`}
@@ -163,9 +188,9 @@ export function ReportsPage() {
                       페이지{filters.sort === 'page_count' ? ' ↓' : ''}
                     </button>
                   </th>
-                  <th>rpt_id</th>
-                  <th>파일</th>
-                  <th>
+                  <th className="col-rpt">rpt_id</th>
+                  <th className="col-file">파일</th>
+                  <th className="col-seen">
                     <button
                       type="button"
                       className={`sort-th${filters.sort === 'last_seen_at' ? ' active' : ''}`}
@@ -178,41 +203,68 @@ export function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {reports.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <span className={`status-pill status-${item.status}`}>
-                        {STATUS_LABEL[item.status] || item.status}
-                      </span>
-                    </td>
-                    <td className="report-title">{item.title}</td>
-                    <td>{item.provider || '—'}</td>
-                    <td className="mono">
-                      {formatPublishedAt(item.published_at)}
-                    </td>
-                    <td className="mono report-pages">
-                      {item.page_count != null ? item.page_count : '—'}
-                    </td>
-                    <td className="mono">{item.source_key}</td>
-                    <td className="report-file">
-                      {item.has_file ? (
-                        <a
-                          className="report-file-link"
-                          href={`/api/reports/${item.id}/file`}
-                          download={item.file_name || undefined}
-                          title={item.file_name || '다운로드'}
+                {reports.items.map((item) => {
+                  const q = item.quality || 'pending'
+                  return (
+                    <tr key={item.id}>
+                      <td className="col-status">
+                        <span className={`status-pill status-${item.status}`}>
+                          {STATUS_LABEL[item.status] || item.status}
+                        </span>
+                      </td>
+                      <td className="col-quality">
+                        <span
+                          className={`status-pill quality-${q}`}
+                          title={
+                            item.quality_scope
+                              ? `scope=${item.quality_scope}`
+                              : undefined
+                          }
                         >
-                          {item.file_name || '파일'}
-                        </a>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td title={item.last_seen_at || undefined}>
-                      {formatRelative(item.last_seen_at)}
-                    </td>
-                  </tr>
-                ))}
+                          {QUALITY_LABEL[q] || q}
+                        </span>
+                      </td>
+                      <td className="col-title report-title" title={item.title}>
+                        {item.title}
+                      </td>
+                      <td
+                        className="col-provider"
+                        title={item.provider || undefined}
+                      >
+                        {item.provider || '—'}
+                      </td>
+                      <td className="col-published mono">
+                        {formatPublishedAt(item.published_at)}
+                      </td>
+                      <td className="col-pages mono report-pages">
+                        {item.page_count != null ? item.page_count : '—'}
+                      </td>
+                      <td className="col-rpt mono" title={item.source_key}>
+                        {item.source_key}
+                      </td>
+                      <td className="col-file">
+                        {item.has_file ? (
+                          <a
+                            className="report-file-link"
+                            href={`/api/reports/${item.id}/file`}
+                            download={item.file_name || undefined}
+                            title={item.file_name || '다운로드'}
+                          >
+                            {item.file_name || '파일'}
+                          </a>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td
+                        className="col-seen"
+                        title={item.last_seen_at || undefined}
+                      >
+                        {formatRelative(item.last_seen_at)}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

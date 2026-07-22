@@ -122,6 +122,8 @@ export type ReportStatus =
   | 'no_download'
   | 'failed'
 
+export type ReportQuality = 'pass' | 'fail' | 'pending'
+
 export type ReportRecord = {
   id: string
   source_key: string
@@ -135,6 +137,11 @@ export type ReportRecord = {
   provider?: string | null
   page_count?: number | null
   crawl_id?: string | null
+  quality?: ReportQuality
+  quality_pass?: boolean | null
+  quality_scope?: string | null
+  quality_confidence?: number | null
+  quality_at?: string | null
 }
 
 export type ReportCounts = {
@@ -147,11 +154,19 @@ export type ReportCounts = {
   [key: string]: number
 }
 
+export type QualityCounts = {
+  pass: number
+  fail: number
+  pending: number
+  [key: string]: number
+}
+
 export type ReportsResponse = {
   ok?: boolean
   items: ReportRecord[]
   total: number
   counts: ReportCounts
+  quality_counts?: QualityCounts
   limit: number
   offset: number
   message?: string

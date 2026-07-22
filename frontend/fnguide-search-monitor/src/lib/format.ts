@@ -25,6 +25,13 @@ export const STATUS_LABEL: Record<string, string> = {
   failed: '실패',
 }
 
+export const QUALITY_LABEL: Record<string, string> = {
+  all: '품질전체',
+  pass: '통과',
+  fail: '탈락',
+  pending: '미감사',
+}
+
 export function formatTime(value: string | null | undefined): string {
   if (!value) return '—'
   const ms = Date.parse(value)
