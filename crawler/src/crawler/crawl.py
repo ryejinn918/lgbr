@@ -40,6 +40,13 @@ def run_crawl(
             raise CrawlStateError("A crawl is already running")
         if sessions_store.get_open_session():
             raise CrawlStateError("An account session is already open")
+        blocked = crawls_store.get_latest_blocking_error()
+        if blocked:
+            raise CrawlStateError(
+                "Previous crawl ended in error. After investigation run: "
+                "UPDATE fnguide_crawls SET state = 'ended' "
+                f"WHERE id = '{blocked['id']}' AND state = 'error';"
+            )
         crawl = crawls_store.create_crawl()
     crawl_id = str(crawl["id"])
     sess = FnguideSession(

@@ -44,6 +44,19 @@ function isStale(status: SessionResponse, now: number): boolean {
   return now - ms > STALE_AFTER_MS
 }
 
+function applyCrawl(data: CrawlResponse): CrawlResponse {
+  return {
+    state: data.state,
+    label: data.label,
+    crawl: data.crawl ?? null,
+    session: data.session ?? EMPTY_SESSION,
+    can_start: data.can_start ?? false,
+    unblock_sql: data.unblock_sql ?? null,
+    db: data.db ?? null,
+    unblock_text: data.unblock_text ?? null,
+  }
+}
+
 export function useSessionStatus(): SessionView {
   const [crawl, setCrawl] = useState<CrawlResponse>(EMPTY_CRAWL)
   const [status, setStatus] = useState<SessionResponse>(EMPTY_SESSION)
@@ -67,7 +80,7 @@ export function useSessionStatus(): SessionView {
         const crawlData = (await crawlRes.json()) as CrawlResponse
         const historyData = (await historyRes.json()) as HistoryResponse
         if (cancelled) return
-        setCrawl(crawlData)
+        setCrawl(applyCrawl(crawlData))
         setStatus(crawlData.session ?? EMPTY_SESSION)
         setHistory(historyData.items ?? [])
         setFetchError(null)
@@ -101,13 +114,7 @@ export function useSessionStatus(): SessionView {
       if (!res.ok) {
         throw new Error(data.message || `HTTP ${res.status}`)
       }
-      setCrawl({
-        state: data.state ?? data.crawl?.state ?? 'starting',
-        label: data.label,
-        crawl: data.crawl ?? null,
-        session: data.session ?? EMPTY_SESSION,
-        can_start: data.can_start ?? false,
-      })
+      setCrawl(applyCrawl(data))
       if (data.session) setStatus(data.session)
     } finally {
       setRequestingStart(false)
@@ -119,18 +126,8 @@ export function useSessionStatus(): SessionView {
     try {
       const res = await fetch('/api/crawl/stop', { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = (await res.json()) as CrawlResponse & {
-        crawl?: CrawlResponse['crawl']
-        session?: SessionResponse
-      }
-      if (data.crawl) {
-        setCrawl({
-          state: data.crawl.state,
-          label: data.crawl.label,
-          crawl: data.crawl,
-          session: data.session ?? status,
-        })
-      }
+      const data = (await res.json()) as CrawlResponse
+      setCrawl(applyCrawl(data))
       if (data.session) setStatus(data.session)
     } finally {
       setRequestingStop(false)

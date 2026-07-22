@@ -14,9 +14,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 from uuid import UUID
 
-from lgbr_api.db import CRAWL_STATE_LABELS, connect
+from lgbr_api.db import CRAWL_STATE_LABELS, connect, database_url
 from lgbr_api.sessions import get_current_session, request_logout
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -152,23 +153,31 @@ def get_current_crawl() -> dict[str, Any]:
             )
             last = cur.fetchone()
     account = get_current_session()
-    can_start = account.get("session") is None
     if not last:
         return {
             "state": "ended",
             "label": "종료",
             "crawl": None,
             "session": account,
-            "can_start": can_start,
+            "can_start": account.get("session") is None,
         }
     crawl = _serialize(dict(last))
-    # No open crawl → idle is always 종료. Last error stays on the row only.
+    # Latest error blocks casual restart until fnguide_crawls.state is cleared.
+    if crawl.get("state") == "error":
+        return {
+            "state": "error",
+            "label": "오류",
+            "crawl": crawl,
+            "session": account,
+            "can_start": False,
+            **_unblock_directions(crawl["id"]),
+        }
     return {
         "state": "ended",
         "label": "종료",
         "crawl": crawl,
         "session": account,
-        "can_start": can_start,
+        "can_start": account.get("session") is None,
     }
 
 
@@ -230,6 +239,24 @@ def start_crawl() -> dict[str, Any]:
             "crawl": crawl,
             "session": get_current_session(),
             "can_start": False,
+        }
+
+    blocking = _get_latest_error()
+    if blocking:
+        crawl = _serialize(blocking)
+        directions = _unblock_directions(crawl["id"])
+        return {
+            "ok": False,
+            "status": 409,
+            "label": "오류",
+            "message": (
+                "이전 크롤이 error 상태라 재실행할 수 없습니다. "
+                "점검 후 DB에 접속해 fnguide_crawls.state 를 ended 로 바꾸세요."
+            ),
+            "crawl": crawl,
+            "session": get_current_session(),
+            "can_start": False,
+            **directions,
         }
 
     account = get_current_session()
@@ -304,7 +331,7 @@ def start_crawl() -> dict[str, Any]:
             "message": f"크롤 시작 실패: {exc}",
             "crawl": None,
             "session": get_current_session(),
-            "can_start": get_current_session().get("session") is None,
+            "can_start": False,
         }
 
     return {
@@ -366,6 +393,77 @@ def _get_open_row() -> dict[str, Any] | None:
             )
             row = cur.fetchone()
     return dict(row) if row else None
+
+
+def _get_latest_error() -> dict[str, Any] | None:
+    """If the newest crawl row is error, restart is blocked until SQL clears it."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM fnguide_crawls
+                ORDER BY started_at DESC
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+    if not row or row.get("state") != "error":
+        return None
+    return dict(row)
+
+
+def _db_connect_info() -> dict[str, str]:
+    """Connection details for the unblock SQL (local ops monitor)."""
+    url = database_url()
+    parsed = urlparse(url)
+    host = parsed.hostname or os.environ.get("POSTGRES_HOST", "")
+    port = str(parsed.port or os.environ.get("POSTGRES_PORT", ""))
+    db = (parsed.path or "/").lstrip("/") or os.environ.get("POSTGRES_DB", "")
+    user = unquote(parsed.username or "") or os.environ.get("POSTGRES_USER", "")
+    password = unquote(parsed.password or "") or os.environ.get(
+        "POSTGRES_PASSWORD", ""
+    )
+    psql = f"psql postgresql://{user}:{password}@{host}:{port}/{db}"
+    return {
+        "host": host,
+        "port": port,
+        "database": db,
+        "user": user,
+        "password": password,
+        "psql": psql,
+    }
+
+
+def _unblock_sql(crawl_id: str) -> str:
+    return (
+        "UPDATE fnguide_crawls "
+        f"SET state = 'ended' "
+        f"WHERE id = '{crawl_id}' AND state = 'error';"
+    )
+
+
+def _unblock_directions(crawl_id: str) -> dict[str, Any]:
+    db = _db_connect_info()
+    sql = _unblock_sql(crawl_id)
+    return {
+        "db": db,
+        "unblock_sql": sql,
+        "unblock_text": (
+            f"# DB 접속\n"
+            f"host={db['host']}\n"
+            f"port={db['port']}\n"
+            f"database={db['database']}\n"
+            f"user={db['user']}\n"
+            f"password={db['password']}\n"
+            f"\n"
+            f"# 접속 후 실행\n"
+            f"{db['psql']}\n"
+            f"\n"
+            f"# 재실행 허용: fnguide_crawls.state 를 error → ended\n"
+            f"{sql}\n"
+        ),
+    }
 
 
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:

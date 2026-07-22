@@ -43,12 +43,25 @@ export type SessionResponse = {
   session: SessionRecord | null
 }
 
+export type DbConnectInfo = {
+  host: string
+  port: string
+  database: string
+  user: string
+  password: string
+  psql: string
+}
+
 export type CrawlResponse = {
   state: CrawlState
   label: string
   crawl: CrawlRecord | null
   session: SessionResponse
   can_start?: boolean
+  /** Exact SQL to clear a blocking error after investigation. */
+  unblock_sql?: string | null
+  db?: DbConnectInfo | null
+  unblock_text?: string | null
 }
 
 export type HistoryResponse = {

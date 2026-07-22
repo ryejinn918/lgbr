@@ -166,6 +166,24 @@ def get_open_crawl() -> dict[str, Any] | None:
     return _serialize(dict(row)) if row else None
 
 
+def get_latest_blocking_error() -> dict[str, Any] | None:
+    """Newest crawl is error → block restart until cleared in DB."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM fnguide_crawls
+                ORDER BY started_at DESC
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+    if not row or row.get("state") != "error":
+        return None
+    return _serialize(dict(row))
+
+
 def get_crawl(crawl_id: UUID | str) -> dict[str, Any] | None:
     with connect() as conn:
         with conn.cursor() as cur:

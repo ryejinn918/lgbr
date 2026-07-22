@@ -62,6 +62,24 @@
   color: var(--warn-ink);
 }
 
+.badge-panel .warn p {
+  margin: 0;
+}
+
+.badge-panel .unblock-sql {
+  margin: 0.65rem 0 0;
+  padding: 0.65rem 0.75rem;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 70%, #fff);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .account-line {
   margin: 0.5rem 0 0;
   color: var(--muted);

@@ -42,7 +42,8 @@ function App() {
     crawl.state === 'starting' ||
     crawl.state === 'active' ||
     crawl.state === 'stopping'
-  const canStart = crawl.can_start !== false && !crawlBusy
+  const blockedByError = crawl.state === 'error'
+  const canStart = crawl.can_start === true && !crawlBusy
   const badgeState = fetchError
     ? 'offline'
     : stale
@@ -91,17 +92,21 @@ function App() {
             있습니다.
           </p>
         ) : null}
-        {crawl.state === 'error' &&
-        crawl.crawl &&
-        !crawl.crawl.ended_at &&
-        !fetchError ? (
-          <p className="warn">
-            오류 상태입니다
-            {crawl.crawl.message ? `: ${crawl.crawl.message}` : '.'} 원인 확인 후
-            다시 실행하세요.
-          </p>
+        {blockedByError && !fetchError ? (
+          <div className="warn">
+            <p>
+              오류로 멈췄습니다
+              {crawl.crawl?.message ? `: ${crawl.crawl.message}` : '.'} 원인을
+              점검한 뒤, 아래 DB에 접속해{' '}
+              <code>fnguide_crawls.state</code>를{' '}
+              <code>error</code> → <code>ended</code>로 바꾸세요.
+            </p>
+            {crawl.unblock_text ? (
+              <pre className="unblock-sql">{crawl.unblock_text}</pre>
+            ) : null}
+          </div>
         ) : null}
-        {!canStart && !crawlBusy && !fetchError && crawl.state !== 'error' ? (
+        {!canStart && !crawlBusy && !blockedByError && !fetchError ? (
           <p className="warn">열린 세션이 남아 있어 실행할 수 없습니다.</p>
         ) : null}
         {stale && !fetchError ? (
