@@ -2,14 +2,35 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from uuid import UUID
+
+from starlette.responses import FileResponse, JSONResponse, Response
 
 from lgbr_api.db import connect
 
 VALID_STATUSES = frozenset(
     {"listed", "blind", "downloaded", "no_download", "failed"}
 )
+
+# api/src/lgbr_api/reports.py → repo root
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+DOWNLOADS_ROOT = (_REPO_ROOT / ".crawler" / "downloads").resolve()
+
+
+def _safe_download_path(file_path: str) -> Path | None:
+    try:
+        path = Path(file_path).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    try:
+        path.relative_to(DOWNLOADS_ROOT)
+    except ValueError:
+        return None
+    if not path.is_file():
+        return None
+    return path
 
 
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
@@ -149,3 +170,52 @@ def list_reports(
         "limit": limit,
         "offset": offset,
     }
+
+
+def get_report_file(report_id: str) -> Response:
+    try:
+        rid = str(UUID(report_id))
+    except (TypeError, ValueError):
+        return JSONResponse(
+            {"ok": False, "message": "invalid report id"},
+            status_code=400,
+        )
+
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT file_path, file_name
+                FROM reports
+                WHERE id = %s
+                """,
+                (rid,),
+            )
+            row = cur.fetchone()
+
+    if row is None:
+        return JSONResponse(
+            {"ok": False, "message": "report not found"},
+            status_code=404,
+        )
+
+    raw_path = row.get("file_path")
+    if not raw_path:
+        return JSONResponse(
+            {"ok": False, "message": "no file for report"},
+            status_code=404,
+        )
+
+    path = _safe_download_path(str(raw_path))
+    if path is None:
+        return JSONResponse(
+            {"ok": False, "message": "file missing or outside downloads root"},
+            status_code=404,
+        )
+
+    name = (row.get("file_name") or path.name or "report.pdf").strip()
+    return FileResponse(
+        path,
+        filename=name,
+        media_type="application/pdf",
+    )

@@ -23,7 +23,7 @@ from lgbr_api.crawls import (
 )
 from lgbr_api.db import load_database_env
 from lgbr_api.profiles import list_profiles, update_profile
-from lgbr_api.reports import list_reports
+from lgbr_api.reports import get_report_file, list_reports
 from lgbr_api.sessions import get_current_session, list_history
 
 SHUTDOWN_WAIT_SECONDS = 60.0
@@ -138,6 +138,10 @@ async def reports(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
+async def report_file(request: Request):
+    return get_report_file(str(request.path_params.get("report_id") or ""))
+
+
 async def crawl_profiles(_: Request) -> JSONResponse:
     result = list_profiles()
     status = int(result.pop("status", 200 if result.get("ok") else 400))
@@ -177,6 +181,7 @@ def create_app() -> Starlette:
             ),
             Route("/api/cdp", cdp_status),
             Route("/api/reports", reports),
+            Route("/api/reports/{report_id}/file", report_file),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],
         lifespan=lifespan,

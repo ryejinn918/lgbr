@@ -143,8 +143,19 @@ export function ReportsPage() {
                       {formatPublishedAt(item.published_at)}
                     </td>
                     <td className="mono">{item.source_key}</td>
-                    <td className="report-file" title={item.file_name || undefined}>
-                      {item.has_file ? item.file_name || '파일' : '—'}
+                    <td className="report-file">
+                      {item.has_file ? (
+                        <a
+                          className="report-file-link"
+                          href={`/api/reports/${item.id}/file`}
+                          download={item.file_name || undefined}
+                          title={item.file_name || '다운로드'}
+                        >
+                          {item.file_name || '파일'}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td>{formatRelative(item.last_seen_at)}</td>
                   </tr>

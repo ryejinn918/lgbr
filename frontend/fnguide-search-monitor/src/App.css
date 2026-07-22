@@ -208,6 +208,16 @@
   color: var(--muted);
 }
 
+.report-file-link {
+  color: var(--active);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.report-file-link:hover {
+  color: var(--ink);
+}
+
 .report-table td.mono,
 .report-table .mono {
   white-space: nowrap;
