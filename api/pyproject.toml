@@ -1,0 +1,20 @@
+[project]
+name = "lgbr-api"
+version = "0.1.0"
+description = "Local status API for Fnguide search monitor"
+readme = "README.md"
+authors = [
+    { name = "taehee", email = "ktthee1995@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "starlette>=0.46.0",
+    "uvicorn>=0.34.0",
+]
+
+[project.scripts]
+lgbr-api = "lgbr_api.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"

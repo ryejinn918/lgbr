@@ -1,0 +1,121 @@
+.monitor {
+  width: min(720px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2.5rem 0 4rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.monitor-header {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--muted);
+}
+
+.monitor-header h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(2rem, 4vw, 2.6rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.lede {
+  margin: 0;
+  color: var(--muted);
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  padding: 1.25rem 1.35rem;
+}
+
+.badge-panel .badge-label {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.badge-panel .badge-value {
+  margin: 0.35rem 0 0;
+  font-family: var(--display);
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.badge-panel .warn {
+  margin: 0.85rem 0 0;
+  color: var(--warn-ink);
+}
+
+.badge-panel.state-active {
+  border-color: color-mix(in srgb, var(--active) 55%, var(--line));
+  background: color-mix(in srgb, var(--active) 14%, var(--panel));
+}
+
+.badge-panel.state-logging_in,
+.badge-panel.state-logging_out {
+  border-color: color-mix(in srgb, var(--busy) 55%, var(--line));
+  background: color-mix(in srgb, var(--busy) 12%, var(--panel));
+}
+
+.badge-panel.state-error,
+.badge-panel.state-stale,
+.badge-panel.state-offline {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+
+.details dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+.details dl > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.details .wide {
+  grid-column: 1 / -1;
+}
+
+.details dt {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 0;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .details dl {
+    grid-template-columns: 1fr;
+  }
+}

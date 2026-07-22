@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local secrets / captured sessions
+.fnsearch/
+.env
+.env.*

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fnsearch",
+    "lgbr-api",
 ]
 
 [tool.uv]
@@ -15,8 +16,10 @@ required-environments = [
 
 [tool.uv.sources]
 fnsearch = { workspace = true }
+lgbr-api = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "fnsearch",
+    "api",
 ]
