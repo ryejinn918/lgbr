@@ -1,6 +1,13 @@
 """Fnguide login, search, and download automation."""
 
-from fnsearch.browser import LOGIN_URL, goto_login, launch_browser, open_login
+from fnsearch.browser import (
+    LOGIN_URL,
+    goto_login,
+    launch_browser,
+    launch_context,
+    new_human_context,
+    open_login,
+)
 from fnsearch.session import (
     SessionRun,
     capture_session,
@@ -22,10 +29,12 @@ __all__ = [
     "goto_login",
     "hold_session",
     "launch_browser",
+    "launch_context",
     "load_session",
     "login",
     "login_and_capture",
     "logout",
+    "new_human_context",
     "open_login",
     "set_status",
     "verify_session",

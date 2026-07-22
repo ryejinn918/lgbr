@@ -12,7 +12,7 @@ from pathlib import Path
 
 from patchright.sync_api import Browser, BrowserContext, Page
 
-from fnsearch.browser import LOGIN_URL, launch_browser
+from fnsearch.browser import LOGIN_URL, launch_browser, launch_context, new_human_context
 from fnsearch.status import DEFAULT_STATUS_PATH, clear_status, set_status
 
 DEFAULT_SESSION_PATH = Path(".fnsearch/session.json")
@@ -103,7 +103,9 @@ def load_session(
 ) -> BrowserContext:
     if not path.exists():
         raise FileNotFoundError(f"Session file not found: {path}")
-    return browser.new_context(storage_state=str(path))
+    from fnsearch.browser import human_context_options
+
+    return browser.new_context(**human_context_options(), storage_state=str(path))
 
 
 def session_summary(path: Path = DEFAULT_SESSION_PATH) -> dict:
@@ -160,9 +162,8 @@ def SessionRun(
         path=status_path,
         keep_started_at=False,
     )
-    with launch_browser(headless=headless) as browser:
-        context = browser.new_context()
-        page = context.new_page()
+    with launch_context(headless=headless) as context:
+        page = context.pages[0] if context.pages else context.new_page()
         handle = SessionHandle(page=page, user_id=user_id, status_path=status_path)
         try:
             page.goto(LOGIN_URL, wait_until="domcontentloaded")
@@ -254,7 +255,7 @@ def login_and_capture(
 ) -> dict:
     """Debug helper: login and persist storage_state (not the default workflow)."""
     with launch_browser(headless=headless) as browser:
-        context = browser.new_context()
+        context = new_human_context(browser)
         page = context.new_page()
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
         login(

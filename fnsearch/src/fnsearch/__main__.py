@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from fnsearch.browser import open_login
 from fnsearch.session import (
     DEFAULT_SESSION_PATH,
@@ -18,6 +20,19 @@ from fnsearch.session import (
 from fnsearch.status import DEFAULT_STATUS_PATH, clear_status, get_status, set_status
 
 
+def _load_env() -> None:
+    """Load credentials from fnsearch/.env (or cwd .env) without overriding exports."""
+    candidates = [
+        Path(__file__).resolve().parents[2] / ".env",
+        Path.cwd() / "fnsearch" / ".env",
+        Path.cwd() / ".env",
+    ]
+    for path in candidates:
+        if path.is_file():
+            load_dotenv(path, override=False)
+            return
+
+
 def _add_headless(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--headless",
@@ -27,6 +42,7 @@ def _add_headless(parser: argparse.ArgumentParser) -> None:
 
 
 def main() -> None:
+    _load_env()
     parser = argparse.ArgumentParser(description="Fnguide automation")
     sub = parser.add_subparsers(dest="command")
 
