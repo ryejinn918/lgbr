@@ -1,8 +1,16 @@
 import { useSessionStatus } from './hooks/useSessionStatus'
-import type { SessionRecord, SessionState } from './types'
+import type { CrawlState, SessionRecord, SessionState } from './types'
 import './App.css'
 
-const STATE_CLASS: Record<SessionState, string> = {
+const CRAWL_CLASS: Record<CrawlState, string> = {
+  starting: 'starting',
+  active: 'active',
+  stopping: 'stopping',
+  ended: 'ended',
+  error: 'error',
+}
+
+const SESSION_CLASS: Record<SessionState, string> = {
   logging_in: 'logging_in',
   logged_in: 'logged_in',
   logging_out: 'logging_out',
@@ -19,30 +27,45 @@ function formatTime(value: string | null | undefined): string {
 
 function App() {
   const {
+    crawl,
     status,
     history,
     stale,
     fetchError,
-    requestingLogout,
+    requestingStart,
+    requestingStop,
+    startCrawl,
     requestLogout,
   } = useSessionStatus()
 
-  const busy =
-    status.state === 'logged_in' ||
-    status.state === 'logging_in' ||
-    status.state === 'logging_out'
+  const crawlBusy =
+    crawl.state === 'starting' ||
+    crawl.state === 'active' ||
+    crawl.state === 'stopping'
+  const canStart = crawl.can_start !== false && !crawlBusy
   const badgeState = fetchError
     ? 'offline'
     : stale
       ? 'stale'
-      : STATE_CLASS[status.state]
+      : CRAWL_CLASS[crawl.state]
 
-  async function onLogout() {
-    if (!window.confirm('Fnguide 계정에서 로그아웃할까요?')) return
+  async function onStart() {
+    if (!window.confirm('크롤을 시작할까요? (로그인 세션을 함께 획득합니다)')) {
+      return
+    }
+    try {
+      await startCrawl()
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '실행 실패')
+    }
+  }
+
+  async function onStop() {
+    if (!window.confirm('크롤을 종료하고 로그아웃할까요?')) return
     try {
       await requestLogout()
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '로그아웃 요청 실패')
+      window.alert(err instanceof Error ? err.message : '종료 요청 실패')
     }
   }
 
@@ -50,20 +73,36 @@ function App() {
     <main className="monitor">
       <header className="monitor-header">
         <p className="brand">fnguide-search-monitor</p>
-        <h1>계정 상태</h1>
-        <p className="lede">봇의 Fnguide 계정 사용 여부와 로그인 이력을 봅니다.</p>
+        <h1>크롤 상태</h1>
+        <p className="lede">수동 크롤 실행과 Fnguide 계정 사용 여부입니다.</p>
       </header>
 
       <section className={`panel badge-panel state-${badgeState}`}>
-        <p className="badge-label">상태</p>
+        <p className="badge-label">크롤</p>
         <p className="badge-value">
-          {fetchError ? 'API Offline' : stale ? '응답 없음' : status.label}
+          {fetchError ? 'API Offline' : stale ? '응답 없음' : crawl.label}
         </p>
-        {status.state === 'logged_in' && !fetchError ? (
+        <p className={`account-line state-${SESSION_CLASS[status.state]}`}>
+          계정: {fetchError ? '—' : status.label}
+        </p>
+        {crawl.state === 'active' && !fetchError ? (
           <p className="warn">
-            계정을 사용 중입니다. 같은 계정으로 들어가면 봇 세션이 끊길 수
+            크롤이 계정을 사용 중입니다. 같은 계정으로 들어가면 세션이 끊길 수
             있습니다.
           </p>
+        ) : null}
+        {crawl.state === 'error' &&
+        crawl.crawl &&
+        !crawl.crawl.ended_at &&
+        !fetchError ? (
+          <p className="warn">
+            오류 상태입니다
+            {crawl.crawl.message ? `: ${crawl.crawl.message}` : '.'} 원인 확인 후
+            다시 실행하세요.
+          </p>
+        ) : null}
+        {!canStart && !crawlBusy && !fetchError && crawl.state !== 'error' ? (
+          <p className="warn">열린 세션이 남아 있어 실행할 수 없습니다.</p>
         ) : null}
         {stale && !fetchError ? (
           <p className="warn">최근 활동 갱신이 없습니다.</p>
@@ -73,11 +112,19 @@ function App() {
         <div className="actions">
           <button
             type="button"
-            className="logout-btn"
-            disabled={!busy || requestingLogout || !!fetchError}
-            onClick={() => void onLogout()}
+            className="run-btn"
+            disabled={!canStart || requestingStart || !!fetchError}
+            onClick={() => void onStart()}
           >
-            {requestingLogout ? '요청 중…' : '로그아웃'}
+            {requestingStart ? '시작 중…' : '실행'}
+          </button>
+          <button
+            type="button"
+            className="logout-btn"
+            disabled={!crawlBusy || requestingStop || !!fetchError}
+            onClick={() => void onStop()}
+          >
+            {requestingStop ? '요청 중…' : '종료'}
           </button>
         </div>
       </section>
@@ -85,28 +132,18 @@ function App() {
       <section className="panel details">
         <dl>
           <div>
-            <dt>user_id</dt>
+            <dt>계정</dt>
             <dd>{status.session?.fnguide_user_id ?? '—'}</dd>
           </div>
           <div>
-            <dt>pid</dt>
-            <dd>{status.session?.pid ?? '—'}</dd>
+            <dt>시작</dt>
+            <dd>
+              {formatTime(crawl.crawl?.started_at ?? status.session?.started_at)}
+            </dd>
           </div>
           <div>
-            <dt>started_at</dt>
-            <dd>{formatTime(status.session?.started_at)}</dd>
-          </div>
-          <div>
-            <dt>last_used_at</dt>
+            <dt>최근 사용</dt>
             <dd>{formatTime(status.session?.last_used_at)}</dd>
-          </div>
-          <div>
-            <dt>lease_until</dt>
-            <dd>{formatTime(status.session?.lease_until)}</dd>
-          </div>
-          <div>
-            <dt>logout_requested_at</dt>
-            <dd>{formatTime(status.session?.logout_requested_at)}</dd>
           </div>
         </dl>
       </section>

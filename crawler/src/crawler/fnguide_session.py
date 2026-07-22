@@ -15,7 +15,7 @@ from crawler import sessions_store
 from crawler.browser import LOGIN_URL, launch_context
 from crawler.session import _is_logged_in, login, logout
 
-DEFAULT_TTL_SECONDS = int(os.environ.get("FNGUIDE_SESSION_TTL_SECONDS", "3600"))
+DEFAULT_TTL_SECONDS = int(os.environ.get("FNGUIDE_SESSION_TTL_SECONDS", "28800"))
 DEFAULT_IDLE_SECONDS = int(os.environ.get("FNGUIDE_SESSION_IDLE_SECONDS", "600"))
 
 
@@ -75,7 +75,15 @@ class FnguideSession:
                 step="ready",
             )
         except Exception as exc:
-            sessions_store.mark_login_failed(self.session_id, str(exc))
+            fail_msg = str(exc)
+            try:
+                sessions_store.mark_login_failed(self.session_id, fail_msg)
+            except Exception as db_exc:
+                self._close_browser()
+                self.session_id = None
+                raise RuntimeError(
+                    f"Login failed ({fail_msg}); also failed to mark session error: {db_exc}"
+                ) from db_exc
             self._close_browser()
             self.session_id = None
             raise
@@ -117,26 +125,38 @@ class FnguideSession:
     def stop(self, end_reason: str, message: str | None = None) -> dict[str, Any]:
         if not self.session_id:
             return {"state": "ended", "label": "로그아웃됨"}
+        session_id = self.session_id
         row: dict[str, Any] | None = None
         try:
             if self.page and end_reason != "external":
-                sessions_store.begin_logout(self.session_id)
+                try:
+                    sessions_store.begin_logout(session_id)
+                except Exception:
+                    # Still attempt browser logout + terminal error write.
+                    pass
                 if _is_logged_in(self.page):
                     logout(self.page)
             event = "external_logout" if end_reason == "external" else None
             row = sessions_store.end_session(
-                self.session_id,
+                session_id,
                 end_reason=end_reason,
                 message=message,
                 event=event,
             )
         except Exception as exc:
-            row = sessions_store.end_session(
-                self.session_id,
-                end_reason="error",
-                message=str(exc),
-                event="error",
-            )
+            try:
+                row = sessions_store.end_session(
+                    session_id,
+                    end_reason="error",
+                    message=str(exc),
+                    event="error",
+                )
+            except Exception as db_exc:
+                self._close_browser()
+                self.session_id = None
+                raise RuntimeError(
+                    f"Session stop failed ({exc}); cannot mark error in DB: {db_exc}"
+                ) from db_exc
         finally:
             self._close_browser()
             self.session_id = None

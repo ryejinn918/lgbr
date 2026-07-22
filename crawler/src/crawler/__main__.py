@@ -10,6 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from crawler.browser import open_login
+from crawler.crawl import run_crawl
 from crawler.db import load_database_env
 from crawler.fnguide_session import (
     DEFAULT_IDLE_SECONDS,
@@ -22,7 +23,7 @@ from crawler.session import (
     session_summary,
     verify_session,
 )
-from crawler import sessions_store
+from crawler import crawls_store, sessions_store
 from crawler.status import DEFAULT_STATUS_PATH, clear_status, get_status, set_status
 
 
@@ -76,6 +77,32 @@ def main() -> None:
     )
     _add_headless(verify_parser)
     verify_parser.add_argument("--session", type=Path, default=DEFAULT_SESSION_PATH)
+
+    crawl_parser = sub.add_parser(
+        "crawl",
+        help="Manual crawl run (session login is a subtask)",
+    )
+    crawl_sub = crawl_parser.add_subparsers(dest="crawl_command")
+    crawl_run = crawl_sub.add_parser(
+        "run",
+        help="Start crawl: acquire session, hold until stop/idle/ttl",
+    )
+    _add_headless(crawl_run)
+    crawl_run.add_argument("--user-id", default=os.environ.get("FNGUIDE_USER_ID"))
+    crawl_run.add_argument("--password", default=os.environ.get("FNGUIDE_PASSWORD"))
+    crawl_run.add_argument("--ttl", type=int, default=DEFAULT_TTL_SECONDS)
+    crawl_run.add_argument("--idle", type=int, default=DEFAULT_IDLE_SECONDS)
+    crawl_run.add_argument(
+        "--no-force",
+        action="store_true",
+        help="Do not confirm the single-session conflict dialog",
+    )
+    crawl_run.add_argument(
+        "--crawl-id",
+        default=None,
+        help="Use an existing crawl row created by the API",
+    )
+    crawl_sub.add_parser("current", help="Show current crawl")
 
     session_parser = sub.add_parser(
         "session",
@@ -164,6 +191,43 @@ def main() -> None:
             result["summary"] = session_summary(args.session)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
+
+    if command == "crawl":
+        crawl_command = args.crawl_command or "current"
+        if crawl_command == "current":
+            current = crawls_store.get_open_crawl()
+            print(
+                json.dumps(
+                    current or {"state": "ended", "label": "종료", "crawl": None},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if crawl_command == "run":
+            if not args.user_id or not args.password:
+                parser.error(
+                    "crawl run requires --user-id/--password or "
+                    "FNGUIDE_USER_ID/FNGUIDE_PASSWORD"
+                )
+            try:
+                result = run_crawl(
+                    user_id=args.user_id,
+                    password=args.password,
+                    ttl_seconds=args.ttl,
+                    idle_seconds=args.idle,
+                    headless=headless,
+                    force_other_session=not args.no_force,
+                    crawl_id=args.crawl_id,
+                )
+            except Exception as exc:
+                print(json.dumps({"state": "error", "message": str(exc)}, ensure_ascii=False))
+                raise SystemExit(1) from exc
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            if result.get("state") == "error":
+                raise SystemExit(1)
+            return
+        parser.error(f"Unknown crawl command: {crawl_command}")
 
     if command == "session":
         session_command = args.session_command or "current"

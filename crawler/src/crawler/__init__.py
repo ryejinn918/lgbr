@@ -8,6 +8,7 @@ from crawler.browser import (
     new_human_context,
     open_login,
 )
+from crawler.crawl import run_crawl
 from crawler.fnguide_session import FnguideSession
 from crawler.session import (
     SessionRun,
@@ -38,6 +39,7 @@ __all__ = [
     "logout",
     "new_human_context",
     "open_login",
+    "run_crawl",
     "set_status",
     "verify_session",
 ]

@@ -19,6 +19,14 @@ STATE_LABELS = {
     "error": "오류",
 }
 
+CRAWL_STATE_LABELS = {
+    "starting": "활성화 시도중",
+    "active": "크롤링 활성중",
+    "stopping": "종료 시도중",
+    "ended": "종료",
+    "error": "오류",
+}
+
 END_REASON_LABELS = {
     "manual": "수동 로그아웃",
     "idle": "미사용 종료",

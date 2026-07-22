@@ -62,32 +62,51 @@
   color: var(--warn-ink);
 }
 
-.actions {
-  margin-top: 1rem;
+.account-line {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 
+.actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.run-btn,
 .logout-btn {
   appearance: none;
-  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
-  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
-  color: var(--ink);
   font: inherit;
   padding: 0.55rem 1rem;
   cursor: pointer;
+  color: var(--ink);
 }
 
+.run-btn {
+  border: 1px solid color-mix(in srgb, var(--active) 45%, var(--line));
+  background: color-mix(in srgb, var(--active) 12%, var(--panel));
+}
+
+.logout-btn {
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+}
+
+.run-btn:disabled,
 .logout-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.badge-panel.state-logged_in {
+.badge-panel.state-active {
   border-color: color-mix(in srgb, var(--active) 55%, var(--line));
   background: color-mix(in srgb, var(--active) 14%, var(--panel));
 }
 
-.badge-panel.state-logging_in,
-.badge-panel.state-logging_out {
+.badge-panel.state-starting,
+.badge-panel.state-stopping {
   border-color: color-mix(in srgb, var(--busy) 55%, var(--line));
   background: color-mix(in srgb, var(--busy) 12%, var(--panel));
 }
