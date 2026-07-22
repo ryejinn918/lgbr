@@ -1,7 +1,8 @@
 const path = require('path')
 
 const root = __dirname
-const frontendDir = path.join(root, 'frontend', 'fnguide-search-monitor')
+const searchMonitorDir = path.join(root, 'frontend', 'fnguide-search-monitor')
+const consensusDir = path.join(root, 'frontend', 'fnguide-consensus')
 const python = path.join(root, '.venv', 'bin', 'python')
 
 module.exports = {
@@ -22,7 +23,19 @@ module.exports = {
     },
     {
       name: 'fnguide-search-monitor',
-      cwd: frontendDir,
+      cwd: searchMonitorDir,
+      script: './node_modules/vite/bin/vite.js',
+      args: 'preview',
+      interpreter: 'node',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '5s',
+    },
+    {
+      name: 'fnguide-consensus',
+      cwd: consensusDir,
       script: './node_modules/vite/bin/vite.js',
       args: 'preview',
       interpreter: 'node',
