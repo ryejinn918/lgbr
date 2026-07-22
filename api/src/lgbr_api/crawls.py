@@ -8,6 +8,7 @@ Fail-closed rules:
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from lgbr_api.sessions import get_current_session, request_logout
 
 ROOT = Path(__file__).resolve().parents[3]
 CRAWL_LOG = ROOT / ".crawler" / "crawl.log"
+DEFAULT_EVENT_LIMIT = 50
 
 
 def _now() -> datetime:
@@ -121,7 +123,40 @@ def reconcile_stale_crawls() -> list[dict[str, Any]]:
     return fixed
 
 
-def get_current_crawl() -> dict[str, Any]:
+def list_crawl_events(
+    crawl_id: str | None = None, *, limit: int = DEFAULT_EVENT_LIMIT
+) -> dict[str, Any]:
+    """List recent events for a crawl (default: newest crawl)."""
+    limit = max(1, min(int(limit), 500))
+    with connect() as conn:
+        with conn.cursor() as cur:
+            if crawl_id is None:
+                cur.execute(
+                    """
+                    SELECT id FROM fnguide_crawls
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {"crawl_id": None, "items": []}
+                crawl_id = str(row["id"])
+            cur.execute(
+                """
+                SELECT id, crawl_id, at, level, stage, event, detail
+                FROM fnguide_crawl_events
+                WHERE crawl_id = %s
+                ORDER BY at DESC
+                LIMIT %s
+                """,
+                (str(crawl_id), limit),
+            )
+            items = [_serialize_event(dict(r)) for r in cur.fetchall()]
+    return {"crawl_id": str(crawl_id), "items": items}
+
+
+def get_current_crawl(*, event_limit: int = DEFAULT_EVENT_LIMIT) -> dict[str, Any]:
     reconcile_stale_crawls()
     with connect() as conn:
         with conn.cursor() as cur:
@@ -137,10 +172,13 @@ def get_current_crawl() -> dict[str, Any]:
             row = cur.fetchone()
             if row:
                 crawl = _serialize(dict(row))
+                events = list_crawl_events(crawl["id"], limit=event_limit)["items"]
                 return {
                     "state": crawl["state"],
                     "label": crawl["label"],
                     "crawl": crawl,
+                    "progress": crawl.get("progress") or {},
+                    "events": events,
                     "session": get_current_session(),
                     "can_start": False,
                 }
@@ -159,16 +197,21 @@ def get_current_crawl() -> dict[str, Any]:
             "state": "ended",
             "label": "종료",
             "crawl": None,
+            "progress": {},
+            "events": [],
             "session": account,
             "can_start": account.get("session") is None,
         }
     crawl = _serialize(dict(last))
+    events = list_crawl_events(crawl["id"], limit=event_limit)["items"]
     # Latest error blocks casual restart until fnguide_crawls.state is cleared.
     if crawl.get("state") == "error":
         return {
             "state": "error",
             "label": "오류",
             "crawl": crawl,
+            "progress": crawl.get("progress") or {},
+            "events": events,
             "session": account,
             "can_start": False,
             **_unblock_directions(crawl["id"]),
@@ -177,6 +220,8 @@ def get_current_crawl() -> dict[str, Any]:
         "state": "ended",
         "label": "종료",
         "crawl": crawl,
+        "progress": crawl.get("progress") or {},
+        "events": events,
         "session": account,
         "can_start": account.get("session") is None,
     }
@@ -536,6 +581,26 @@ def _unblock_directions(crawl_id: str) -> dict[str, Any]:
     }
 
 
+def _serialize_event(row: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in row.items():
+        if isinstance(value, datetime):
+            out[key] = value.isoformat()
+        elif isinstance(value, UUID):
+            out[key] = str(value)
+        else:
+            out[key] = value
+    detail = out.get("detail")
+    if isinstance(detail, str):
+        try:
+            out["detail"] = json.loads(detail)
+        except Exception:
+            out["detail"] = {"raw": detail}
+    elif detail is None:
+        out["detail"] = {}
+    return out
+
+
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in row.items():
@@ -545,6 +610,14 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
             out[key] = str(value)
         else:
             out[key] = value
+    progress = out.get("progress")
+    if isinstance(progress, str):
+        try:
+            out["progress"] = json.loads(progress)
+        except Exception:
+            out["progress"] = {}
+    elif progress is None:
+        out["progress"] = {}
     state = out.get("state")
     out["label"] = CRAWL_STATE_LABELS.get(str(state), "종료")
     port = out.get("cdp_port")

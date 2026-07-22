@@ -27,6 +27,29 @@ export type SessionRecord = {
 
 export type CrawlMode = 'auto' | 'adhoc' | 'datacenter'
 
+export type CrawlProgress = {
+  stage?: string
+  mode?: string
+  limit?: number
+  downloaded?: number
+  list_page?: number
+  current_rpt_id?: string
+  candidates?: number
+  error?: string
+  reason?: string
+  [key: string]: unknown
+}
+
+export type CrawlEvent = {
+  id: string
+  crawl_id: string
+  at: string
+  level: 'debug' | 'info' | 'warn' | 'error' | string
+  stage: string
+  event: string
+  detail: Record<string, unknown>
+}
+
 export type CrawlRecord = {
   id: string
   session_id: string | null
@@ -37,6 +60,7 @@ export type CrawlRecord = {
   state: CrawlState
   mode?: CrawlMode | null
   report_limit?: number | null
+  progress?: CrawlProgress | null
   cdp_port?: number | null
   cdp_http_url?: string | null
   message: string | null
@@ -60,6 +84,8 @@ export type CrawlResponse = {
   state: CrawlState
   label: string
   crawl: CrawlRecord | null
+  progress?: CrawlProgress
+  events?: CrawlEvent[]
   session: SessionResponse
   can_start?: boolean
   /** Exact SQL to clear a blocking error after investigation. */

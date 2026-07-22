@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlparse
 
 from patchright.sync_api import Page
 
+from crawler.crawl_log import CrawlLogger
+
 SEARCH_URL = "https://www.fnguide.com/Research/SearchReport"
 KEYWORD = "데이터센터"
 SECTORS = (
@@ -48,6 +50,16 @@ class DatacenterJobSummary:
             parts.append("stopped=1")
         return "; ".join(parts)
 
+    def as_detail(self) -> dict[str, Any]:
+        return {
+            "downloaded": len(self.downloaded),
+            "skipped_blind": self.skipped_blind,
+            "skipped_no_download": self.skipped_no_download,
+            "failed": self.failed,
+            "stopped": self.stopped,
+            "files": [Path(p).name for p in self.downloaded],
+        }
+
 
 def is_blind_candidate(*, row_text: str, has_tag: bool) -> bool:
     if has_tag:
@@ -78,6 +90,7 @@ def run_datacenter_job(
     download_dir: Path,
     should_stop: Callable[[], bool] | None = None,
     touch: Callable[[], Any] | None = None,
+    logger: CrawlLogger | None = None,
 ) -> DatacenterJobSummary:
     """Apply fixed filters, then download up to `limit` non-blind PDFs."""
     if limit < 1:
@@ -85,47 +98,133 @@ def run_datacenter_job(
     download_dir.mkdir(parents=True, exist_ok=True)
     summary = DatacenterJobSummary()
     stop = should_stop or (lambda: False)
+    log = logger
 
-    _apply_filters(page)
+    if log:
+        log.set_progress(limit=limit, downloaded=0, stage="filter")
+
+    if log:
+        with log.stage("filter", keyword=KEYWORD, page_cnt_min=10):
+            _apply_filters(page)
+    else:
+        _apply_filters(page)
     if touch:
         touch()
     _sort_by_page_count_desc(page)
+    if log:
+        log.emit(level="info", stage="filter", event="sorted", by="page_count_desc")
 
     seen: set[str] = set()
     list_page = 0
     while len(summary.downloaded) < limit and list_page < MAX_LIST_PAGES:
         if stop():
             summary.stopped = True
+            if log:
+                log.emit(level="warn", stage="list", event="stopped", list_page=list_page)
             break
         candidates = _list_candidates(page)
+        if log:
+            log.emit(
+                level="info",
+                stage="list",
+                event="page",
+                list_page=list_page,
+                candidates=len(candidates),
+            )
+            log.set_progress(
+                stage="list",
+                list_page=list_page,
+                candidates=len(candidates),
+                downloaded=len(summary.downloaded),
+                limit=limit,
+            )
         progressed = False
         for cand in candidates:
             if stop():
                 summary.stopped = True
+                if log:
+                    log.emit(
+                        level="warn",
+                        stage="download",
+                        event="stopped",
+                        list_page=list_page,
+                    )
                 break
             rpt_id = cand["rpt_id"]
             if rpt_id in seen:
                 continue
             seen.add(rpt_id)
             progressed = True
+            title = cand["title"]
+            if log:
+                log.set_progress(
+                    stage="download",
+                    current_rpt_id=rpt_id,
+                    downloaded=len(summary.downloaded),
+                    limit=limit,
+                    list_page=list_page,
+                )
             if cand["blind"]:
                 summary.skipped_blind += 1
+                if log:
+                    log.emit(
+                        level="info",
+                        stage="download",
+                        event="item_skip",
+                        rpt_id=rpt_id,
+                        title=title,
+                        reason="blind",
+                    )
                 continue
             try:
                 path = _download_one(
                     page,
                     rpt_id=rpt_id,
-                    title=cand["title"],
+                    title=title,
                     download_dir=download_dir,
                     index=len(summary.downloaded) + 1,
                 )
-            except _NoDownloadError:
+            except _NoDownloadError as exc:
                 summary.skipped_no_download += 1
+                if log:
+                    log.emit(
+                        level="info",
+                        stage="download",
+                        event="item_skip",
+                        rpt_id=rpt_id,
+                        title=title,
+                        reason="no_custom_download",
+                        error=str(exc),
+                    )
                 continue
-            except Exception:
+            except Exception as exc:
                 summary.failed += 1
+                if log:
+                    log.emit(
+                        level="error",
+                        stage="download",
+                        event="item_fail",
+                        rpt_id=rpt_id,
+                        title=title,
+                        error=str(exc),
+                    )
                 continue
             summary.downloaded.append(str(path))
+            if log:
+                log.emit(
+                    level="info",
+                    stage="download",
+                    event="item_ok",
+                    rpt_id=rpt_id,
+                    title=title,
+                    path=str(path),
+                )
+                log.set_progress(
+                    stage="download",
+                    downloaded=len(summary.downloaded),
+                    limit=limit,
+                    current_rpt_id=rpt_id,
+                )
             if touch:
                 touch()
             if len(summary.downloaded) >= limit:
@@ -133,10 +232,30 @@ def run_datacenter_job(
         if summary.stopped or len(summary.downloaded) >= limit:
             break
         if not progressed or not _goto_next_list_page(page):
+            if log:
+                log.emit(
+                    level="info",
+                    stage="list",
+                    event="no_more_pages",
+                    list_page=list_page,
+                )
             break
         list_page += 1
         if touch:
             touch()
+
+    if log:
+        detail = summary.as_detail()
+        log.emit(level="info", stage="download", event="crawl_end", **detail)
+        log.set_progress(
+            stage="done",
+            limit=limit,
+            downloaded=detail["downloaded"],
+            skipped_blind=detail["skipped_blind"],
+            skipped_no_download=detail["skipped_no_download"],
+            failed=detail["failed"],
+            stopped=detail["stopped"],
+        )
     return summary
 
 

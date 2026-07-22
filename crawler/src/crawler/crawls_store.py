@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -267,6 +268,93 @@ def request_stop() -> dict[str, Any] | None:
     return _serialize(dict(row))
 
 
+def append_event(
+    crawl_id: UUID | str,
+    *,
+    level: str,
+    stage: str,
+    event: str,
+    detail: dict[str, Any] | None = None,
+) -> None:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO fnguide_crawl_events (crawl_id, level, stage, event, detail)
+                VALUES (%s, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    str(crawl_id),
+                    level,
+                    stage or "",
+                    event,
+                    json.dumps(detail or {}, ensure_ascii=False, default=str),
+                ),
+            )
+        conn.commit()
+
+
+def update_progress(crawl_id: UUID | str, fields: dict[str, Any]) -> dict[str, Any]:
+    """Merge `fields` into crawls.progress (shallow)."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE fnguide_crawls
+                SET progress = COALESCE(progress, '{}'::jsonb) || %s::jsonb
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    json.dumps(fields, ensure_ascii=False, default=str),
+                    str(crawl_id),
+                ),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise RuntimeError(f"No crawl {crawl_id} for progress update")
+        conn.commit()
+    return _serialize(dict(row))
+
+
+def list_events(crawl_id: UUID | str, *, limit: int = 50) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit), 500))
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, crawl_id, at, level, stage, event, detail
+                FROM fnguide_crawl_events
+                WHERE crawl_id = %s
+                ORDER BY at DESC
+                LIMIT %s
+                """,
+                (str(crawl_id), limit),
+            )
+            rows = cur.fetchall()
+    return [_serialize_event(dict(r)) for r in rows]
+
+
+def _serialize_event(row: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in row.items():
+        if isinstance(value, datetime):
+            out[key] = value.isoformat()
+        elif isinstance(value, UUID):
+            out[key] = str(value)
+        else:
+            out[key] = value
+    detail = out.get("detail")
+    if isinstance(detail, str):
+        try:
+            out["detail"] = json.loads(detail)
+        except Exception:
+            out["detail"] = {"raw": detail}
+    elif detail is None:
+        out["detail"] = {}
+    return out
+
+
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in row.items():
@@ -276,6 +364,14 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
             out[key] = str(value)
         else:
             out[key] = value
+    progress = out.get("progress")
+    if isinstance(progress, str):
+        try:
+            out["progress"] = json.loads(progress)
+        except Exception:
+            out["progress"] = {}
+    elif progress is None:
+        out["progress"] = {}
     state = out.get("state")
     out["label"] = CRAWL_STATE_LABELS.get(str(state), "종료")
     out["terminal"] = str(state) in TERMINAL_STATES or out.get("ended_at") is not None

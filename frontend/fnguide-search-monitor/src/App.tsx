@@ -1,7 +1,39 @@
 import { useState } from 'react'
 import { useSessionStatus } from './hooks/useSessionStatus'
-import type { CrawlMode, CrawlState, SessionRecord, SessionState } from './types'
+import type {
+  CrawlEvent,
+  CrawlMode,
+  CrawlState,
+  SessionRecord,
+  SessionState,
+} from './types'
 import './App.css'
+
+function formatProgress(progress: Record<string, unknown> | undefined): string {
+  if (!progress || Object.keys(progress).length === 0) return '—'
+  const stage = progress.stage != null ? String(progress.stage) : null
+  const downloaded = progress.downloaded
+  const limit = progress.limit
+  const rpt = progress.current_rpt_id != null ? String(progress.current_rpt_id) : null
+  const bits: string[] = []
+  if (stage) bits.push(`stage=${stage}`)
+  if (downloaded != null || limit != null) {
+    bits.push(`downloaded=${downloaded ?? 0}/${limit ?? '?'}`)
+  }
+  if (rpt) bits.push(`rpt=${rpt}`)
+  return bits.length ? bits.join(' · ') : JSON.stringify(progress)
+}
+
+function formatEventDetail(detail: Record<string, unknown>): string {
+  const keys = ['rpt_id', 'reason', 'error', 'path', 'title', 'list_page', 'candidates']
+  const parts: string[] = []
+  for (const key of keys) {
+    if (detail[key] != null && detail[key] !== '') {
+      parts.push(`${key}=${String(detail[key])}`)
+    }
+  }
+  return parts.join(' · ')
+}
 
 const CRAWL_CLASS: Record<CrawlState, string> = {
   starting: 'starting',
@@ -197,7 +229,37 @@ function App() {
             <dt>최근 사용</dt>
             <dd>{formatTime(status.session?.last_used_at)}</dd>
           </div>
+          <div>
+            <dt>진행</dt>
+            <dd>{fetchError ? '—' : formatProgress(crawl.progress)}</dd>
+          </div>
         </dl>
+      </section>
+
+      <section className="panel history events">
+        <h2>크롤 이벤트</h2>
+        {!crawl.events || crawl.events.length === 0 ? (
+          <p className="empty">이벤트가 없습니다.</p>
+        ) : (
+          <ul>
+            {crawl.events.map((item: CrawlEvent) => (
+              <li key={item.id} className={`event-level-${item.level}`}>
+                <div className="history-main">
+                  <span className="history-label">
+                    {item.stage || '—'}/{item.event}
+                  </span>
+                  <span className="history-user">{item.level}</span>
+                </div>
+                <div className="history-meta">
+                  {formatTime(item.at)}
+                  {formatEventDetail(item.detail)
+                    ? ` · ${formatEventDetail(item.detail)}`
+                    : ''}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="panel history">

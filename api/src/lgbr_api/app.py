@@ -16,6 +16,7 @@ from lgbr_api.auth import ApiKeyMiddleware
 from lgbr_api.crawls import (
     get_cdp_status,
     get_current_crawl,
+    list_crawl_events,
     request_stop,
     shutdown_open_crawl,
     start_crawl,
@@ -56,8 +57,21 @@ async def session_history(request: Request) -> JSONResponse:
     return JSONResponse({"items": list_history(limit=limit)})
 
 
-async def crawl(_: Request) -> JSONResponse:
-    return JSONResponse(get_current_crawl())
+async def crawl(request: Request) -> JSONResponse:
+    try:
+        event_limit = int(request.query_params.get("events", "50"))
+    except ValueError:
+        event_limit = 50
+    return JSONResponse(get_current_crawl(event_limit=event_limit))
+
+
+async def crawl_events(request: Request) -> JSONResponse:
+    crawl_id = request.query_params.get("crawl_id")
+    try:
+        limit = int(request.query_params.get("limit", "50"))
+    except ValueError:
+        limit = 50
+    return JSONResponse(list_crawl_events(crawl_id, limit=limit))
 
 
 async def crawl_start(request: Request) -> JSONResponse:
@@ -108,6 +122,7 @@ def create_app() -> Starlette:
             Route("/api/session/logout", session_logout, methods=["POST"]),
             Route("/api/session/history", session_history),
             Route("/api/crawl", crawl),
+            Route("/api/crawl/events", crawl_events),
             Route("/api/crawl/start", crawl_start, methods=["POST"]),
             Route("/api/crawl/stop", crawl_stop, methods=["POST"]),
             Route("/api/cdp", cdp_status),

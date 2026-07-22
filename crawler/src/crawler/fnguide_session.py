@@ -14,7 +14,13 @@ from patchright.sync_api import BrowserContext, Page
 
 from crawler import sessions_store
 from crawler.browser import LOGIN_URL, launch_context
-from crawler.session import _is_logged_in, login, logout
+from crawler.session import (
+    LoginPageError,
+    _is_logged_in,
+    capture_login_failure,
+    login,
+    logout,
+)
 
 DEFAULT_TTL_SECONDS = int(os.environ.get("FNGUIDE_SESSION_TTL_SECONDS", "28800"))
 DEFAULT_IDLE_SECONDS = int(os.environ.get("FNGUIDE_SESSION_IDLE_SECONDS", "900"))
@@ -68,21 +74,42 @@ class FnguideSession:
                 else self._context.new_page()
             )
             self.page.goto(LOGIN_URL, wait_until="domcontentloaded")
-            login(
-                self.page,
-                user_id=self.user_id,
-                password=self.password,
-                force_other_session=self.force_other_session,
-            )
+            # Persistent profile may already be authenticated.
+            if not _is_logged_in(self.page):
+                login(
+                    self.page,
+                    user_id=self.user_id,
+                    password=self.password,
+                    force_other_session=self.force_other_session,
+                )
             if not _is_logged_in(self.page) and "/users/login" in self.page.url.lower():
-                raise RuntimeError(f"Login failed; still on {self.page.url}")
+                raise LoginPageError(
+                    f"Login failed; still on {self.page.url}",
+                    detail={"url": self.page.url, "logged_in": False},
+                )
             return sessions_store.mark_logged_in(
                 self.session_id,
                 current_url=self.page.url,
                 step="ready",
             )
         except Exception as exc:
+            detail: dict[str, Any] = {}
+            if isinstance(exc, LoginPageError):
+                detail = dict(exc.detail)
+            if self.page is not None:
+                try:
+                    artifact_dir = self.downloads_path or Path(".crawler/downloads") / (
+                        self.session_id or "login-fail"
+                    )
+                    captured = capture_login_failure(self.page, artifact_dir)
+                    detail = {**captured, **detail}
+                except Exception as cap_exc:
+                    detail["capture_error"] = str(cap_exc)
             fail_msg = str(exc)
+            if detail.get("url"):
+                fail_msg = f"{fail_msg} | url={detail.get('url')}"
+            if detail.get("screenshot"):
+                fail_msg = f"{fail_msg} | screenshot={detail.get('screenshot')}"
             try:
                 sessions_store.mark_login_failed(self.session_id, fail_msg)
             except Exception as db_exc:
@@ -93,7 +120,7 @@ class FnguideSession:
                 ) from db_exc
             self._close_browser()
             self.session_id = None
-            raise
+            raise LoginPageError(fail_msg, detail=detail) from exc
 
     def touch(
         self,

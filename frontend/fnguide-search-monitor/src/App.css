@@ -238,6 +238,19 @@
   color: var(--muted);
 }
 
+.events .event-level-error .history-label {
+  color: var(--danger);
+}
+
+.events .event-level-warn .history-label {
+  color: var(--warn-ink);
+}
+
+.events ul {
+  max-height: 22rem;
+  overflow: auto;
+}
+
 @media (max-width: 640px) {
   .details dl {
     grid-template-columns: 1fr;

@@ -46,6 +46,74 @@ def _is_logged_in(page: Page) -> bool:
     return logout.count() > 0
 
 
+class LoginPageError(RuntimeError):
+    """Login page missing expected controls; includes diagnostics detail."""
+
+    def __init__(self, message: str, *, detail: dict | None = None) -> None:
+        super().__init__(message)
+        self.detail: dict = detail or {}
+
+
+def login_diagnostics(page: Page) -> dict:
+    """Best-effort snapshot of the current page for login failures."""
+    try:
+        title = page.title()
+    except Exception:
+        title = None
+    try:
+        url = page.url
+    except Exception:
+        url = None
+    try:
+        has_user = page.locator("#userId").count() > 0
+    except Exception:
+        has_user = False
+    try:
+        has_pw = page.locator("#userPw").count() > 0
+    except Exception:
+        has_pw = False
+    try:
+        has_logout = page.get_by_text("로그아웃", exact=False).count() > 0
+    except Exception:
+        has_logout = False
+    try:
+        logged_in = _is_logged_in(page)
+    except Exception:
+        logged_in = False
+    return {
+        "url": url,
+        "title": title,
+        "has_userId": has_user,
+        "has_userPw": has_pw,
+        "has_logout": has_logout,
+        "logged_in": logged_in,
+    }
+
+
+def capture_login_failure(
+    page: Page,
+    directory: Path,
+    *,
+    prefix: str = "login-fail",
+) -> dict:
+    """Write screenshot/html under directory; return paths merged with diagnostics."""
+    directory.mkdir(parents=True, exist_ok=True)
+    detail = login_diagnostics(page)
+    shot = directory / f"{prefix}.png"
+    html_path = directory / f"{prefix}.html"
+    try:
+        page.screenshot(path=str(shot), full_page=True)
+        detail["screenshot"] = str(shot)
+    except Exception as exc:
+        detail["screenshot_error"] = str(exc)
+    try:
+        html_path.write_text(page.content()[:500_000], encoding="utf-8")
+        detail["html"] = str(html_path)
+    except Exception as exc:
+        detail["html_error"] = str(exc)
+    return detail
+
+
 def login(
     page: Page,
     *,
@@ -53,11 +121,36 @@ def login(
     password: str,
     force_other_session: bool = True,
 ) -> Page:
-    """Fill credentials, submit login, and optionally accept session conflict."""
+    """Fill credentials, submit login, and optionally accept session conflict.
+
+    Skips credential entry when the persistent profile is already logged in.
+    """
+    if _is_logged_in(page):
+        return page
+
     if "/users/login" not in page.url.lower():
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        page.wait_for_timeout(500)
 
-    page.locator("#userId").fill(user_id)
+    # Cookie/session may redirect away from login as already authenticated.
+    if _is_logged_in(page):
+        return page
+
+    if "/users/login" not in page.url.lower():
+        page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        page.wait_for_timeout(500)
+
+    user = page.locator("#userId")
+    try:
+        user.wait_for(state="visible", timeout=30_000)
+    except Exception as exc:
+        detail = login_diagnostics(page)
+        raise LoginPageError(
+            f"Login form not found (#userId) at {detail.get('url')}",
+            detail=detail,
+        ) from exc
+
+    user.fill(user_id)
     page.locator("#userPw").fill(password)
     page.locator("#loginBtn").click()
 

@@ -19,6 +19,8 @@ const EMPTY_CRAWL: CrawlResponse = {
   state: 'ended',
   label: '종료',
   crawl: null,
+  progress: {},
+  events: [],
   session: EMPTY_SESSION,
   can_start: true,
 }
@@ -54,6 +56,8 @@ function applyCrawl(data: CrawlResponse): CrawlResponse {
     state: data.state,
     label: data.label,
     crawl: data.crawl ?? null,
+    progress: data.progress ?? data.crawl?.progress ?? {},
+    events: data.events ?? [],
     session: data.session ?? EMPTY_SESSION,
     can_start: data.can_start ?? false,
     unblock_sql: data.unblock_sql ?? null,
