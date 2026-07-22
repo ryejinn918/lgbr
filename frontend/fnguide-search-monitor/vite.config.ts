@@ -78,14 +78,14 @@ export default defineConfig(({ mode }) => {
     plugins,
     server: {
       host: '127.0.0.1',
-      port: 8788,
+      port: 8000,
       strictPort: true,
       allowedHosts: ['lgbrwsl.tail700203.ts.net'],
       proxy: apiProxy,
     },
     preview: {
       host: '127.0.0.1',
-      port: 8788,
+      port: 8000,
       strictPort: true,
       allowedHosts: ['lgbrwsl.tail700203.ts.net'],
       proxy: apiProxy,
