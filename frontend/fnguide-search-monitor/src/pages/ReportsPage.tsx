@@ -1,90 +1,68 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useReports, type ReportSort } from '../hooks/useReports'
+import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import { STATUS_LABEL, formatPublishedAt, formatRelative } from '../lib/format'
-
-const FILTERS = [
-  'all',
-  'downloaded',
-  'blind',
-  'listed',
-  'no_download',
-  'failed',
-] as const
+import {
+  STATUS_FILTERS,
+  isReportFiltersDirty,
+  parseReportFilters,
+  resetReportFilters,
+  resolveReportSort,
+  serializeReportFilters,
+  withPage,
+  withQuery,
+  withSort,
+  withStatus,
+  type ReportFilters,
+} from '../lib/reportFilters'
 
 export function ReportsPage() {
   const [params, setParams] = useSearchParams()
-  const status = params.get('status') || 'all'
-  const qParam = params.get('q') || ''
-  const sort: ReportSort =
-    params.get('sort') === 'page_count' ? 'page_count' : 'published_at'
-  const offset = Math.max(0, Number(params.get('offset') || '0') || 0)
-  const [qDraft, setQDraft] = useState(qParam)
+  const searchKey = params.toString()
+  const filters = useMemo(
+    () => parseReportFilters(new URLSearchParams(searchKey)),
+    [searchKey],
+  )
+  const [qDraft, setQDraft] = useState(filters.q)
   const { crawl } = useSessionStatus()
   const crawlBusy =
     crawl.state === 'starting' ||
     crawl.state === 'active' ||
     crawl.state === 'stopping'
-  const filtersDirty =
-    status !== 'all' || Boolean(qParam) || sort !== 'published_at' || offset > 0
+  const dirty = isReportFiltersDirty(filters, qDraft)
 
   useEffect(() => {
-    setQDraft(qParam)
-  }, [qParam])
+    setQDraft(filters.q)
+  }, [filters.q])
 
   const query = useMemo(
     () => ({
-      status,
-      q: qParam,
-      sort,
+      status: filters.status,
+      q: filters.q,
+      sort: resolveReportSort(filters.sort),
       limit: 30,
-      offset,
+      offset: filters.offset,
       poll: true,
     }),
-    [status, qParam, sort, offset],
+    [filters],
   )
   const reports = useReports(query)
 
-  function setStatus(next: string) {
-    const nextParams = new URLSearchParams(params)
-    // 활성 칩을 다시 누르면 전체로 되돌림
-    if (!next || next === 'all' || next === status) nextParams.delete('status')
-    else nextParams.set('status', next)
-    nextParams.delete('offset')
-    setParams(nextParams)
+  function commit(next: ReportFilters) {
+    setQDraft(next.q)
+    const serialized = serializeReportFilters(next)
+    // 빈 쿼리는 객체로 넘겨 RR가 search를 확실히 지우게 함
+    if ([...serialized.keys()].length === 0) {
+      setParams({}, { replace: true })
+      return
+    }
+    setParams(serialized, { replace: true })
   }
 
-  function setSort(next: ReportSort) {
-    const nextParams = new URLSearchParams(params)
-    // 활성 정렬을 다시 누르면 기본(발행일)으로
-    if (next === 'published_at' || next === sort) nextParams.delete('sort')
-    else nextParams.set('sort', next)
-    nextParams.delete('offset')
-    setParams(nextParams)
-  }
-
-  function applySearch(e: FormEvent) {
+  function onSearch(e: FormEvent) {
     e.preventDefault()
-    const nextParams = new URLSearchParams(params)
-    const trimmed = qDraft.trim()
-    if (trimmed) nextParams.set('q', trimmed)
-    else nextParams.delete('q')
-    nextParams.delete('offset')
-    setParams(nextParams)
-  }
-
-  function resetFilters() {
-    setQDraft('')
-    setParams(new URLSearchParams())
-  }
-
-  function shiftPage(delta: number) {
-    const next = Math.max(0, offset + delta * reports.limit)
-    const nextParams = new URLSearchParams(params)
-    if (next === 0) nextParams.delete('offset')
-    else nextParams.set('offset', String(next))
-    setParams(nextParams)
+    commit(withQuery(filters, qDraft))
   }
 
   return (
@@ -105,12 +83,12 @@ export function ReportsPage() {
 
       <section className="panel">
         <div className="filter-row">
-          {FILTERS.map((key) => (
+          {STATUS_FILTERS.map((key) => (
             <button
               key={key}
               type="button"
-              className={`filter-chip${status === key ? ' active' : ''}`}
-              onClick={() => setStatus(key)}
+              className={`filter-chip${filters.status === key ? ' active' : ''}`}
+              onClick={() => commit(withStatus(filters, key))}
             >
               {STATUS_LABEL[key]} {reports.counts[key] ?? 0}
             </button>
@@ -118,14 +96,14 @@ export function ReportsPage() {
           <button
             type="button"
             className="filter-chip filter-reset"
-            disabled={!filtersDirty}
-            onClick={resetFilters}
+            disabled={!dirty}
+            onClick={() => commit(resetReportFilters())}
             title="상태·검색·정렬·페이지 초기화"
           >
             초기화
           </button>
         </div>
-        <form className="search-row" onSubmit={applySearch}>
+        <form className="search-row" onSubmit={onSearch}>
           <input
             type="search"
             placeholder="제목, 증권사, rpt_id"
@@ -135,17 +113,11 @@ export function ReportsPage() {
           <button type="submit" className="run-btn">
             검색
           </button>
-          {qParam || qDraft ? (
+          {filters.q || qDraft ? (
             <button
               type="button"
               className="run-btn"
-              onClick={() => {
-                setQDraft('')
-                const nextParams = new URLSearchParams(params)
-                nextParams.delete('q')
-                nextParams.delete('offset')
-                setParams(nextParams)
-              }}
+              onClick={() => commit(withQuery(filters, ''))}
             >
               검색 지우기
             </button>
@@ -174,26 +146,35 @@ export function ReportsPage() {
                   <th>
                     <button
                       type="button"
-                      className={`sort-th${sort === 'published_at' ? ' active' : ''}`}
-                      onClick={() => setSort('published_at')}
-                      title="발행일 내림차순"
+                      className={`sort-th${filters.sort === 'published_at' ? ' active' : ''}`}
+                      onClick={() => commit(withSort(filters, 'published_at'))}
+                      title="발행일 내림차순 (다시 누르면 해제)"
                     >
-                      발행일{sort === 'published_at' ? ' ↓' : ''}
+                      발행일{filters.sort === 'published_at' ? ' ↓' : ''}
                     </button>
                   </th>
                   <th>
                     <button
                       type="button"
-                      className={`sort-th${sort === 'page_count' ? ' active' : ''}`}
-                      onClick={() => setSort('page_count')}
-                      title="페이지수 내림차순"
+                      className={`sort-th${filters.sort === 'page_count' ? ' active' : ''}`}
+                      onClick={() => commit(withSort(filters, 'page_count'))}
+                      title="페이지수 내림차순 (다시 누르면 해제)"
                     >
-                      페이지{sort === 'page_count' ? ' ↓' : ''}
+                      페이지{filters.sort === 'page_count' ? ' ↓' : ''}
                     </button>
                   </th>
                   <th>rpt_id</th>
                   <th>파일</th>
-                  <th title="목록에서 마지막으로 본 시각">최근</th>
+                  <th>
+                    <button
+                      type="button"
+                      className={`sort-th${filters.sort === 'last_seen_at' ? ' active' : ''}`}
+                      onClick={() => commit(withSort(filters, 'last_seen_at'))}
+                      title="최근 본 시각 내림차순 (다시 누르면 해제)"
+                    >
+                      최근{filters.sort === 'last_seen_at' ? ' ↓' : ''}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -240,20 +221,21 @@ export function ReportsPage() {
           <button
             type="button"
             className="run-btn"
-            disabled={offset <= 0}
-            onClick={() => shiftPage(-1)}
+            disabled={filters.offset <= 0}
+            onClick={() => commit(withPage(filters, -1, reports.limit))}
           >
             이전
           </button>
           <span className="section-note">
-            {offset + 1}–{Math.min(offset + reports.limit, reports.total)} /{' '}
+            {filters.offset + 1}–
+            {Math.min(filters.offset + reports.limit, reports.total)} /{' '}
             {reports.total}
           </span>
           <button
             type="button"
             className="run-btn"
-            disabled={offset + reports.limit >= reports.total}
-            onClick={() => shiftPage(1)}
+            disabled={filters.offset + reports.limit >= reports.total}
+            onClick={() => commit(withPage(filters, 1, reports.limit))}
           >
             다음
           </button>

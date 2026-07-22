@@ -12,7 +12,7 @@ const EMPTY_COUNTS: ReportCounts = {
   failed: 0,
 }
 
-export type ReportSort = 'published_at' | 'page_count'
+export type ReportSort = 'published_at' | 'page_count' | 'last_seen_at'
 
 export type ReportsQuery = {
   status?: string
@@ -39,7 +39,10 @@ export function useReports(query: ReportsQuery): ReportsView {
   const status = query.status && query.status !== 'all' ? query.status : ''
   const q = query.q?.trim() || ''
   const crawlId = query.crawlId || ''
-  const sort = query.sort === 'page_count' ? 'page_count' : 'published_at'
+  const sort: ReportSort =
+    query.sort === 'published_at' || query.sort === 'page_count'
+      ? query.sort
+      : 'last_seen_at'
   const limit = query.limit ?? 30
   const offset = query.offset ?? 0
   const poll = query.poll !== false
@@ -57,7 +60,7 @@ export function useReports(query: ReportsQuery): ReportsView {
     if (status) params.set('status', status)
     if (q) params.set('q', q)
     if (crawlId) params.set('crawl_id', crawlId)
-    if (sort !== 'published_at') params.set('sort', sort)
+    if (sort !== 'last_seen_at') params.set('sort', sort)
     try {
       const res = await fetch(`/api/reports?${params}`)
       const data = (await res.json()) as ReportsResponse

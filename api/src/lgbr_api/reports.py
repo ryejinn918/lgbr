@@ -13,10 +13,11 @@ from lgbr_api.db import connect
 VALID_STATUSES = frozenset(
     {"listed", "blind", "downloaded", "no_download", "failed"}
 )
-VALID_SORTS = frozenset({"published_at", "page_count"})
+VALID_SORTS = frozenset({"published_at", "page_count", "last_seen_at"})
 SORT_SQL = {
     "published_at": "published_at DESC NULLS LAST, id DESC",
     "page_count": "page_count DESC NULLS LAST, published_at DESC NULLS LAST, id DESC",
+    "last_seen_at": "last_seen_at DESC NULLS LAST, id DESC",
 }
 
 # api/src/lgbr_api/reports.py → repo root
@@ -97,7 +98,7 @@ def list_reports(
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
 
-    sort_key = (sort or "published_at").strip() or "published_at"
+    sort_key = (sort or "last_seen_at").strip() or "last_seen_at"
     if sort_key not in VALID_SORTS:
         return {
             "ok": False,
