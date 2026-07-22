@@ -14,18 +14,30 @@ function formatProgress(progress: Record<string, unknown> | undefined): string {
   const stage = progress.stage != null ? String(progress.stage) : null
   const downloaded = progress.downloaded
   const limit = progress.limit
+  const skippedBlind = progress.skipped_blind
   const rpt = progress.current_rpt_id != null ? String(progress.current_rpt_id) : null
   const bits: string[] = []
   if (stage) bits.push(`stage=${stage}`)
   if (downloaded != null || limit != null) {
     bits.push(`downloaded=${downloaded ?? 0}/${limit ?? '?'}`)
   }
+  if (skippedBlind != null) bits.push(`skipped_blind=${skippedBlind}`)
   if (rpt) bits.push(`rpt=${rpt}`)
   return bits.length ? bits.join(' · ') : JSON.stringify(progress)
 }
 
 function formatEventDetail(detail: Record<string, unknown>): string {
-  const keys = ['rpt_id', 'reason', 'error', 'path', 'title', 'list_page', 'candidates']
+  const keys = [
+    'rpt_id',
+    'reason',
+    'error',
+    'path',
+    'title',
+    'list_page',
+    'candidates',
+    'blind',
+    'total',
+  ]
   const parts: string[] = []
   for (const key of keys) {
     if (detail[key] != null && detail[key] !== '') {
@@ -139,6 +151,9 @@ function App() {
                 ? ' · CDP 대기'
                 : ''}
           </p>
+        ) : null}
+        {crawl.crawl?.asset_id && !fetchError ? (
+          <p className="account-line">애셋: {crawl.crawl.asset_id}</p>
         ) : null}
         {crawl.crawl?.message && !fetchError ? (
           <p className="account-line">메시지: {crawl.crawl.message}</p>

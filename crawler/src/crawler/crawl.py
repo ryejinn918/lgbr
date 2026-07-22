@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from crawler import crawls_store, sessions_store
+from crawler.asset_id import downloads_dir
 from crawler.browser import allocate_cdp_port
 from crawler.crawl_log import CrawlLogger
 from crawler.fnguide_session import (
@@ -24,8 +25,6 @@ from crawler.fnguide_session import (
 )
 from crawler.jobs.datacenter import run_datacenter_job
 from crawler.session import LoginPageError
-
-DOWNLOADS_ROOT = Path(".crawler/downloads")
 
 _stop_flag = threading.Event()
 _handlers_installed = False
@@ -70,17 +69,25 @@ def run_crawl(
     crawl = crawls_store.claim_crawl(crawl_id)
     crawl_id = str(crawl["id"])
     mode = str(crawl.get("mode") or "auto")
+    asset_id = str(crawl.get("asset_id") or "")
+    if not asset_id:
+        raise CrawlStateError(f"Crawl {crawl_id} missing asset_id")
     log = CrawlLogger(crawl_id)
-    log.emit(level="info", stage="crawl", event="claimed", mode=mode)
-    log.set_progress(stage="login", mode=mode)
+    log.emit(
+        level="info",
+        stage="crawl",
+        event="claimed",
+        mode=mode,
+        asset_id=asset_id,
+    )
+    log.set_progress(stage="login", mode=mode, asset_id=asset_id)
 
     cdp_port = allocate_cdp_port() if mode == "adhoc" else None
     touch_step = "adhoc" if mode == "adhoc" else "crawl"
-    download_dir: Path | None = None
     if mode == "datacenter":
-        download_dir = DOWNLOADS_ROOT / crawl_id
-        download_dir.mkdir(parents=True, exist_ok=True)
         touch_step = "datacenter"
+    download_dir = downloads_dir(asset_id)
+    download_dir.mkdir(parents=True, exist_ok=True)
 
     sess = FnguideSession(
         user_id=user_id,
@@ -94,8 +101,14 @@ def run_crawl(
     )
 
     try:
-        log.emit(level="info", stage="login", event="stage_start", mode=mode)
-        log.set_progress(stage="login", mode=mode)
+        log.emit(
+            level="info",
+            stage="login",
+            event="stage_start",
+            mode=mode,
+            asset_id=asset_id,
+        )
+        log.set_progress(stage="login", mode=mode, asset_id=asset_id)
         try:
             sess.start()
         except LoginPageError as exc:
@@ -123,8 +136,14 @@ def run_crawl(
             log.emit(level="info", stage="crawl", event="cdp_ready", cdp_port=cdp_port)
         crawls_store.attach_session(crawl_id, sess.session_id)
         crawls_store.mark_active(crawl_id)
-        log.emit(level="info", stage="crawl", event="active", mode=mode)
-        log.set_progress(stage="active", mode=mode)
+        log.emit(
+            level="info",
+            stage="crawl",
+            event="active",
+            mode=mode,
+            asset_id=asset_id,
+        )
+        log.set_progress(stage="active", mode=mode, asset_id=asset_id)
 
         if mode == "datacenter":
             return _run_datacenter(crawl_id, crawl, sess, download_dir, log)

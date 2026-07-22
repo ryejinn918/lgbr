@@ -30,11 +30,15 @@ export type CrawlMode = 'auto' | 'adhoc' | 'datacenter'
 export type CrawlProgress = {
   stage?: string
   mode?: string
+  asset_id?: string
   limit?: number
   downloaded?: number
+  skipped_blind?: number
+  skipped_no_download?: number
   list_page?: number
   current_rpt_id?: string
   candidates?: number
+  blind?: number
   error?: string
   reason?: string
   [key: string]: unknown
@@ -60,6 +64,7 @@ export type CrawlRecord = {
   state: CrawlState
   mode?: CrawlMode | null
   report_limit?: number | null
+  asset_id?: string | null
   progress?: CrawlProgress | null
   cdp_port?: number | null
   cdp_http_url?: string | null

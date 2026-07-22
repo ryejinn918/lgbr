@@ -19,6 +19,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 from uuid import UUID
 
+from lgbr_api.asset_id import make_asset_id
 from lgbr_api.db import CRAWL_STATE_LABELS, connect, database_url
 from lgbr_api.sessions import get_current_session, request_logout
 
@@ -471,15 +472,20 @@ def _create_starting_crawl(
     report_limit: int = DEFAULT_REPORT_LIMIT,
 ) -> dict[str, Any]:
     now = _now()
+    asset_id = make_asset_id(
+        mode,
+        report_limit=report_limit if mode == "datacenter" else None,
+    )
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO fnguide_crawls (started_at, state, mode, report_limit)
-                VALUES (%s, 'starting', %s, %s)
+                INSERT INTO fnguide_crawls
+                    (started_at, state, mode, report_limit, asset_id)
+                VALUES (%s, 'starting', %s, %s, %s)
                 RETURNING *
                 """,
-                (now, mode, report_limit),
+                (now, mode, report_limit, asset_id),
             )
             row = dict(cur.fetchone())
         conn.commit()

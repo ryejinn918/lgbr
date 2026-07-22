@@ -92,7 +92,11 @@ def run_datacenter_job(
     touch: Callable[[], Any] | None = None,
     logger: CrawlLogger | None = None,
 ) -> DatacenterJobSummary:
-    """Apply fixed filters, then download up to `limit` non-blind PDFs."""
+    """Apply fixed filters, then download up to `limit` PDFs.
+
+    List rows already tagged 본문 제한 are skipped (logged) and do not count
+    toward `limit`. Only successful downloads increment the counter.
+    """
     if limit < 1:
         raise ValueError("limit must be >= 1")
     download_dir.mkdir(parents=True, exist_ok=True)
@@ -123,23 +127,54 @@ def run_datacenter_job(
                 log.emit(level="warn", stage="list", event="stopped", list_page=list_page)
             break
         candidates = _list_candidates(page)
+        # List-tagged 본문 제한 is excluded from the downloadable count; still logged.
+        blind_rows = [c for c in candidates if c["blind"] and c["rpt_id"] not in seen]
+        work_rows = [c for c in candidates if not c["blind"] and c["rpt_id"] not in seen]
         if log:
             log.emit(
                 level="info",
                 stage="list",
                 event="page",
                 list_page=list_page,
-                candidates=len(candidates),
+                total=len(candidates),
+                candidates=len(work_rows),
+                blind=len(blind_rows),
             )
             log.set_progress(
                 stage="list",
                 list_page=list_page,
-                candidates=len(candidates),
+                candidates=len(work_rows),
+                blind=len(blind_rows),
                 downloaded=len(summary.downloaded),
+                skipped_blind=summary.skipped_blind,
                 limit=limit,
             )
+
         progressed = False
-        for cand in candidates:
+        for cand in blind_rows:
+            rpt_id = cand["rpt_id"]
+            seen.add(rpt_id)
+            progressed = True
+            summary.skipped_blind += 1
+            if log:
+                log.emit(
+                    level="info",
+                    stage="list",
+                    event="item_skip",
+                    rpt_id=rpt_id,
+                    title=cand["title"],
+                    reason="blind",
+                    list_page=list_page,
+                )
+                log.set_progress(
+                    stage="list",
+                    skipped_blind=summary.skipped_blind,
+                    downloaded=len(summary.downloaded),
+                    limit=limit,
+                    list_page=list_page,
+                )
+
+        for cand in work_rows:
             if stop():
                 summary.stopped = True
                 if log:
@@ -161,21 +196,10 @@ def run_datacenter_job(
                     stage="download",
                     current_rpt_id=rpt_id,
                     downloaded=len(summary.downloaded),
+                    skipped_blind=summary.skipped_blind,
                     limit=limit,
                     list_page=list_page,
                 )
-            if cand["blind"]:
-                summary.skipped_blind += 1
-                if log:
-                    log.emit(
-                        level="info",
-                        stage="download",
-                        event="item_skip",
-                        rpt_id=rpt_id,
-                        title=title,
-                        reason="blind",
-                    )
-                continue
             try:
                 path = _download_one(
                     page,
@@ -195,6 +219,12 @@ def run_datacenter_job(
                         title=title,
                         reason="no_custom_download",
                         error=str(exc),
+                    )
+                    log.set_progress(
+                        stage="download",
+                        skipped_no_download=summary.skipped_no_download,
+                        downloaded=len(summary.downloaded),
+                        limit=limit,
                     )
                 continue
             except Exception as exc:
@@ -222,6 +252,7 @@ def run_datacenter_job(
                 log.set_progress(
                     stage="download",
                     downloaded=len(summary.downloaded),
+                    skipped_blind=summary.skipped_blind,
                     limit=limit,
                     current_rpt_id=rpt_id,
                 )
