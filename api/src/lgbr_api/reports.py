@@ -1,0 +1,143 @@
+"""Report catalog API for the monitor."""
+
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from lgbr_api.db import connect
+
+VALID_STATUSES = frozenset(
+    {"listed", "blind", "downloaded", "no_download", "failed"}
+)
+
+
+def _serialize(row: dict[str, Any]) -> dict[str, Any]:
+    pub = row.get("published_at")
+    return {
+        "id": str(row["id"]),
+        "source_key": row.get("source_key"),
+        "title": row.get("title"),
+        "status": row.get("status") or "listed",
+        "has_file": bool(row.get("file_path")),
+        "file_name": row.get("file_name"),
+        "last_seen_at": (
+            row["last_seen_at"].isoformat() if row.get("last_seen_at") else None
+        ),
+        "downloaded_at": (
+            row["downloaded_at"].isoformat() if row.get("downloaded_at") else None
+        ),
+        "published_at": pub.isoformat() if pub else None,
+        "page_count": row.get("page_count"),
+        "crawl_id": str(row["crawl_id"]) if row.get("crawl_id") else None,
+    }
+
+
+def _status_counts(cur: Any) -> dict[str, int]:
+    cur.execute(
+        """
+        SELECT status, count(*)::int AS n
+        FROM reports
+        GROUP BY status
+        """
+    )
+    counts = {s: 0 for s in VALID_STATUSES}
+    total = 0
+    for row in cur.fetchall():
+        status = str(row["status"] or "listed")
+        n = int(row["n"])
+        if status in counts:
+            counts[status] = n
+        total += n
+    counts["all"] = total
+    return counts
+
+
+def list_reports(
+    *,
+    status: str | None = None,
+    q: str | None = None,
+    crawl_id: str | None = None,
+    limit: int = 30,
+    offset: int = 0,
+) -> dict[str, Any]:
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+
+    status_filter: str | None = None
+    if status and status != "all":
+        if status not in VALID_STATUSES:
+            return {
+                "ok": False,
+                "message": f"invalid status: {status}",
+                "status": 400,
+                "items": [],
+                "total": 0,
+                "counts": {},
+                "limit": limit,
+                "offset": offset,
+            }
+        status_filter = status
+
+    crawl_uuid: str | None = None
+    if crawl_id:
+        try:
+            crawl_uuid = str(UUID(crawl_id))
+        except (TypeError, ValueError):
+            return {
+                "ok": False,
+                "message": "invalid crawl_id",
+                "status": 400,
+                "items": [],
+                "total": 0,
+                "counts": {},
+                "limit": limit,
+                "offset": offset,
+            }
+
+    q_pat = f"%{q.strip()}%" if q and q.strip() else None
+
+    where: list[str] = []
+    params: list[Any] = []
+    if status_filter:
+        where.append("status = %s")
+        params.append(status_filter)
+    if crawl_uuid:
+        where.append("crawl_id = %s")
+        params.append(crawl_uuid)
+    if q_pat:
+        where.append("(title ILIKE %s OR source_key ILIKE %s)")
+        params.extend([q_pat, q_pat])
+
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+
+    with connect() as conn:
+        with conn.cursor() as cur:
+            counts = _status_counts(cur)
+            cur.execute(
+                f"SELECT count(*)::int AS n FROM reports{where_sql}",
+                params,
+            )
+            total = int(cur.fetchone()["n"])
+            cur.execute(
+                f"""
+                SELECT id, source_key, title, status, file_path, file_name,
+                       last_seen_at, downloaded_at, published_at, page_count,
+                       crawl_id
+                FROM reports
+                {where_sql}
+                ORDER BY last_seen_at DESC NULLS LAST, id DESC
+                LIMIT %s OFFSET %s
+                """,
+                [*params, limit, offset],
+            )
+            items = [_serialize(r) for r in cur.fetchall()]
+
+    return {
+        "ok": True,
+        "items": items,
+        "total": total,
+        "counts": counts,
+        "limit": limit,
+        "offset": offset,
+    }

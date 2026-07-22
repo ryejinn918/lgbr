@@ -1,9 +1,39 @@
 .monitor {
-  width: min(760px, calc(100% - 2rem));
+  width: min(820px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 2.5rem 0 4rem;
+  padding: 2rem 0 4rem;
   display: grid;
   gap: 1.25rem;
+}
+
+.app-shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+}
+
+.app-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.app-nav a:hover {
+  color: var(--ink);
+}
+
+.app-nav a.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom: 2px solid color-mix(in srgb, var(--active) 70%, var(--line));
 }
 
 .monitor-header {
@@ -18,6 +48,248 @@
   letter-spacing: 0.04em;
   text-transform: lowercase;
   color: var(--muted);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.section-note {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.live-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.live-strip .badge-label {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.live-value {
+  margin: 0.25rem 0 0;
+  font-family: var(--display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.live-meta,
+.live-current {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.live-current {
+  color: var(--ink);
+}
+
+.live-banner {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.live-banner a,
+.live-meta a {
+  color: var(--ink);
+}
+
+.count-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.count-tile {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--line);
+  text-decoration: none;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 70%, #fff);
+}
+
+.count-tile:hover {
+  border-color: color-mix(in srgb, var(--active) 40%, var(--line));
+}
+
+.count-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.count-value {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.report-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.report-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.65rem;
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  padding-top: 0.65rem;
+}
+
+.report-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.status-pill {
+  grid-row: span 2;
+  align-self: start;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status-pill.status-downloaded {
+  border-color: color-mix(in srgb, var(--active) 45%, var(--line));
+  color: var(--active);
+}
+
+.status-pill.status-blind,
+.status-pill.status-failed {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+  color: var(--danger);
+}
+
+.status-pill.status-listed,
+.status-pill.status-no_download {
+  border-color: color-mix(in srgb, var(--busy) 40%, var(--line));
+  color: var(--busy);
+}
+
+.report-title {
+  font-weight: 500;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.report-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.filter-chip {
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.filter-chip.active {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--active) 45%, var(--line));
+  background: color-mix(in srgb, var(--active) 10%, var(--panel));
+}
+
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.search-row input[type='search'] {
+  flex: 1 1 12rem;
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 80%, #fff);
+  color: var(--ink);
+}
+
+.pager {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.live-strip.state-active,
+.badge-panel.state-active {
+  border-color: color-mix(in srgb, var(--active) 55%, var(--line));
+  background: color-mix(in srgb, var(--active) 14%, var(--panel));
+}
+
+.live-strip.state-starting,
+.live-strip.state-stopping,
+.badge-panel.state-starting,
+.badge-panel.state-stopping {
+  border-color: color-mix(in srgb, var(--busy) 55%, var(--line));
+  background: color-mix(in srgb, var(--busy) 12%, var(--panel));
+}
+
+.live-strip.state-error,
+.live-strip.state-stale,
+.live-strip.state-offline,
+.badge-panel.state-error,
+.badge-panel.state-stale,
+.badge-panel.state-offline {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+
+@media (max-width: 720px) {
+  .count-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .monitor-header h1 {
@@ -190,9 +462,14 @@
   color: var(--ink);
 }
 
-.history .empty {
+.empty {
   margin: 0;
   color: var(--muted);
+}
+
+.warn {
+  margin: 0.5rem 0 0;
+  color: var(--warn-ink);
 }
 
 .history ul {

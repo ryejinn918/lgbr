@@ -7,7 +7,18 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-DOWNLOADS_ROOT = Path(".crawler/downloads")
+# Prefer repo-root .crawler/downloads (API worker cwd); fall back to CWD-relative.
+def _default_downloads_root() -> Path:
+    here = Path(__file__).resolve()
+    # .../crawler/src/crawler/asset_id.py -> repo root is parents[3]
+    for parent in here.parents:
+        candidate = parent / ".crawler" / "downloads"
+        if (parent / "crawler").is_dir() and (parent / "api").is_dir():
+            return candidate
+    return Path(".crawler/downloads")
+
+
+DOWNLOADS_ROOT = _default_downloads_root()
 _SEOUL = ZoneInfo("Asia/Seoul")
 
 MODE_ABBREV = {

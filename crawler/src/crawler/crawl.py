@@ -69,6 +69,7 @@ def run_crawl(
     crawl = crawls_store.claim_crawl(crawl_id)
     crawl_id = str(crawl["id"])
     mode = str(crawl.get("mode") or "auto")
+    debug = bool(crawl.get("debug"))
     asset_id = str(crawl.get("asset_id") or "")
     if not asset_id:
         raise CrawlStateError(f"Crawl {crawl_id} missing asset_id")
@@ -79,10 +80,12 @@ def run_crawl(
         event="claimed",
         mode=mode,
         asset_id=asset_id,
+        debug=debug,
     )
-    log.set_progress(stage="login", mode=mode, asset_id=asset_id)
+    log.set_progress(stage="login", mode=mode, asset_id=asset_id, debug=debug)
 
-    cdp_port = allocate_cdp_port() if mode == "adhoc" else None
+    want_cdp = mode == "adhoc" or (mode == "datacenter" and debug)
+    cdp_port = allocate_cdp_port() if want_cdp else None
     touch_step = "adhoc" if mode == "adhoc" else "crawl"
     if mode == "datacenter":
         touch_step = "datacenter"
@@ -107,8 +110,9 @@ def run_crawl(
             event="stage_start",
             mode=mode,
             asset_id=asset_id,
+            debug=debug,
         )
-        log.set_progress(stage="login", mode=mode, asset_id=asset_id)
+        log.set_progress(stage="login", mode=mode, asset_id=asset_id, debug=debug)
         try:
             sess.start()
         except LoginPageError as exc:
@@ -142,37 +146,37 @@ def run_crawl(
             event="active",
             mode=mode,
             asset_id=asset_id,
+            debug=debug,
         )
-        log.set_progress(stage="active", mode=mode, asset_id=asset_id)
+        log.set_progress(stage="active", mode=mode, asset_id=asset_id, debug=debug)
 
         if mode == "datacenter":
-            return _run_datacenter(crawl_id, crawl, sess, download_dir, log)
+            summary = _run_datacenter_job(crawl_id, crawl, sess, download_dir, log)
+            message = summary.as_message()
+            if _signal_requested() or summary.stopped:
+                message = f"{message}; shutdown signal"
+                return _graceful_end(
+                    crawl_id, sess, log, reason="shutdown", message=message
+                )
+            if debug:
+                return _handoff_to_adhoc(
+                    crawl_id,
+                    sess,
+                    log,
+                    cdp_port=cdp_port,
+                    job_message=message,
+                    poll_seconds=poll_seconds,
+                )
+            return _graceful_end(
+                crawl_id, sess, log, reason="shutdown", message=message
+            )
 
-        reason = "shutdown"
-        message: str | None = None
-        while True:
-            if _signal_requested():
-                reason = "shutdown"
-                message = "shutdown signal"
-                break
-            crawl_row = crawls_store.get_crawl(crawl_id)
-            if crawl_row is None:
-                raise CrawlStateError(f"Crawl row {crawl_id} missing")
-            if crawl_row.get("ended_at") or crawl_row.get("state") in ("ended", "error"):
-                raise CrawlStateError("Crawl was terminated externally")
-            if crawl_row.get("stop_requested_at"):
-                reason = "manual"
-                break
-            stop_reason = sess.poll_should_stop()
-            if stop_reason:
-                reason = stop_reason
-                break
-            # touch failure must not leave us "active" while DB is broken
-            sess.touch(step=touch_step)
-            time.sleep(max(poll_seconds, 0.5))
-
-        return _graceful_end(
-            crawl_id, sess, log, reason=reason, message=message
+        return _hold_until_stop(
+            crawl_id,
+            sess,
+            log,
+            touch_step=touch_step,
+            poll_seconds=poll_seconds,
         )
     except KeyboardInterrupt:
         return _graceful_end(
@@ -206,13 +210,15 @@ def run_crawl(
         return _fail_closed(crawl_id, sess, log, message=str(exc))
 
 
-def _run_datacenter(
+def _run_datacenter_job(
     crawl_id: str,
     crawl: dict[str, Any],
     sess: FnguideSession,
     download_dir: Path | None,
     log: CrawlLogger,
-) -> dict[str, Any]:
+) -> Any:
+    from crawler.jobs.datacenter import DatacenterJobSummary
+
     if sess.page is None:
         raise CrawlStateError("Datacenter crawl has no browser page")
     if download_dir is None:
@@ -233,20 +239,96 @@ def _run_datacenter(
             return True
         return bool(row.get("stop_requested_at"))
 
-    summary = run_datacenter_job(
+    summary: DatacenterJobSummary = run_datacenter_job(
         sess.page,
         limit=limit,
         download_dir=download_dir,
         should_stop=should_stop,
         touch=lambda: sess.touch(step="datacenter"),
         logger=log,
+        crawl_id=crawl_id,
+        asset_id=str(crawl.get("asset_id") or "") or None,
     )
-    message = summary.as_message()
-    if _signal_requested() or summary.stopped:
-        message = f"{message}; shutdown signal"
-    return _graceful_end(
-        crawl_id, sess, log, reason="shutdown", message=message
+    return summary
+
+
+def _handoff_to_adhoc(
+    crawl_id: str,
+    sess: FnguideSession,
+    log: CrawlLogger,
+    *,
+    cdp_port: int | None,
+    job_message: str,
+    poll_seconds: float,
+) -> dict[str, Any]:
+    """After datacenter job, keep the browser open as adhoc+CDP for inspection."""
+    crawls_store.set_mode(crawl_id, "adhoc")
+    if cdp_port is not None:
+        crawls_store.set_cdp_port(crawl_id, cdp_port)
+    log.emit(
+        level="info",
+        stage="crawl",
+        event="debug_handoff",
+        mode="adhoc",
+        cdp_port=cdp_port,
+        message=job_message,
     )
+    log.set_progress(
+        stage="adhoc_hold",
+        mode="adhoc",
+        debug=True,
+        job_message=job_message,
+        cdp_port=cdp_port,
+    )
+    try:
+        crawls_store.set_message(crawl_id, f"job_done: {job_message}")
+    except Exception as exc:
+        log.emit(
+            level="warn",
+            stage="crawl",
+            event="debug_handoff_message_failed",
+            error=str(exc),
+        )
+    return _hold_until_stop(
+        crawl_id,
+        sess,
+        log,
+        touch_step="adhoc",
+        poll_seconds=poll_seconds,
+    )
+
+
+def _hold_until_stop(
+    crawl_id: str,
+    sess: FnguideSession,
+    log: CrawlLogger,
+    *,
+    touch_step: str,
+    poll_seconds: float,
+) -> dict[str, Any]:
+    reason = "shutdown"
+    message: str | None = None
+    while True:
+        if _signal_requested():
+            reason = "shutdown"
+            message = "shutdown signal"
+            break
+        crawl_row = crawls_store.get_crawl(crawl_id)
+        if crawl_row is None:
+            raise CrawlStateError(f"Crawl row {crawl_id} missing")
+        if crawl_row.get("ended_at") or crawl_row.get("state") in ("ended", "error"):
+            raise CrawlStateError("Crawl was terminated externally")
+        if crawl_row.get("stop_requested_at"):
+            reason = "manual"
+            break
+        stop_reason = sess.poll_should_stop()
+        if stop_reason:
+            reason = stop_reason
+            break
+        sess.touch(step=touch_step)
+        time.sleep(max(poll_seconds, 0.5))
+
+    return _graceful_end(crawl_id, sess, log, reason=reason, message=message)
 
 
 def _graceful_end(

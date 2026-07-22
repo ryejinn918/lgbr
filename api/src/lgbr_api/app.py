@@ -22,6 +22,7 @@ from lgbr_api.crawls import (
     start_crawl,
 )
 from lgbr_api.db import load_database_env
+from lgbr_api.reports import list_reports
 from lgbr_api.sessions import get_current_session, list_history
 
 SHUTDOWN_WAIT_SECONDS = 60.0
@@ -77,6 +78,7 @@ async def crawl_events(request: Request) -> JSONResponse:
 async def crawl_start(request: Request) -> JSONResponse:
     mode = "datacenter"
     limit: int | None = None
+    debug = False
     try:
         body = await request.json()
     except Exception:
@@ -98,7 +100,9 @@ async def crawl_start(request: Request) -> JSONResponse:
                     },
                     status_code=400,
                 )
-    result = start_crawl(mode=mode, limit=limit)
+        if "debug" in body:
+            debug = bool(body.get("debug"))
+    result = start_crawl(mode=mode, limit=limit, debug=debug)
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 
@@ -109,6 +113,26 @@ async def crawl_stop(_: Request) -> JSONResponse:
 
 async def cdp_status(_: Request) -> JSONResponse:
     result = get_cdp_status()
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def reports(request: Request) -> JSONResponse:
+    try:
+        limit = int(request.query_params.get("limit", "30"))
+    except ValueError:
+        limit = 30
+    try:
+        offset = int(request.query_params.get("offset", "0"))
+    except ValueError:
+        offset = 0
+    result = list_reports(
+        status=request.query_params.get("status"),
+        q=request.query_params.get("q"),
+        crawl_id=request.query_params.get("crawl_id"),
+        limit=limit,
+        offset=offset,
+    )
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 
@@ -126,6 +150,7 @@ def create_app() -> Starlette:
             Route("/api/crawl/start", crawl_start, methods=["POST"]),
             Route("/api/crawl/stop", crawl_stop, methods=["POST"]),
             Route("/api/cdp", cdp_status),
+            Route("/api/reports", reports),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],
         lifespan=lifespan,

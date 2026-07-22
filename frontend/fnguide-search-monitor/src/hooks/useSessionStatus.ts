@@ -33,7 +33,11 @@ export type SessionView = {
   fetchError: string | null
   requestingStart: boolean
   requestingStop: boolean
-  startCrawl: (mode?: CrawlMode, limit?: number) => Promise<void>
+  startCrawl: (
+    mode?: CrawlMode,
+    limit?: number,
+    opts?: { debug?: boolean },
+  ) => Promise<void>
   requestLogout: () => Promise<void>
 }
 
@@ -112,12 +116,17 @@ export function useSessionStatus(): SessionView {
     }
   }, [])
 
-  async function startCrawl(mode: CrawlMode = 'datacenter', limit = 5) {
+  async function startCrawl(
+    mode: CrawlMode = 'datacenter',
+    limit = 5,
+    opts?: { debug?: boolean },
+  ) {
     setRequestingStart(true)
     try {
-      const body: { mode: CrawlMode; limit?: number } = { mode }
+      const body: { mode: CrawlMode; limit?: number; debug?: boolean } = { mode }
       if (mode === 'datacenter') {
         body.limit = limit
+        if (opts?.debug) body.debug = true
       }
       const res = await fetch('/api/crawl/start', {
         method: 'POST',

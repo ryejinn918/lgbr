@@ -65,6 +65,7 @@ export type CrawlRecord = {
   mode?: CrawlMode | null
   report_limit?: number | null
   asset_id?: string | null
+  debug?: boolean | null
   progress?: CrawlProgress | null
   cdp_port?: number | null
   cdp_http_url?: string | null
@@ -101,4 +102,45 @@ export type CrawlResponse = {
 
 export type HistoryResponse = {
   items: SessionRecord[]
+}
+
+export type ReportStatus =
+  | 'listed'
+  | 'blind'
+  | 'downloaded'
+  | 'no_download'
+  | 'failed'
+
+export type ReportRecord = {
+  id: string
+  source_key: string
+  title: string
+  status: ReportStatus | string
+  has_file: boolean
+  file_name: string | null
+  last_seen_at: string | null
+  downloaded_at: string | null
+  published_at?: string | null
+  page_count?: number | null
+  crawl_id?: string | null
+}
+
+export type ReportCounts = {
+  all: number
+  listed: number
+  blind: number
+  downloaded: number
+  no_download: number
+  failed: number
+  [key: string]: number
+}
+
+export type ReportsResponse = {
+  ok?: boolean
+  items: ReportRecord[]
+  total: number
+  counts: ReportCounts
+  limit: number
+  offset: number
+  message?: string
 }

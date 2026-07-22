@@ -26,6 +26,7 @@ def create_crawl(
     pid: int | None = None,
     mode: str = "auto",
     report_limit: int = 5,
+    debug: bool = False,
 ) -> dict[str, Any]:
     now = _now()
     if mode not in VALID_MODES:
@@ -41,8 +42,8 @@ def create_crawl(
             cur.execute(
                 """
                 INSERT INTO fnguide_crawls
-                    (started_at, pid, state, mode, report_limit, asset_id)
-                VALUES (%s, %s, 'starting', %s, %s, %s)
+                    (started_at, pid, state, mode, report_limit, asset_id, debug)
+                VALUES (%s, %s, 'starting', %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -51,6 +52,7 @@ def create_crawl(
                     mode,
                     report_limit,
                     asset_id,
+                    bool(debug),
                 ),
             )
             row = dict(cur.fetchone())
@@ -69,6 +71,46 @@ def set_cdp_port(crawl_id: UUID | str, port: int) -> dict[str, Any]:
                 RETURNING *
                 """,
                 (port, os.getpid(), str(crawl_id)),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise RuntimeError(f"No open crawl {crawl_id}")
+        conn.commit()
+    return _serialize(dict(row))
+
+
+def set_mode(crawl_id: UUID | str, mode: str) -> dict[str, Any]:
+    if mode not in VALID_MODES:
+        raise ValueError(f"Invalid crawl mode: {mode}")
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE fnguide_crawls
+                SET mode = %s
+                WHERE id = %s AND ended_at IS NULL
+                RETURNING *
+                """,
+                (mode, str(crawl_id)),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise RuntimeError(f"No open crawl {crawl_id}")
+        conn.commit()
+    return _serialize(dict(row))
+
+
+def set_message(crawl_id: UUID | str, message: str) -> dict[str, Any]:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE fnguide_crawls
+                SET message = %s
+                WHERE id = %s AND ended_at IS NULL
+                RETURNING *
+                """,
+                (message, str(crawl_id)),
             )
             row = cur.fetchone()
             if not row:

@@ -306,7 +306,12 @@ MIN_REPORT_LIMIT = 1
 MAX_REPORT_LIMIT = 50
 
 
-def start_crawl(*, mode: str = "auto", limit: int | None = None) -> dict[str, Any]:
+def start_crawl(
+    *,
+    mode: str = "auto",
+    limit: int | None = None,
+    debug: bool = False,
+) -> dict[str, Any]:
     if mode not in VALID_MODES:
         return {
             "ok": False,
@@ -319,6 +324,7 @@ def start_crawl(*, mode: str = "auto", limit: int | None = None) -> dict[str, An
         }
 
     report_limit = DEFAULT_REPORT_LIMIT
+    use_debug = bool(debug) and mode == "datacenter"
     if mode == "datacenter":
         if limit is None:
             report_limit = DEFAULT_REPORT_LIMIT
@@ -393,7 +399,9 @@ def start_crawl(*, mode: str = "auto", limit: int | None = None) -> dict[str, An
         }
 
     try:
-        crawl = _create_starting_crawl(mode=mode, report_limit=report_limit)
+        crawl = _create_starting_crawl(
+            mode=mode, report_limit=report_limit, debug=use_debug
+        )
     except Exception as exc:
         return {
             "ok": False,
@@ -470,6 +478,7 @@ def _create_starting_crawl(
     *,
     mode: str = "auto",
     report_limit: int = DEFAULT_REPORT_LIMIT,
+    debug: bool = False,
 ) -> dict[str, Any]:
     now = _now()
     asset_id = make_asset_id(
@@ -481,11 +490,11 @@ def _create_starting_crawl(
             cur.execute(
                 """
                 INSERT INTO fnguide_crawls
-                    (started_at, state, mode, report_limit, asset_id)
-                VALUES (%s, 'starting', %s, %s, %s)
+                    (started_at, state, mode, report_limit, asset_id, debug)
+                VALUES (%s, 'starting', %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (now, mode, report_limit, asset_id),
+                (now, mode, report_limit, asset_id, bool(debug)),
             )
             row = dict(cur.fetchone())
         conn.commit()
@@ -642,11 +651,12 @@ def get_cdp_status() -> dict[str, Any]:
             "message": "열린 크롤이 없습니다.",
         }
     crawl = _serialize(row)
-    if crawl.get("mode") != "adhoc":
+    # After datacenter debug handoff mode becomes adhoc; mid-job debug also has CDP.
+    if crawl.get("mode") != "adhoc" and not crawl.get("debug"):
         return {
             "ok": False,
             "status": 409,
-            "message": "adhoc 크롤이 아닙니다.",
+            "message": "adhoc(또는 datacenter debug) 크롤이 아닙니다.",
             "crawl": crawl,
         }
     port = crawl.get("cdp_port")
