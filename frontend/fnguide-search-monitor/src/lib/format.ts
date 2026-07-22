@@ -70,20 +70,52 @@ export function formatEventDetail(detail: Record<string, unknown>): string {
     'rpt_id',
     'reason',
     'error',
-    'path',
+    'file_name',
     'title',
     'list_page',
     'candidates',
     'blind',
+    'existing',
     'total',
+    'summary',
   ]
   const parts: string[] = []
   for (const key of keys) {
     if (detail[key] != null && detail[key] !== '') {
-      parts.push(`${key}=${String(detail[key])}`)
+      let value = String(detail[key])
+      if (key === 'title' && value.length > 48) {
+        value = `${value.slice(0, 45)}...`
+      }
+      parts.push(`${key}=${value}`)
     }
   }
   return parts.join(' · ')
+}
+
+/** Prefer progress counters; fall back to a short crawl.message. */
+export function formatCrawlResult(
+  progress: Record<string, unknown> | undefined,
+  message: string | null | undefined,
+): string | null {
+  if (progress) {
+    const downloaded = progress.downloaded
+    const listed = progress.listed
+    const failed = progress.failed
+    const blind = progress.skipped_blind ?? progress.blind
+    const existing = progress.skipped_existing
+    const noDl = progress.skipped_no_download
+    const bits: string[] = []
+    if (downloaded != null) bits.push(`downloaded=${downloaded}`)
+    if (listed != null) bits.push(`listed=${listed}`)
+    if (blind != null) bits.push(`blind=${blind}`)
+    if (existing != null) bits.push(`existing=${existing}`)
+    if (noDl != null) bits.push(`no_dl=${noDl}`)
+    if (failed != null) bits.push(`failed=${failed}`)
+    if (bits.length) return bits.join(' ')
+  }
+  if (!message) return null
+  if (message.length > 160) return `${message.slice(0, 157)}...`
+  return message
 }
 
 export function latestReportTitle(

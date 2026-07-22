@@ -387,6 +387,65 @@
   opacity: 0.45;
 }
 
+.profile-summary a {
+  color: var(--ink);
+  margin-left: 0.25rem;
+}
+
+.profile-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.field-block {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.field-block input,
+.field-block select {
+  font: inherit;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 80%, #fff);
+  color: var(--ink);
+  max-width: 28rem;
+}
+
+.sector-fieldset {
+  margin: 0;
+  padding: 0.75rem 0 0;
+  border: none;
+}
+
+.sector-fieldset legend {
+  font-size: 0.9rem;
+  color: var(--muted);
+  padding: 0;
+}
+
+.sector-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  margin-top: 0.55rem;
+}
+
+.sector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.sector-chip input {
+  margin: 0;
+}
+
 .run-btn,
 .logout-btn {
   appearance: none;

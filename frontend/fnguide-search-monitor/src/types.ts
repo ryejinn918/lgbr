@@ -25,7 +25,18 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
-export type CrawlMode = 'auto' | 'adhoc' | 'datacenter'
+export type CrawlMode = 'auto' | 'adhoc' | 'datacenter' | 'ai'
+
+export type CrawlProfileMode = 'datacenter' | 'ai'
+
+export type CrawlProfile = {
+  mode: CrawlProfileMode
+  keyword: string
+  sectors: string[]
+  period_months: number
+  page_min_label: string
+  updated_at: string | null
+}
 
 export type CrawlProgress = {
   stage?: string

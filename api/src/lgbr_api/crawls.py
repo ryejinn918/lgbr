@@ -300,7 +300,8 @@ def shutdown_open_crawl(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
     }
 
 
-VALID_MODES = frozenset({"auto", "adhoc", "datacenter"})
+VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai"})
+LIMITED_MODES = frozenset({"datacenter", "ai"})
 DEFAULT_REPORT_LIMIT = 5
 MIN_REPORT_LIMIT = 1
 MAX_REPORT_LIMIT = 50
@@ -317,15 +318,15 @@ def start_crawl(
             "ok": False,
             "status": 400,
             "label": "오류",
-            "message": "mode must be 'auto', 'adhoc', or 'datacenter'",
+            "message": "mode must be 'auto', 'adhoc', 'datacenter', or 'ai'",
             "crawl": None,
             "session": get_current_session(),
             "can_start": False,
         }
 
     report_limit = DEFAULT_REPORT_LIMIT
-    use_debug = bool(debug) and mode == "datacenter"
-    if mode == "datacenter":
+    use_debug = bool(debug) and mode in LIMITED_MODES
+    if mode in LIMITED_MODES:
         if limit is None:
             report_limit = DEFAULT_REPORT_LIMIT
         else:
@@ -483,7 +484,7 @@ def _create_starting_crawl(
     now = _now()
     asset_id = make_asset_id(
         mode,
-        report_limit=report_limit if mode == "datacenter" else None,
+        report_limit=report_limit if mode in LIMITED_MODES else None,
     )
     with connect() as conn:
         with conn.cursor() as cur:
@@ -656,7 +657,7 @@ def get_cdp_status() -> dict[str, Any]:
         return {
             "ok": False,
             "status": 409,
-            "message": "adhoc(또는 datacenter debug) 크롤이 아닙니다.",
+            "message": "adhoc(또는 search debug) 크롤이 아닙니다.",
             "crawl": crawl,
         }
     port = crawl.get("cdp_port")

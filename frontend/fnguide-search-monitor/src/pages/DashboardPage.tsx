@@ -84,7 +84,11 @@ export function DashboardPage() {
             <p className="live-meta">
               {[
                 crawl.crawl.mode,
+                crawl.crawl.report_limit != null
+                  ? `limit ${crawl.crawl.report_limit}`
+                  : null,
                 crawl.crawl.asset_id,
+                progress.keyword != null ? `kw=${String(progress.keyword)}` : null,
                 crawl.crawl.debug ? 'debug' : null,
                 crawl.crawl.cdp_port ? `CDP ${crawl.crawl.cdp_port}` : null,
                 formatProgress(progress),

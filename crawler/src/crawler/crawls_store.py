@@ -18,7 +18,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-VALID_MODES = frozenset({"auto", "adhoc", "datacenter"})
+VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai"})
+LIMITED_MODES = frozenset({"datacenter", "ai"})
 
 
 def create_crawl(
@@ -35,7 +36,7 @@ def create_crawl(
         raise ValueError(f"Invalid report_limit: {report_limit}")
     asset_id = make_asset_id(
         mode,
-        report_limit=report_limit if mode == "datacenter" else None,
+        report_limit=report_limit if mode in LIMITED_MODES else None,
     )
     with connect() as conn:
         with conn.cursor() as cur:

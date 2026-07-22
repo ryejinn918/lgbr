@@ -6,7 +6,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / ".crawler"
+# Repo-root .crawler (same as DOWNLOADS_ROOT), not crawler/.crawler.
+ROOT = Path(__file__).resolve().parents[2] / ".crawler"
 DOWNLOADS = ROOT / "downloads"
 SNAPSHOTS = ROOT / "snapshots"
 

@@ -60,12 +60,7 @@ def downloaded_keys(source: str = SOURCE_FNGUIDE) -> set[str]:
 def _download_roots(root: Path | None = None) -> list[Path]:
     if root is not None:
         return [root]
-    roots = [DOWNLOADS_ROOT]
-    # Also scan crawler-local downloads from adhoc scripts.
-    alt = Path(__file__).resolve().parents[2] / ".crawler" / "downloads"
-    if alt.resolve() != DOWNLOADS_ROOT.resolve():
-        roots.append(alt)
-    return roots
+    return [DOWNLOADS_ROOT]
 
 
 def disk_rpt_ids(*, root: Path | None = None) -> set[str]:

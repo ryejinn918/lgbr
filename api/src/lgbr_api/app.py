@@ -22,6 +22,7 @@ from lgbr_api.crawls import (
     start_crawl,
 )
 from lgbr_api.db import load_database_env
+from lgbr_api.profiles import list_profiles, update_profile
 from lgbr_api.reports import list_reports
 from lgbr_api.sessions import get_current_session, list_history
 
@@ -137,6 +138,25 @@ async def reports(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
+async def crawl_profiles(_: Request) -> JSONResponse:
+    result = list_profiles()
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def crawl_profile_patch(request: Request) -> JSONResponse:
+    mode = request.path_params.get("mode") or ""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    result = update_profile(str(mode), body)
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
 def create_app() -> Starlette:
     load_database_env()
     return Starlette(
@@ -149,6 +169,12 @@ def create_app() -> Starlette:
             Route("/api/crawl/events", crawl_events),
             Route("/api/crawl/start", crawl_start, methods=["POST"]),
             Route("/api/crawl/stop", crawl_stop, methods=["POST"]),
+            Route("/api/crawl/profiles", crawl_profiles),
+            Route(
+                "/api/crawl/profiles/{mode}",
+                crawl_profile_patch,
+                methods=["PATCH"],
+            ),
             Route("/api/cdp", cdp_status),
             Route("/api/reports", reports),
         ],

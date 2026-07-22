@@ -10,9 +10,11 @@ _SEOUL = ZoneInfo("Asia/Seoul")
 
 MODE_ABBREV = {
     "datacenter": "dc",
+    "ai": "ai",
     "adhoc": "ad",
     "auto": "au",
 }
+LIMITED_MODES = frozenset({"datacenter", "ai"})
 
 
 def make_asset_id(
@@ -22,7 +24,7 @@ def make_asset_id(
     when: datetime | None = None,
     suffix: str | None = None,
 ) -> str:
-    """Build a short folder id: fn-dc-n20-250723-a1b2c3."""
+    """Build a short folder id: fn-dc-n20-250723-a1b2c3 / fn-ai-n30-…."""
     abbrev = MODE_ABBREV.get(mode)
     if abbrev is None:
         raise ValueError(f"Invalid crawl mode for asset_id: {mode}")
@@ -33,8 +35,8 @@ def make_asset_id(
         ts = ts.astimezone(_SEOUL)
     day = ts.strftime("%y%m%d")
     token = suffix if suffix is not None else secrets.token_hex(3)
-    if mode == "datacenter":
+    if mode in LIMITED_MODES:
         if report_limit is None:
-            raise ValueError("report_limit required for datacenter asset_id")
-        return f"fn-dc-n{int(report_limit)}-{day}-{token}"
+            raise ValueError(f"report_limit required for {mode} asset_id")
+        return f"fn-{abbrev}-n{int(report_limit)}-{day}-{token}"
     return f"fn-{abbrev}-{day}-{token}"

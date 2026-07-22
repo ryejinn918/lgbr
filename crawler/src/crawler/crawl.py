@@ -23,7 +23,7 @@ from crawler.fnguide_session import (
     DEFAULT_TTL_SECONDS,
     FnguideSession,
 )
-from crawler.jobs.datacenter import run_datacenter_job
+from crawler.jobs.search_report import SEARCH_MODES, get_profile, run_search_report_job
 from crawler.session import LoginPageError
 
 _stop_flag = threading.Event()
@@ -84,11 +84,11 @@ def run_crawl(
     )
     log.set_progress(stage="login", mode=mode, asset_id=asset_id, debug=debug)
 
-    want_cdp = mode == "adhoc" or (mode == "datacenter" and debug)
+    want_cdp = mode == "adhoc" or (mode in SEARCH_MODES and debug)
     cdp_port = allocate_cdp_port() if want_cdp else None
     touch_step = "adhoc" if mode == "adhoc" else "crawl"
-    if mode == "datacenter":
-        touch_step = "datacenter"
+    if mode in SEARCH_MODES:
+        touch_step = mode
     download_dir = downloads_dir(asset_id)
     download_dir.mkdir(parents=True, exist_ok=True)
 
@@ -150,8 +150,8 @@ def run_crawl(
         )
         log.set_progress(stage="active", mode=mode, asset_id=asset_id, debug=debug)
 
-        if mode == "datacenter":
-            summary = _run_datacenter_job(crawl_id, crawl, sess, download_dir, log)
+        if mode in SEARCH_MODES:
+            summary = _run_search_job(crawl_id, crawl, sess, download_dir, log)
             message = summary.as_message()
             if _signal_requested() or summary.stopped:
                 message = f"{message}; shutdown signal"
@@ -210,24 +210,25 @@ def run_crawl(
         return _fail_closed(crawl_id, sess, log, message=str(exc))
 
 
-def _run_datacenter_job(
+def _run_search_job(
     crawl_id: str,
     crawl: dict[str, Any],
     sess: FnguideSession,
     download_dir: Path | None,
     log: CrawlLogger,
 ) -> Any:
-    from crawler.jobs.datacenter import DatacenterJobSummary
-
+    mode = str(crawl.get("mode") or "")
     if sess.page is None:
-        raise CrawlStateError("Datacenter crawl has no browser page")
+        raise CrawlStateError(f"{mode} crawl has no browser page")
     if download_dir is None:
-        raise CrawlStateError("Datacenter crawl missing download_dir")
+        raise CrawlStateError(f"{mode} crawl missing download_dir")
 
     try:
         limit = int(crawl.get("report_limit") or 5)
     except (TypeError, ValueError):
         limit = 5
+
+    profile = get_profile(mode)
 
     def should_stop() -> bool:
         if _signal_requested():
@@ -239,17 +240,17 @@ def _run_datacenter_job(
             return True
         return bool(row.get("stop_requested_at"))
 
-    summary: DatacenterJobSummary = run_datacenter_job(
+    return run_search_report_job(
         sess.page,
+        profile=profile,
         limit=limit,
         download_dir=download_dir,
         should_stop=should_stop,
-        touch=lambda: sess.touch(step="datacenter"),
+        touch=lambda: sess.touch(step=mode),
         logger=log,
         crawl_id=crawl_id,
         asset_id=str(crawl.get("asset_id") or "") or None,
     )
-    return summary
 
 
 def _handoff_to_adhoc(
@@ -340,12 +341,15 @@ def _graceful_end(
     message: str | None = None,
 ) -> dict[str, Any]:
     """Logout and mark crawl ended (not error)."""
+    summary = (message or "").strip()
+    if len(summary) > 240:
+        summary = summary[:237] + "..."
     log.emit(
         level="info",
         stage="shutdown",
         event="stage_start",
         reason=reason,
-        message=message,
+        **({"summary": summary} if summary else {}),
     )
     log.set_progress(stage="shutdown", reason=reason)
     try:
@@ -367,12 +371,15 @@ def _graceful_end(
         err_msg = ended_session.get("message") or message or "session ended in error"
         log.emit(level="error", stage="shutdown", event="crawl_end", error=err_msg)
         return crawls_store.end_crawl(crawl_id, message=err_msg, error=True)
+    end_summary = (message or ended_session.get("message") or "").strip()
+    if len(end_summary) > 240:
+        end_summary = end_summary[:237] + "..."
     log.emit(
         level="info",
         stage="shutdown",
         event="crawl_end",
         reason=reason,
-        message=message or ended_session.get("message"),
+        **({"summary": end_summary} if end_summary else {}),
     )
     log.set_progress(stage="ended")
     return crawls_store.end_crawl(

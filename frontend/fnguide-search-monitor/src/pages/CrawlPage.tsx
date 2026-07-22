@@ -1,9 +1,12 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useCrawlProfiles } from '../hooks/useCrawlProfiles'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import type { CrawlEvent, CrawlMode, SessionRecord } from '../types'
 import {
   CRAWL_CLASS,
   SESSION_CLASS,
+  formatCrawlResult,
   formatEventDetail,
   formatProgress,
   formatTime,
@@ -21,8 +24,13 @@ export function CrawlPage() {
     startCrawl,
     requestLogout,
   } = useSessionStatus()
+  const profiles = useCrawlProfiles()
   const [reportLimit, setReportLimit] = useState(5)
   const [debugMode, setDebugMode] = useState(false)
+  const resultLine = formatCrawlResult(
+    crawl.progress ?? crawl.crawl?.progress ?? undefined,
+    crawl.crawl?.message,
+  )
 
   const crawlBusy =
     crawl.state === 'starting' ||
@@ -40,18 +48,20 @@ export function CrawlPage() {
 
   async function onStart(mode: CrawlMode = 'datacenter') {
     const limit = Math.min(50, Math.max(1, Number(reportLimit) || 5))
+    const searchLabel =
+      mode === 'ai' ? 'AI' : mode === 'datacenter' ? '데이터센터' : mode
     const label =
       mode === 'adhoc'
         ? '애드혹 크롤을 시작할까요? (CDP 원격 조작, 로그인 세션 획득)'
         : debugMode
-          ? `데이터센터 ${limit}건 다운로드 후 debug(adhoc/CDP)로 전환할까요?`
-          : `데이터센터 리포트 ${limit}건을 다운로드할까요?`
+          ? `${searchLabel} ${limit}건 다운로드 후 debug(adhoc/CDP)로 전환할까요?`
+          : `${searchLabel} 리포트 ${limit}건을 다운로드할까요?`
     if (!window.confirm(label)) {
       return
     }
     try {
       await startCrawl(mode, limit, {
-        debug: mode === 'datacenter' ? debugMode : false,
+        debug: mode === 'datacenter' || mode === 'ai' ? debugMode : false,
       })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '실행 실패')
@@ -85,7 +95,8 @@ export function CrawlPage() {
         {crawl.crawl?.mode && !fetchError ? (
           <p className="account-line">
             모드: {crawl.crawl.mode}
-            {crawl.crawl.mode === 'datacenter' && crawl.crawl.report_limit
+            {(crawl.crawl.mode === 'datacenter' || crawl.crawl.mode === 'ai') &&
+            crawl.crawl.report_limit
               ? ` · limit ${crawl.crawl.report_limit}`
               : ''}
             {crawl.crawl.debug ? ' · debug' : ''}
@@ -99,8 +110,8 @@ export function CrawlPage() {
         {crawl.crawl?.asset_id && !fetchError ? (
           <p className="account-line">애셋: {crawl.crawl.asset_id}</p>
         ) : null}
-        {crawl.crawl?.message && !fetchError ? (
-          <p className="account-line">메시지: {crawl.crawl.message}</p>
+        {resultLine && !fetchError ? (
+          <p className="account-line">결과: {resultLine}</p>
         ) : null}
         {crawl.crawl?.cdp_http_url && !fetchError ? (
           <p className="account-line">CDP: {crawl.crawl.cdp_http_url}</p>
@@ -115,9 +126,8 @@ export function CrawlPage() {
           <div className="warn">
             <p>
               오류로 멈췄습니다
-              {crawl.crawl?.message ? `: ${crawl.crawl.message}` : '.'} 원인을
-              점검한 뒤, 아래 DB에 접속해{' '}
-              <code>fnguide_crawls.state</code>를{' '}
+              {resultLine ? `: ${resultLine}` : '.'} 원인을 점검한 뒤, 아래 DB에
+              접속해 <code>fnguide_crawls.state</code>를{' '}
               <code>error</code> → <code>ended</code>로 바꾸세요.
             </p>
             {crawl.unblock_text ? (
@@ -132,6 +142,21 @@ export function CrawlPage() {
           <p className="warn">최근 활동 갱신이 없습니다.</p>
         ) : null}
         {fetchError ? <p className="warn">API 연결 실패: {fetchError}</p> : null}
+
+        {!profiles.error && profiles.items.length > 0 ? (
+          <p className="account-line profile-summary">
+            필터:{' '}
+            {profiles.items
+              .map((p) => {
+                const label = p.mode === 'ai' ? 'AI' : '데이터센터'
+                const sectors =
+                  p.sectors.length > 0 ? ` · 섹터 ${p.sectors.length}` : ''
+                return `${label} 「${p.keyword}」 ${p.period_months}개월 · ${p.page_min_label}${sectors}`
+              })
+              .join(' / ')}{' '}
+            <Link to="/types">수정</Link>
+          </p>
+        ) : null}
 
         <div className="actions">
           <label className="limit-field">
@@ -161,6 +186,14 @@ export function CrawlPage() {
             onClick={() => void onStart('datacenter')}
           >
             {requestingStart ? '시작 중…' : '데이터센터'}
+          </button>
+          <button
+            type="button"
+            className="run-btn"
+            disabled={!canStart || requestingStart || !!fetchError}
+            onClick={() => void onStart('ai')}
+          >
+            {requestingStart ? '시작 중…' : 'AI'}
           </button>
           <button
             type="button"

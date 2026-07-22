@@ -124,7 +124,7 @@ export function useSessionStatus(): SessionView {
     setRequestingStart(true)
     try {
       const body: { mode: CrawlMode; limit?: number; debug?: boolean } = { mode }
-      if (mode === 'datacenter') {
+      if (mode === 'datacenter' || mode === 'ai') {
         body.limit = limit
         if (opts?.debug) body.debug = true
       }
