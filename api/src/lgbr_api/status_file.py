@@ -1,4 +1,4 @@
-"""Read bot status.json without depending on fnsearch."""
+"""Read bot status.json without depending on crawler."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_STATUS_PATH = Path(
-    os.environ.get("FNGUIDE_STATUS_PATH", ".fnsearch/status.json")
+    os.environ.get("FNGUIDE_STATUS_PATH", ".crawler/status.json")
 )
 
 _IDLE: dict[str, Any] = {

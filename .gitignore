@@ -10,6 +10,6 @@ wheels/
 .venv
 
 # Local secrets / captured sessions
-.fnsearch/
+.crawler/
 .env
 .env.*

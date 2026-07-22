@@ -1,4 +1,4 @@
-"""Bot-declared session status written to `.fnsearch/status.json`."""
+"""Bot-declared session status written to `.crawler/status.json`."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 StatusState = Literal["idle", "logging_in", "active", "logging_out", "error"]
 
-DEFAULT_STATUS_PATH = Path(".fnsearch/status.json")
+DEFAULT_STATUS_PATH = Path(".crawler/status.json")
 
 _IDLE: dict[str, Any] = {
     "state": "idle",

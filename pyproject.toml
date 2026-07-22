@@ -5,7 +5,7 @@ description = "LGBR monorepo workspace"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fnsearch",
+    "crawler",
     "lgbr-api",
 ]
 
@@ -15,11 +15,11 @@ required-environments = [
 ]
 
 [tool.uv.sources]
-fnsearch = { workspace = true }
+crawler = { workspace = true }
 lgbr-api = { workspace = true }
 
 [tool.uv.workspace]
 members = [
-    "fnsearch",
+    "crawler",
     "api",
 ]

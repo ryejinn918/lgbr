@@ -12,10 +12,10 @@ from pathlib import Path
 
 from patchright.sync_api import Browser, BrowserContext, Page
 
-from fnsearch.browser import LOGIN_URL, launch_browser, launch_context, new_human_context
-from fnsearch.status import DEFAULT_STATUS_PATH, clear_status, set_status
+from crawler.browser import LOGIN_URL, launch_browser, launch_context, new_human_context
+from crawler.status import DEFAULT_STATUS_PATH, clear_status, set_status
 
-DEFAULT_SESSION_PATH = Path(".fnsearch/session.json")
+DEFAULT_SESSION_PATH = Path(".crawler/session.json")
 SESSION_CONFLICT_TITLE = "이미 로그인된 다른 기기가 있습니다."
 
 
@@ -103,7 +103,7 @@ def load_session(
 ) -> BrowserContext:
     if not path.exists():
         raise FileNotFoundError(f"Session file not found: {path}")
-    from fnsearch.browser import human_context_options
+    from crawler.browser import human_context_options
 
     return browser.new_context(**human_context_options(), storage_state=str(path))
 

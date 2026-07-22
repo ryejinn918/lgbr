@@ -1,6 +1,6 @@
 """Fnguide login, search, and download automation."""
 
-from fnsearch.browser import (
+from crawler.browser import (
     LOGIN_URL,
     goto_login,
     launch_browser,
@@ -8,7 +8,8 @@ from fnsearch.browser import (
     new_human_context,
     open_login,
 )
-from fnsearch.session import (
+from crawler.fnguide_session import FnguideSession
+from crawler.session import (
     SessionRun,
     capture_session,
     hold_session,
@@ -18,10 +19,11 @@ from fnsearch.session import (
     logout,
     verify_session,
 )
-from fnsearch.status import clear_status, get_status, set_status
+from crawler.status import clear_status, get_status, set_status
 
 __all__ = [
     "LOGIN_URL",
+    "FnguideSession",
     "SessionRun",
     "capture_session",
     "clear_status",

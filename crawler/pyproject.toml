@@ -1,5 +1,5 @@
 [project]
-name = "fnsearch"
+name = "crawler"
 version = "0.1.0"
 description = "Fnguide login, search, and download automation"
 readme = "README.md"
@@ -10,11 +10,12 @@ requires-python = ">=3.12"
 dependencies = [
     "browserforge>=1.2.4",
     "patchright>=1.61.2",
+    "psycopg[binary]>=3.3.4",
     "python-dotenv>=1.2.2",
 ]
 
 [project.scripts]
-fnsearch = "fnsearch.__main__:main"
+crawler = "crawler.__main__:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]

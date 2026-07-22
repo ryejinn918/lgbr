@@ -1,5 +1,5 @@
 .monitor {
-  width: min(720px, calc(100% - 2rem));
+  width: min(760px, calc(100% - 2rem));
   margin: 0 auto;
   padding: 2.5rem 0 4rem;
   display: grid;
@@ -62,7 +62,26 @@
   color: var(--warn-ink);
 }
 
-.badge-panel.state-active {
+.actions {
+  margin-top: 1rem;
+}
+
+.logout-btn {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+  color: var(--ink);
+  font: inherit;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+
+.logout-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.badge-panel.state-logged_in {
   border-color: color-mix(in srgb, var(--active) 55%, var(--line));
   background: color-mix(in srgb, var(--active) 14%, var(--panel));
 }
@@ -92,10 +111,6 @@
   gap: 0.25rem;
 }
 
-.details .wide {
-  grid-column: 1 / -1;
-}
-
 .details dt {
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -109,9 +124,59 @@
   word-break: break-word;
 }
 
-.mono {
+.history h2 {
+  margin: 0 0 0.85rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.history .empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.history li {
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.history li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.history-main {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.history-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.history-user {
   font-family: var(--mono);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.history-meta {
+  font-size: 0.9rem;
+  color: var(--muted);
 }
 
 @media (max-width: 640px) {

@@ -15,7 +15,7 @@ from browserforge.fingerprints import FingerprintGenerator
 from patchright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
 LOGIN_URL = "https://www.fnguide.com/Users/Login"
-DEFAULT_PROFILE_DIR = Path(".fnsearch/browser-profile")
+DEFAULT_PROFILE_DIR = Path(".crawler/browser-profile")
 ACCEPT_LANGUAGE = "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
 
 _CHROME_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+\.\d+|\d+\.\d+\.\d+|\d+)")
