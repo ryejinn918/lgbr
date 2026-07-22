@@ -6,7 +6,7 @@ from typing import Any
 
 from crawler.db import connect
 
-PROFILE_MODES = frozenset({"datacenter", "ai"})
+PROFILE_MODES = frozenset({"datacenter", "ai", "physical_ai"})
 PERIOD_MONTHS = frozenset({3, 6, 12})
 
 

@@ -11,10 +11,11 @@ _SEOUL = ZoneInfo("Asia/Seoul")
 MODE_ABBREV = {
     "datacenter": "dc",
     "ai": "ai",
+    "physical_ai": "pai",
     "adhoc": "ad",
     "auto": "au",
 }
-LIMITED_MODES = frozenset({"datacenter", "ai"})
+LIMITED_MODES = frozenset({"datacenter", "ai", "physical_ai"})
 
 
 def make_asset_id(

@@ -18,8 +18,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai"})
-LIMITED_MODES = frozenset({"datacenter", "ai"})
+VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai", "physical_ai"})
+LIMITED_MODES = frozenset({"datacenter", "ai", "physical_ai"})
 
 
 def create_crawl(

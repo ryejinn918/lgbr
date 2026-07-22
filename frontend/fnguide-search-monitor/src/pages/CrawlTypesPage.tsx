@@ -6,6 +6,7 @@ import { formatTime } from '../lib/format'
 const MODE_LABEL: Record<CrawlProfileMode, string> = {
   datacenter: '데이터센터',
   ai: 'AI',
+  physical_ai: 'Physical AI',
 }
 
 const SECTOR_OPTIONS = [
@@ -22,7 +23,14 @@ const SECTOR_OPTIONS = [
 ] as const
 
 const PERIOD_OPTIONS = [3, 6, 12] as const
-const PAGE_MIN_OPTIONS = ['전체', '5p 이상', '10p 이상', '20p 이상'] as const
+const PAGE_MIN_OPTIONS = [
+  '전체',
+  '5p 이상',
+  '10p 이상',
+  '15p 이상',
+  '20p 이상',
+  '30p 이상',
+] as const
 
 type Draft = {
   keyword: string
@@ -129,7 +137,7 @@ function ProfileEditor({
       </label>
 
       <label className="field-block">
-        <span>페이지수</span>
+        <span>최소 페이지수 (검색 필터)</span>
         <select
           value={draft.page_min_label}
           onChange={(e) => patch({ page_min_label: e.target.value })}
@@ -146,6 +154,10 @@ function ProfileEditor({
             </option>
           ))}
         </select>
+        <span className="field-hint">
+          Fnguide 목록의 페이지수 필터와 동일합니다. 수집된 보고서 페이지 수는
+          리스트의 「페이지」열에 표시됩니다.
+        </span>
       </label>
 
       <fieldset className="sector-fieldset" disabled={saving}>
@@ -197,8 +209,8 @@ export function CrawlTypesPage() {
       <header className="monitor-header">
         <h1>크롤 타입</h1>
         <p className="lede">
-          데이터센터·AI 검색 필터 프로파일입니다. 타입 추가/삭제는 없고 필터만
-          수정합니다.
+          데이터센터·AI·Physical AI 검색 필터 프로파일입니다. 타입 생성/삭제는
+          없고 필터만 수정합니다.
         </p>
       </header>
 

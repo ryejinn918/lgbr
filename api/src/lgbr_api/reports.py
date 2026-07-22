@@ -13,6 +13,11 @@ from lgbr_api.db import connect
 VALID_STATUSES = frozenset(
     {"listed", "blind", "downloaded", "no_download", "failed"}
 )
+VALID_SORTS = frozenset({"published_at", "page_count"})
+SORT_SQL = {
+    "published_at": "published_at DESC NULLS LAST, id DESC",
+    "page_count": "page_count DESC NULLS LAST, published_at DESC NULLS LAST, id DESC",
+}
 
 # api/src/lgbr_api/reports.py → repo root
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -85,11 +90,27 @@ def list_reports(
     status: str | None = None,
     q: str | None = None,
     crawl_id: str | None = None,
+    sort: str | None = None,
     limit: int = 30,
     offset: int = 0,
 ) -> dict[str, Any]:
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
+
+    sort_key = (sort or "published_at").strip() or "published_at"
+    if sort_key not in VALID_SORTS:
+        return {
+            "ok": False,
+            "message": f"invalid sort: {sort_key}",
+            "status": 400,
+            "items": [],
+            "total": 0,
+            "counts": {},
+            "limit": limit,
+            "offset": offset,
+            "sort": sort_key,
+        }
+    order_sql = SORT_SQL[sort_key]
 
     status_filter: str | None = None
     if status and status != "all":
@@ -103,6 +124,7 @@ def list_reports(
                 "counts": {},
                 "limit": limit,
                 "offset": offset,
+                "sort": sort_key,
             }
         status_filter = status
 
@@ -120,6 +142,7 @@ def list_reports(
                 "counts": {},
                 "limit": limit,
                 "offset": offset,
+                "sort": sort_key,
             }
 
     q_pat = f"%{q.strip()}%" if q and q.strip() else None
@@ -155,7 +178,7 @@ def list_reports(
                        crawl_id, attrs
                 FROM reports
                 {where_sql}
-                ORDER BY last_seen_at DESC NULLS LAST, id DESC
+                ORDER BY {order_sql}
                 LIMIT %s OFFSET %s
                 """,
                 [*params, limit, offset],
@@ -169,6 +192,7 @@ def list_reports(
         "counts": counts,
         "limit": limit,
         "offset": offset,
+        "sort": sort_key,
     }
 
 

@@ -20,6 +20,8 @@ SOURCE = reports_store.SOURCE_FNGUIDE
 VIEWER_WAIT_MS = 3500
 LIST_WAIT_MS = 2500
 MAX_LIST_PAGES = 40
+# Keep only reports longer than this (page_count <= N are ignored).
+MIN_PAGE_COUNT = 10
 
 PERIOD_LABELS = {3: "3개월", 6: "6개월", 12: "12개월"}
 
@@ -54,6 +56,14 @@ PROFILES: dict[str, SearchProfile] = {
         keyword="AI",
         sectors=(),
         theme="ai",
+    ),
+    "physical_ai": SearchProfile(
+        mode="physical_ai",
+        keyword="피지컬",
+        sectors=(),
+        theme="physical_ai",
+        period_months=12,
+        page_min_label="10p 이상",
     ),
 }
 
@@ -209,7 +219,9 @@ def run_search_report_job(
             if log:
                 log.emit(level="warn", stage="list", event="stopped", list_page=list_page)
             break
-        candidates = _list_candidates(page)
+        candidates = [
+            c for c in _list_candidates(page) if not _is_short_report(c)
+        ]
         page_keys = tuple(
             str(c["rpt_id"]) for c in candidates if c.get("rpt_id")
         )
@@ -640,12 +652,13 @@ def _list_candidates(page: Page) -> list[dict[str, Any]]:
             }
             return -1;
           };
-          const iDate = idxOf('작성일', '날짜');
+          const iDate = idxOf('작성일', '날짜', '일자', '등록일', '게시일');
           const iStock = idxOf('종목');
           const iTitle = idxOf('제목');
           const iAuthor = idxOf('작성자');
           const iProvider = idxOf('제공사', '증권사');
           const iPages = idxOf('페이지수', '페이지');
+          const dateRe = /(?:20)?\\d{2}[./-]\\d{1,2}[./-]\\d{1,2}/;
 
           const out = [];
           const seen = new Set();
@@ -666,11 +679,22 @@ def _list_candidates(page: Page) -> list[dict[str, Any]]:
             const pageRaw = cell(iPages >= 0 ? iPages : 5, '');
             const pageDigits = (pageRaw || '').replace(/\\D/g, '');
             const pages = pageDigits ? parseInt(pageDigits, 10) : null;
+            let published = cell(iDate, '');
+            if (!dateRe.test(published)) {
+              published = '';
+              for (const t of tds) {
+                if (dateRe.test(t)) { published = t; break; }
+              }
+            }
+            if (!published) {
+              const rm = rowText.match(dateRe);
+              if (rm) published = rm[0];
+            }
             out.push({
               rpt_id: m[1],
               href,
               title: norm(a.innerText) || cell(iTitle, ''),
-              published_at: cell(iDate >= 0 ? iDate : 0, ''),
+              published_at: published,
               stock: cell(iStock >= 0 ? iStock : 1, ''),
               author: cell(iAuthor >= 0 ? iAuthor : 3, ''),
               provider: cell(iProvider >= 0 ? iProvider : 4, ''),
@@ -692,10 +716,24 @@ def _list_candidates(page: Page) -> list[dict[str, Any]]:
         published_at: str | None = None
         if published_raw:
             m = re.search(r"(20\d{2})[./-](\d{1,2})[./-](\d{1,2})", published_raw)
-            if m:
+            if not m:
+                m2 = re.search(r"\b(\d{2})[./-](\d{1,2})[./-](\d{1,2})\b", published_raw)
+                if m2:
+                    yy = int(m2.group(1))
+                    year = 2000 + yy if yy < 100 else yy
+                    published_at = (
+                        f"{year}-{int(m2.group(2)):02d}-{int(m2.group(3)):02d}"
+                    )
+            else:
                 published_at = (
                     f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
                 )
+            if published_at is None:
+                m3 = re.search(r"(20\d{2})(\d{2})(\d{2})", published_raw)
+                if m3:
+                    published_at = (
+                        f"{m3.group(1)}-{m3.group(2)}-{m3.group(3)}"
+                    )
         page_count = row.get("page_count")
         try:
             page_count_i = int(page_count) if page_count is not None else None
@@ -718,6 +756,17 @@ def _list_candidates(page: Page) -> list[dict[str, Any]]:
             }
         )
     return candidates
+
+
+def _is_short_report(cand: dict[str, Any]) -> bool:
+    """True when page_count is known and at or below the keep threshold."""
+    page_count = cand.get("page_count")
+    if page_count is None:
+        return False
+    try:
+        return int(page_count) <= MIN_PAGE_COUNT
+    except (TypeError, ValueError):
+        return False
 
 
 def _goto_next_list_page(page: Page) -> tuple[bool, dict[str, Any]]:

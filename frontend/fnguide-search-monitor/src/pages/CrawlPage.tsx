@@ -49,7 +49,15 @@ export function CrawlPage() {
   async function onStart(mode: CrawlMode = 'datacenter') {
     const limit = Math.min(50, Math.max(1, Number(reportLimit) || 5))
     const searchLabel =
-      mode === 'ai' ? 'AI' : mode === 'datacenter' ? '데이터센터' : mode
+      mode === 'ai'
+        ? 'AI'
+        : mode === 'physical_ai'
+          ? 'Physical AI'
+          : mode === 'datacenter'
+            ? '데이터센터'
+            : mode
+    const isSearchMode =
+      mode === 'datacenter' || mode === 'ai' || mode === 'physical_ai'
     const label =
       mode === 'adhoc'
         ? '애드혹 크롤을 시작할까요? (CDP 원격 조작, 로그인 세션 획득)'
@@ -61,7 +69,7 @@ export function CrawlPage() {
     }
     try {
       await startCrawl(mode, limit, {
-        debug: mode === 'datacenter' || mode === 'ai' ? debugMode : false,
+        debug: isSearchMode ? debugMode : false,
       })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '실행 실패')
@@ -95,7 +103,9 @@ export function CrawlPage() {
         {crawl.crawl?.mode && !fetchError ? (
           <p className="account-line">
             모드: {crawl.crawl.mode}
-            {(crawl.crawl.mode === 'datacenter' || crawl.crawl.mode === 'ai') &&
+            {(crawl.crawl.mode === 'datacenter' ||
+              crawl.crawl.mode === 'ai' ||
+              crawl.crawl.mode === 'physical_ai') &&
             crawl.crawl.report_limit
               ? ` · limit ${crawl.crawl.report_limit}`
               : ''}
@@ -148,7 +158,12 @@ export function CrawlPage() {
             필터:{' '}
             {profiles.items
               .map((p) => {
-                const label = p.mode === 'ai' ? 'AI' : '데이터센터'
+                const label =
+                  p.mode === 'ai'
+                    ? 'AI'
+                    : p.mode === 'physical_ai'
+                      ? 'Physical AI'
+                      : '데이터센터'
                 const sectors =
                   p.sectors.length > 0 ? ` · 섹터 ${p.sectors.length}` : ''
                 return `${label} 「${p.keyword}」 ${p.period_months}개월 · ${p.page_min_label}${sectors}`
@@ -194,6 +209,14 @@ export function CrawlPage() {
             onClick={() => void onStart('ai')}
           >
             {requestingStart ? '시작 중…' : 'AI'}
+          </button>
+          <button
+            type="button"
+            className="run-btn"
+            disabled={!canStart || requestingStart || !!fetchError}
+            onClick={() => void onStart('physical_ai')}
+          >
+            {requestingStart ? '시작 중…' : 'Physical AI'}
           </button>
           <button
             type="button"

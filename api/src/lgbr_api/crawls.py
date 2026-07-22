@@ -300,8 +300,8 @@ def shutdown_open_crawl(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
     }
 
 
-VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai"})
-LIMITED_MODES = frozenset({"datacenter", "ai"})
+VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai", "physical_ai"})
+LIMITED_MODES = frozenset({"datacenter", "ai", "physical_ai"})
 DEFAULT_REPORT_LIMIT = 5
 MIN_REPORT_LIMIT = 1
 MAX_REPORT_LIMIT = 50
@@ -318,7 +318,9 @@ def start_crawl(
             "ok": False,
             "status": 400,
             "label": "오류",
-            "message": "mode must be 'auto', 'adhoc', 'datacenter', or 'ai'",
+            "message": (
+                "mode must be 'auto', 'adhoc', 'datacenter', 'ai', or 'physical_ai'"
+            ),
             "crawl": None,
             "session": get_current_session(),
             "can_start": False,

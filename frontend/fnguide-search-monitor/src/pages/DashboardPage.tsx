@@ -152,9 +152,10 @@ export function DashboardPage() {
                   <th>제목</th>
                   <th>증권사</th>
                   <th>발행일</th>
+                  <th>페이지</th>
                   <th>rpt_id</th>
                   <th>파일</th>
-                  <th>최근</th>
+                  <th title="목록에서 마지막으로 본 시각">최근</th>
                 </tr>
               </thead>
               <tbody>
@@ -169,6 +170,9 @@ export function DashboardPage() {
                     <td>{item.provider || '—'}</td>
                     <td className="mono">
                       {formatPublishedAt(item.published_at)}
+                    </td>
+                    <td className="mono report-pages">
+                      {item.page_count != null ? item.page_count : '—'}
                     </td>
                     <td className="mono">{item.source_key}</td>
                     <td className="report-file">
@@ -185,7 +189,9 @@ export function DashboardPage() {
                         '—'
                       )}
                     </td>
-                    <td>{formatRelative(item.last_seen_at)}</td>
+                    <td title={item.last_seen_at || undefined}>
+                      {formatRelative(item.last_seen_at)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -25,9 +25,9 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
-export type CrawlMode = 'auto' | 'adhoc' | 'datacenter' | 'ai'
+export type CrawlMode = 'auto' | 'adhoc' | 'datacenter' | 'ai' | 'physical_ai'
 
-export type CrawlProfileMode = 'datacenter' | 'ai'
+export type CrawlProfileMode = 'datacenter' | 'ai' | 'physical_ai'
 
 export type CrawlProfile = {
   mode: CrawlProfileMode

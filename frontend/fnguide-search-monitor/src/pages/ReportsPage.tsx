@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useReports } from '../hooks/useReports'
+import { useReports, type ReportSort } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import { STATUS_LABEL, formatPublishedAt, formatRelative } from '../lib/format'
 
@@ -17,6 +17,8 @@ export function ReportsPage() {
   const [params, setParams] = useSearchParams()
   const status = params.get('status') || 'all'
   const qParam = params.get('q') || ''
+  const sort: ReportSort =
+    params.get('sort') === 'page_count' ? 'page_count' : 'published_at'
   const offset = Math.max(0, Number(params.get('offset') || '0') || 0)
   const [qDraft, setQDraft] = useState(qParam)
   const { crawl } = useSessionStatus()
@@ -24,23 +26,40 @@ export function ReportsPage() {
     crawl.state === 'starting' ||
     crawl.state === 'active' ||
     crawl.state === 'stopping'
+  const filtersDirty =
+    status !== 'all' || Boolean(qParam) || sort !== 'published_at' || offset > 0
+
+  useEffect(() => {
+    setQDraft(qParam)
+  }, [qParam])
 
   const query = useMemo(
     () => ({
       status,
       q: qParam,
+      sort,
       limit: 30,
       offset,
       poll: true,
     }),
-    [status, qParam, offset],
+    [status, qParam, sort, offset],
   )
   const reports = useReports(query)
 
   function setStatus(next: string) {
     const nextParams = new URLSearchParams(params)
-    if (!next || next === 'all') nextParams.delete('status')
+    // 활성 칩을 다시 누르면 전체로 되돌림
+    if (!next || next === 'all' || next === status) nextParams.delete('status')
     else nextParams.set('status', next)
+    nextParams.delete('offset')
+    setParams(nextParams)
+  }
+
+  function setSort(next: ReportSort) {
+    const nextParams = new URLSearchParams(params)
+    // 활성 정렬을 다시 누르면 기본(발행일)으로
+    if (next === 'published_at' || next === sort) nextParams.delete('sort')
+    else nextParams.set('sort', next)
     nextParams.delete('offset')
     setParams(nextParams)
   }
@@ -53,6 +72,11 @@ export function ReportsPage() {
     else nextParams.delete('q')
     nextParams.delete('offset')
     setParams(nextParams)
+  }
+
+  function resetFilters() {
+    setQDraft('')
+    setParams(new URLSearchParams())
   }
 
   function shiftPage(delta: number) {
@@ -91,6 +115,15 @@ export function ReportsPage() {
               {STATUS_LABEL[key]} {reports.counts[key] ?? 0}
             </button>
           ))}
+          <button
+            type="button"
+            className="filter-chip filter-reset"
+            disabled={!filtersDirty}
+            onClick={resetFilters}
+            title="상태·검색·정렬·페이지 초기화"
+          >
+            초기화
+          </button>
         </div>
         <form className="search-row" onSubmit={applySearch}>
           <input
@@ -102,6 +135,21 @@ export function ReportsPage() {
           <button type="submit" className="run-btn">
             검색
           </button>
+          {qParam || qDraft ? (
+            <button
+              type="button"
+              className="run-btn"
+              onClick={() => {
+                setQDraft('')
+                const nextParams = new URLSearchParams(params)
+                nextParams.delete('q')
+                nextParams.delete('offset')
+                setParams(nextParams)
+              }}
+            >
+              검색 지우기
+            </button>
+          ) : null}
           <button
             type="button"
             className="run-btn"
@@ -123,10 +171,29 @@ export function ReportsPage() {
                   <th>상태</th>
                   <th>제목</th>
                   <th>증권사</th>
-                  <th>발행일</th>
+                  <th>
+                    <button
+                      type="button"
+                      className={`sort-th${sort === 'published_at' ? ' active' : ''}`}
+                      onClick={() => setSort('published_at')}
+                      title="발행일 내림차순"
+                    >
+                      발행일{sort === 'published_at' ? ' ↓' : ''}
+                    </button>
+                  </th>
+                  <th>
+                    <button
+                      type="button"
+                      className={`sort-th${sort === 'page_count' ? ' active' : ''}`}
+                      onClick={() => setSort('page_count')}
+                      title="페이지수 내림차순"
+                    >
+                      페이지{sort === 'page_count' ? ' ↓' : ''}
+                    </button>
+                  </th>
                   <th>rpt_id</th>
                   <th>파일</th>
-                  <th>최근</th>
+                  <th title="목록에서 마지막으로 본 시각">최근</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,6 +208,9 @@ export function ReportsPage() {
                     <td>{item.provider || '—'}</td>
                     <td className="mono">
                       {formatPublishedAt(item.published_at)}
+                    </td>
+                    <td className="mono report-pages">
+                      {item.page_count != null ? item.page_count : '—'}
                     </td>
                     <td className="mono">{item.source_key}</td>
                     <td className="report-file">
@@ -157,7 +227,9 @@ export function ReportsPage() {
                         '—'
                       )}
                     </td>
-                    <td>{formatRelative(item.last_seen_at)}</td>
+                    <td title={item.last_seen_at || undefined}>
+                      {formatRelative(item.last_seen_at)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

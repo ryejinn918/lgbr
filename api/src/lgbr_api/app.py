@@ -131,6 +131,7 @@ async def reports(request: Request) -> JSONResponse:
         status=request.query_params.get("status"),
         q=request.query_params.get("q"),
         crawl_id=request.query_params.get("crawl_id"),
+        sort=request.query_params.get("sort"),
         limit=limit,
         offset=offset,
     )
