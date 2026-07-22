@@ -1,0 +1,22 @@
+[project]
+name = "lgbr"
+version = "0.1.0"
+description = "LGBR monorepo workspace"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fnsearch",
+]
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.uv.sources]
+fnsearch = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "fnsearch",
+]
