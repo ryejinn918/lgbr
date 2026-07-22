@@ -25,6 +25,8 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
+export type CrawlMode = 'auto' | 'adhoc'
+
 export type CrawlRecord = {
   id: string
   session_id: string | null
@@ -33,6 +35,9 @@ export type CrawlRecord = {
   stop_requested_at: string | null
   pid: number | null
   state: CrawlState
+  mode?: CrawlMode | null
+  cdp_port?: number | null
+  cdp_http_url?: string | null
   message: string | null
   label: string
 }

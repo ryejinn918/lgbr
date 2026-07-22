@@ -9,13 +9,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from crawler import cdp as cdp_ops
 from crawler.browser import open_login
 from crawler.crawl import run_crawl
 from crawler.db import load_database_env
 from crawler.fnguide_session import (
     DEFAULT_IDLE_SECONDS,
     DEFAULT_TTL_SECONDS,
-    FnguideSession,
 )
 from crawler.session import (
     DEFAULT_SESSION_PATH,
@@ -80,12 +80,12 @@ def main() -> None:
 
     crawl_parser = sub.add_parser(
         "crawl",
-        help="Manual crawl run (session login is a subtask)",
+        help="Crawl worker (started by API with --crawl-id)",
     )
     crawl_sub = crawl_parser.add_subparsers(dest="crawl_command")
     crawl_run = crawl_sub.add_parser(
         "run",
-        help="Start crawl: acquire session, hold until stop/idle/ttl",
+        help="Claim API crawl row, acquire session, hold until stop/idle/ttl",
     )
     _add_headless(crawl_run)
     crawl_run.add_argument("--user-id", default=os.environ.get("FNGUIDE_USER_ID"))
@@ -99,46 +99,44 @@ def main() -> None:
     )
     crawl_run.add_argument(
         "--crawl-id",
-        default=None,
-        help="Use an existing crawl row created by the API",
+        required=True,
+        help="Crawl row id created by POST /api/crawl/start",
     )
     crawl_sub.add_parser("current", help="Show current crawl")
 
     session_parser = sub.add_parser(
         "session",
-        help="Manage Fnguide account session lifetime",
+        help="Inspect Fnguide account session (read-only)",
     )
     session_sub = session_parser.add_subparsers(dest="session_command")
-    start_parser = session_sub.add_parser(
-        "start",
-        help="Log in and keep account until idle/ttl/manual logout",
-    )
-    _add_headless(start_parser)
-    start_parser.add_argument("--user-id", default=os.environ.get("FNGUIDE_USER_ID"))
-    start_parser.add_argument("--password", default=os.environ.get("FNGUIDE_PASSWORD"))
-    start_parser.add_argument("--ttl", type=int, default=DEFAULT_TTL_SECONDS)
-    start_parser.add_argument("--idle", type=int, default=DEFAULT_IDLE_SECONDS)
-    start_parser.add_argument(
-        "--no-force",
-        action="store_true",
-        help="Do not confirm the single-session conflict dialog",
-    )
     session_sub.add_parser("current", help="Show current DB session")
     session_sub.add_parser("history", help="Show recent session history")
 
-    hold_parser = sub.add_parser(
-        "hold",
-        help="(legacy) Keep session for N seconds then logout",
+    cdp_parser = sub.add_parser(
+        "cdp",
+        help="Remote-control open adhoc crawl via CDP",
     )
-    _add_headless(hold_parser)
-    hold_parser.add_argument("--user-id", default=os.environ.get("FNGUIDE_USER_ID"))
-    hold_parser.add_argument("--password", default=os.environ.get("FNGUIDE_PASSWORD"))
-    hold_parser.add_argument("--seconds", type=int, default=60)
-    hold_parser.add_argument(
-        "--no-force",
-        action="store_true",
-        help="Do not confirm the single-session conflict dialog",
+    cdp_sub = cdp_parser.add_subparsers(dest="cdp_command")
+    cdp_sub.add_parser("status", help="Show CDP pages / active URL")
+    cdp_goto = cdp_sub.add_parser("goto", help="Navigate active tab")
+    cdp_goto.add_argument("--url", required=True)
+    cdp_click = cdp_sub.add_parser("click", help="Click by text or selector")
+    cdp_click.add_argument("--text", default=None)
+    cdp_click.add_argument("--selector", default=None)
+    cdp_fill = cdp_sub.add_parser("fill", help="Fill an input")
+    cdp_fill.add_argument("--selector", required=True)
+    cdp_fill.add_argument("--text", required=True)
+    cdp_press = cdp_sub.add_parser("press", help="Press a key")
+    cdp_press.add_argument("--key", required=True)
+    cdp_press.add_argument("--selector", default=None)
+    cdp_shot = cdp_sub.add_parser("screenshot", help="Capture active tab")
+    cdp_shot.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".crawler/snapshots/cdp.png"),
     )
+    cdp_eval = cdp_sub.add_parser("eval", help="Evaluate JS in active tab")
+    cdp_eval.add_argument("--expr", required=True)
 
     status_parser = sub.add_parser(
         "status",
@@ -251,40 +249,30 @@ def main() -> None:
                 )
             )
             return
-        if session_command == "start":
-            if not args.user_id or not args.password:
-                parser.error(
-                    "session start requires --user-id/--password or "
-                    "FNGUIDE_USER_ID/FNGUIDE_PASSWORD"
-                )
-            sess = FnguideSession(
-                user_id=args.user_id,
-                password=args.password,
-                ttl_seconds=args.ttl,
-                idle_seconds=args.idle,
-                headless=headless,
-                force_other_session=not args.no_force,
-            )
-            result = sess.run_until_released()
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
         parser.error(f"Unknown session command: {session_command}")
 
-    if command == "hold":
-        if not args.user_id or not args.password:
-            parser.error(
-                "hold requires --user-id/--password or "
-                "FNGUIDE_USER_ID/FNGUIDE_PASSWORD"
-            )
-        sess = FnguideSession(
-            user_id=args.user_id,
-            password=args.password,
-            ttl_seconds=args.seconds,
-            idle_seconds=args.seconds,
-            headless=headless,
-            force_other_session=not args.no_force,
-        )
-        result = sess.run_until_released()
+    if command == "cdp":
+        cdp_command = args.cdp_command or "status"
+        try:
+            if cdp_command == "status":
+                result = cdp_ops.cdp_status()
+            elif cdp_command == "goto":
+                result = cdp_ops.cdp_goto(args.url)
+            elif cdp_command == "click":
+                result = cdp_ops.cdp_click(text=args.text, selector=args.selector)
+            elif cdp_command == "fill":
+                result = cdp_ops.cdp_fill(selector=args.selector, text=args.text)
+            elif cdp_command == "press":
+                result = cdp_ops.cdp_press(key=args.key, selector=args.selector)
+            elif cdp_command == "screenshot":
+                result = cdp_ops.cdp_screenshot(out=args.out)
+            elif cdp_command == "eval":
+                result = cdp_ops.cdp_eval(args.expr)
+            else:
+                parser.error(f"Unknown cdp command: {cdp_command}")
+        except Exception as exc:
+            print(json.dumps({"ok": False, "message": str(exc)}, ensure_ascii=False))
+            raise SystemExit(1) from exc
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 

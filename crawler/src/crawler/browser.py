@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import socket
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -90,6 +91,16 @@ def _launch_args() -> list[str]:
     ]
 
 
+def allocate_cdp_port() -> int:
+    """Return FNGUIDE_CDP_PORT or an ephemeral free localhost port."""
+    fixed = os.environ.get("FNGUIDE_CDP_PORT")
+    if fixed:
+        return int(fixed)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
 @contextmanager
 def launch_browser(*, headless: bool | None = None) -> Iterator[Browser]:
     """Launch Chrome (preferred) for callers that still need a Browser object."""
@@ -113,6 +124,7 @@ def launch_context(
     *,
     headless: bool | None = None,
     user_data_dir: Path | None = None,
+    cdp_port: int | None = None,
 ) -> Iterator[BrowserContext]:
     """Launch a human-like Chrome persistent context.
 
@@ -128,6 +140,15 @@ def launch_context(
     fingerprint = generate_human_fingerprint()
     options = _context_options_from_fingerprint(fingerprint)
 
+    args = list(_launch_args())
+    if cdp_port is not None:
+        args.extend(
+            [
+                f"--remote-debugging-port={cdp_port}",
+                "--remote-debugging-address=127.0.0.1",
+            ]
+        )
+
     # Headed Chrome: avoid forcing a custom viewport/UA when possible.
     # Headless: apply Browserforge-aligned Chrome UA so we don't send HeadlessChrome.
     launch_kwargs: dict[str, Any] = {
@@ -137,7 +158,7 @@ def launch_context(
         "locale": options["locale"],
         "timezone_id": options["timezone_id"],
         "color_scheme": options["color_scheme"],
-        "args": _launch_args(),
+        "args": args,
         "ignore_default_args": ["--enable-automation"],
     }
     if headless:

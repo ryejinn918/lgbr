@@ -9,7 +9,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from lgbr_api.auth import ApiKeyMiddleware
-from lgbr_api.crawls import get_current_crawl, request_stop, start_crawl
+from lgbr_api.crawls import get_cdp_status, get_current_crawl, request_stop, start_crawl
 from lgbr_api.db import load_database_env
 from lgbr_api.sessions import get_current_session, list_history
 
@@ -39,14 +39,27 @@ async def crawl(_: Request) -> JSONResponse:
     return JSONResponse(get_current_crawl())
 
 
-async def crawl_start(_: Request) -> JSONResponse:
-    result = start_crawl()
+async def crawl_start(request: Request) -> JSONResponse:
+    mode = "auto"
+    try:
+        body = await request.json()
+        if isinstance(body, dict) and body.get("mode"):
+            mode = str(body["mode"])
+    except Exception:
+        mode = "auto"
+    result = start_crawl(mode=mode)
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 
 
 async def crawl_stop(_: Request) -> JSONResponse:
     return JSONResponse(request_stop())
+
+
+async def cdp_status(_: Request) -> JSONResponse:
+    result = get_cdp_status()
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
 
 
 def create_app() -> Starlette:
@@ -60,6 +73,7 @@ def create_app() -> Starlette:
             Route("/api/crawl", crawl),
             Route("/api/crawl/start", crawl_start, methods=["POST"]),
             Route("/api/crawl/stop", crawl_stop, methods=["POST"]),
+            Route("/api/cdp", cdp_status),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],
     )

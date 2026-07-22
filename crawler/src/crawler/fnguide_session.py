@@ -16,7 +16,7 @@ from crawler.browser import LOGIN_URL, launch_context
 from crawler.session import _is_logged_in, login, logout
 
 DEFAULT_TTL_SECONDS = int(os.environ.get("FNGUIDE_SESSION_TTL_SECONDS", "28800"))
-DEFAULT_IDLE_SECONDS = int(os.environ.get("FNGUIDE_SESSION_IDLE_SECONDS", "600"))
+DEFAULT_IDLE_SECONDS = int(os.environ.get("FNGUIDE_SESSION_IDLE_SECONDS", "900"))
 
 
 def _parse_dt(value: str | datetime | None) -> datetime | None:
@@ -35,6 +35,7 @@ class FnguideSession:
     idle_seconds: int = DEFAULT_IDLE_SECONDS
     headless: bool | None = True
     force_other_session: bool = True
+    cdp_port: int | None = None
 
     session_id: str | None = None
     page: Page | None = None
@@ -53,7 +54,7 @@ class FnguideSession:
         try:
             self._stack = ExitStack()
             self._context = self._stack.enter_context(
-                launch_context(headless=self.headless)
+                launch_context(headless=self.headless, cdp_port=self.cdp_port)
             )
             self.page = (
                 self._context.pages[0]

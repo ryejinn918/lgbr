@@ -42,20 +42,26 @@ function App() {
     crawl.state === 'starting' ||
     crawl.state === 'active' ||
     crawl.state === 'stopping'
+  const sessionOpen = status.session != null
   const blockedByError = crawl.state === 'error'
   const canStart = crawl.can_start === true && !crawlBusy
+  const canStop = crawlBusy || sessionOpen
   const badgeState = fetchError
     ? 'offline'
     : stale
       ? 'stale'
       : CRAWL_CLASS[crawl.state]
 
-  async function onStart() {
-    if (!window.confirm('크롤을 시작할까요? (로그인 세션을 함께 획득합니다)')) {
+  async function onStart(mode: 'auto' | 'adhoc' = 'auto') {
+    const label =
+      mode === 'adhoc'
+        ? '애드혹 크롤을 시작할까요? (CDP 원격 조작, 로그인 세션 획득)'
+        : '크롤을 시작할까요? (로그인 세션을 함께 획득합니다)'
+    if (!window.confirm(label)) {
       return
     }
     try {
-      await startCrawl()
+      await startCrawl(mode)
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '실행 실패')
     }
@@ -86,6 +92,19 @@ function App() {
         <p className={`account-line state-${SESSION_CLASS[status.state]}`}>
           계정: {fetchError ? '—' : status.label}
         </p>
+        {crawl.crawl?.mode && !fetchError ? (
+          <p className="account-line">
+            모드: {crawl.crawl.mode}
+            {crawl.crawl.cdp_port
+              ? ` · CDP ${crawl.crawl.cdp_port}`
+              : crawl.crawl.mode === 'adhoc'
+                ? ' · CDP 대기'
+                : ''}
+          </p>
+        ) : null}
+        {crawl.crawl?.cdp_http_url && !fetchError ? (
+          <p className="account-line">CDP: {crawl.crawl.cdp_http_url}</p>
+        ) : null}
         {crawl.state === 'active' && !fetchError ? (
           <p className="warn">
             크롤이 계정을 사용 중입니다. 같은 계정으로 들어가면 세션이 끊길 수
@@ -119,14 +138,22 @@ function App() {
             type="button"
             className="run-btn"
             disabled={!canStart || requestingStart || !!fetchError}
-            onClick={() => void onStart()}
+            onClick={() => void onStart('auto')}
           >
             {requestingStart ? '시작 중…' : '실행'}
           </button>
           <button
             type="button"
+            className="run-btn"
+            disabled={!canStart || requestingStart || !!fetchError}
+            onClick={() => void onStart('adhoc')}
+          >
+            {requestingStart ? '시작 중…' : '애드혹'}
+          </button>
+          <button
+            type="button"
             className="logout-btn"
-            disabled={!crawlBusy || requestingStop || !!fetchError}
+            disabled={!canStop || requestingStop || !!fetchError}
             onClick={() => void onStop()}
           >
             {requestingStop ? '요청 중…' : '종료'}

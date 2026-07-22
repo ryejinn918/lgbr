@@ -10,6 +10,7 @@ import time
 from typing import Any
 
 from crawler import crawls_store, sessions_store
+from crawler.browser import allocate_cdp_port
 from crawler.fnguide_session import (
     DEFAULT_IDLE_SECONDS,
     DEFAULT_TTL_SECONDS,
@@ -25,30 +26,19 @@ def run_crawl(
     *,
     user_id: str,
     password: str,
+    crawl_id: str,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
     idle_seconds: int = DEFAULT_IDLE_SECONDS,
     headless: bool | None = True,
     force_other_session: bool = True,
     poll_seconds: float = 2.0,
-    crawl_id: str | None = None,
 ) -> dict[str, Any]:
-    """Start crawl (starting → active → stopping → ended|error) around a session."""
-    if crawl_id:
-        crawl = crawls_store.claim_crawl(crawl_id)
-    else:
-        if crawls_store.get_open_crawl():
-            raise CrawlStateError("A crawl is already running")
-        if sessions_store.get_open_session():
-            raise CrawlStateError("An account session is already open")
-        blocked = crawls_store.get_latest_blocking_error()
-        if blocked:
-            raise CrawlStateError(
-                "Previous crawl ended in error. After investigation run: "
-                "UPDATE fnguide_crawls SET state = 'ended' "
-                f"WHERE id = '{blocked['id']}' AND state = 'error';"
-            )
-        crawl = crawls_store.create_crawl()
+    """Claim API crawl row (starting → active → stopping → ended|error) around a session."""
+    crawl = crawls_store.claim_crawl(crawl_id)
     crawl_id = str(crawl["id"])
+    mode = str(crawl.get("mode") or "auto")
+    cdp_port = allocate_cdp_port() if mode == "adhoc" else None
+    touch_step = "adhoc" if mode == "adhoc" else "crawl"
     sess = FnguideSession(
         user_id=user_id,
         password=password,
@@ -56,12 +46,15 @@ def run_crawl(
         idle_seconds=idle_seconds,
         headless=headless,
         force_other_session=force_other_session,
+        cdp_port=cdp_port,
     )
 
     try:
         sess.start()
         if not sess.session_id:
             raise CrawlStateError("Session start returned no session_id")
+        if cdp_port is not None:
+            crawls_store.set_cdp_port(crawl_id, cdp_port)
         crawls_store.attach_session(crawl_id, sess.session_id)
         crawls_store.mark_active(crawl_id)
 
@@ -80,7 +73,7 @@ def run_crawl(
                 reason = stop_reason
                 break
             # touch failure must not leave us "active" while DB is broken
-            sess.touch(step="crawl")
+            sess.touch(step=touch_step)
             time.sleep(max(poll_seconds, 0.5))
 
         crawls_store.mark_stopping(crawl_id)

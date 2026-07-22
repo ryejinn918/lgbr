@@ -226,7 +226,18 @@ def request_stop() -> dict[str, Any]:
     }
 
 
-def start_crawl() -> dict[str, Any]:
+def start_crawl(*, mode: str = "auto") -> dict[str, Any]:
+    if mode not in ("auto", "adhoc"):
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": "mode must be 'auto' or 'adhoc'",
+            "crawl": None,
+            "session": get_current_session(),
+            "can_start": False,
+        }
+
     reconcile_stale_crawls()
     open_crawl = _get_open_row()
     if open_crawl:
@@ -272,7 +283,7 @@ def start_crawl() -> dict[str, Any]:
         }
 
     try:
-        crawl = _create_starting_crawl()
+        crawl = _create_starting_crawl(mode=mode)
     except Exception as exc:
         return {
             "ok": False,
@@ -345,17 +356,17 @@ def start_crawl() -> dict[str, Any]:
     }
 
 
-def _create_starting_crawl() -> dict[str, Any]:
+def _create_starting_crawl(*, mode: str = "auto") -> dict[str, Any]:
     now = _now()
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO fnguide_crawls (started_at, state)
-                VALUES (%s, 'starting')
+                INSERT INTO fnguide_crawls (started_at, state, mode)
+                VALUES (%s, 'starting', %s)
                 RETURNING *
                 """,
-                (now,),
+                (now, mode),
             )
             row = dict(cur.fetchone())
         conn.commit()
@@ -468,4 +479,68 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
             out[key] = value
     state = out.get("state")
     out["label"] = CRAWL_STATE_LABELS.get(str(state), "종료")
+    port = out.get("cdp_port")
+    out["cdp_http_url"] = f"http://127.0.0.1:{port}" if port else None
     return out
+
+
+def get_cdp_status() -> dict[str, Any]:
+    """Summarize CDP endpoint for an open adhoc crawl."""
+    reconcile_stale_crawls()
+    row = _get_open_row()
+    if not row:
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "열린 크롤이 없습니다.",
+        }
+    crawl = _serialize(row)
+    if crawl.get("mode") != "adhoc":
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "adhoc 크롤이 아닙니다.",
+            "crawl": crawl,
+        }
+    port = crawl.get("cdp_port")
+    if not port:
+        return {
+            "ok": False,
+            "status": 503,
+            "message": "CDP 포트가 아직 없습니다.",
+            "crawl": crawl,
+        }
+    url = f"http://127.0.0.1:{port}"
+    pages: list[Any] = []
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen(f"{url}/json/list", timeout=2) as resp:
+            import json as _json
+
+            pages = _json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": 503,
+            "message": f"CDP 연결 실패: {exc}",
+            "crawl": crawl,
+            "cdp_port": port,
+            "cdp_http_url": url,
+        }
+    return {
+        "ok": True,
+        "crawl": crawl,
+        "cdp_port": port,
+        "cdp_http_url": url,
+        "pages": [
+            {
+                "id": p.get("id"),
+                "title": p.get("title"),
+                "url": p.get("url"),
+                "type": p.get("type"),
+            }
+            for p in pages
+            if isinstance(p, dict)
+        ],
+    }

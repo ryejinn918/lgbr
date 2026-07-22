@@ -16,21 +16,42 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def create_crawl(*, pid: int | None = None) -> dict[str, Any]:
+def create_crawl(*, pid: int | None = None, mode: str = "auto") -> dict[str, Any]:
     now = _now()
+    if mode not in ("auto", "adhoc"):
+        raise ValueError(f"Invalid crawl mode: {mode}")
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO fnguide_crawls (started_at, pid, state)
-                VALUES (%s, %s, 'starting')
+                INSERT INTO fnguide_crawls (started_at, pid, state, mode)
+                VALUES (%s, %s, 'starting', %s)
                 RETURNING *
                 """,
-                (now, pid if pid is not None else os.getpid()),
+                (now, pid if pid is not None else os.getpid(), mode),
             )
             row = dict(cur.fetchone())
         conn.commit()
     return _serialize(row)
+
+
+def set_cdp_port(crawl_id: UUID | str, port: int) -> dict[str, Any]:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE fnguide_crawls
+                SET cdp_port = %s, pid = %s
+                WHERE id = %s AND ended_at IS NULL
+                RETURNING *
+                """,
+                (port, os.getpid(), str(crawl_id)),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise RuntimeError(f"No open crawl {crawl_id}")
+        conn.commit()
+    return _serialize(dict(row))
 
 
 def claim_crawl(crawl_id: UUID | str) -> dict[str, Any]:
@@ -243,4 +264,6 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     state = out.get("state")
     out["label"] = CRAWL_STATE_LABELS.get(str(state), "종료")
     out["terminal"] = str(state) in TERMINAL_STATES or out.get("ended_at") is not None
+    port = out.get("cdp_port")
+    out["cdp_http_url"] = f"http://127.0.0.1:{port}" if port else None
     return out

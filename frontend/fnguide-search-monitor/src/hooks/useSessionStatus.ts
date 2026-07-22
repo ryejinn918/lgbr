@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { CrawlResponse, HistoryResponse, SessionResponse } from '../types'
+import type {
+  CrawlMode,
+  CrawlResponse,
+  HistoryResponse,
+  SessionResponse,
+} from '../types'
 
 const STALE_AFTER_MS = 30_000
 const POLL_MS = 2_000
@@ -26,7 +31,7 @@ export type SessionView = {
   fetchError: string | null
   requestingStart: boolean
   requestingStop: boolean
-  startCrawl: () => Promise<void>
+  startCrawl: (mode?: CrawlMode) => Promise<void>
   requestLogout: () => Promise<void>
 }
 
@@ -103,10 +108,14 @@ export function useSessionStatus(): SessionView {
     }
   }, [])
 
-  async function startCrawl() {
+  async function startCrawl(mode: CrawlMode = 'auto') {
     setRequestingStart(true)
     try {
-      const res = await fetch('/api/crawl/start', { method: 'POST' })
+      const res = await fetch('/api/crawl/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
       const data = (await res.json()) as CrawlResponse & {
         ok?: boolean
         message?: string
