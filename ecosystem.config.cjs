@@ -17,6 +17,8 @@ module.exports = {
       autorestart: true,
       max_restarts: 10,
       min_uptime: '5s',
+      // Wait for lifespan shutdown (request_stop + up to 60s) before SIGKILL.
+      kill_timeout: 90000,
     },
     {
       name: 'fnguide-search-monitor',

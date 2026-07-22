@@ -31,7 +31,7 @@ export type SessionView = {
   fetchError: string | null
   requestingStart: boolean
   requestingStop: boolean
-  startCrawl: (mode?: CrawlMode) => Promise<void>
+  startCrawl: (mode?: CrawlMode, limit?: number) => Promise<void>
   requestLogout: () => Promise<void>
 }
 
@@ -108,13 +108,17 @@ export function useSessionStatus(): SessionView {
     }
   }, [])
 
-  async function startCrawl(mode: CrawlMode = 'auto') {
+  async function startCrawl(mode: CrawlMode = 'datacenter', limit = 5) {
     setRequestingStart(true)
     try {
+      const body: { mode: CrawlMode; limit?: number } = { mode }
+      if (mode === 'datacenter') {
+        body.limit = limit
+      }
       const res = await fetch('/api/crawl/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify(body),
       })
       const data = (await res.json()) as CrawlResponse & {
         ok?: boolean

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
@@ -9,9 +13,26 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from lgbr_api.auth import ApiKeyMiddleware
-from lgbr_api.crawls import get_cdp_status, get_current_crawl, request_stop, start_crawl
+from lgbr_api.crawls import (
+    get_cdp_status,
+    get_current_crawl,
+    request_stop,
+    shutdown_open_crawl,
+    start_crawl,
+)
 from lgbr_api.db import load_database_env
 from lgbr_api.sessions import get_current_session, list_history
+
+SHUTDOWN_WAIT_SECONDS = 60.0
+
+
+@asynccontextmanager
+async def lifespan(_app: Starlette) -> AsyncIterator[None]:
+    yield
+    # PM2/uvicorn stop: ask crawl worker to logout before this process exits.
+    await asyncio.to_thread(
+        shutdown_open_crawl, timeout_seconds=SHUTDOWN_WAIT_SECONDS
+    )
 
 
 async def health(_: Request) -> JSONResponse:
@@ -40,14 +61,30 @@ async def crawl(_: Request) -> JSONResponse:
 
 
 async def crawl_start(request: Request) -> JSONResponse:
-    mode = "auto"
+    mode = "datacenter"
+    limit: int | None = None
     try:
         body = await request.json()
-        if isinstance(body, dict) and body.get("mode"):
-            mode = str(body["mode"])
     except Exception:
-        mode = "auto"
-    result = start_crawl(mode=mode)
+        body = {}
+    if isinstance(body, dict):
+        if body.get("mode"):
+            mode = str(body["mode"])
+        if "limit" in body and body.get("limit") is not None:
+            try:
+                limit = int(body["limit"])
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "label": "오류",
+                        "message": "limit must be an integer",
+                        "crawl": None,
+                        "can_start": False,
+                    },
+                    status_code=400,
+                )
+    result = start_crawl(mode=mode, limit=limit)
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 
@@ -76,6 +113,7 @@ def create_app() -> Starlette:
             Route("/api/cdp", cdp_status),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],
+        lifespan=lifespan,
     )
 
 

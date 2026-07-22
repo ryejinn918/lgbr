@@ -16,19 +16,34 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def create_crawl(*, pid: int | None = None, mode: str = "auto") -> dict[str, Any]:
+VALID_MODES = frozenset({"auto", "adhoc", "datacenter"})
+
+
+def create_crawl(
+    *,
+    pid: int | None = None,
+    mode: str = "auto",
+    report_limit: int = 5,
+) -> dict[str, Any]:
     now = _now()
-    if mode not in ("auto", "adhoc"):
+    if mode not in VALID_MODES:
         raise ValueError(f"Invalid crawl mode: {mode}")
+    if report_limit < 1 or report_limit > 50:
+        raise ValueError(f"Invalid report_limit: {report_limit}")
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO fnguide_crawls (started_at, pid, state, mode)
-                VALUES (%s, %s, 'starting', %s)
+                INSERT INTO fnguide_crawls (started_at, pid, state, mode, report_limit)
+                VALUES (%s, %s, 'starting', %s, %s)
                 RETURNING *
                 """,
-                (now, pid if pid is not None else os.getpid(), mode),
+                (
+                    now,
+                    pid if pid is not None else os.getpid(),
+                    mode,
+                    report_limit,
+                ),
             )
             row = dict(cur.fetchone())
         conn.commit()

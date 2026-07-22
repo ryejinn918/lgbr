@@ -7,6 +7,7 @@ import time
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from patchright.sync_api import BrowserContext, Page
@@ -36,6 +37,7 @@ class FnguideSession:
     headless: bool | None = True
     force_other_session: bool = True
     cdp_port: int | None = None
+    downloads_path: Path | None = None
 
     session_id: str | None = None
     page: Page | None = None
@@ -54,7 +56,11 @@ class FnguideSession:
         try:
             self._stack = ExitStack()
             self._context = self._stack.enter_context(
-                launch_context(headless=self.headless, cdp_port=self.cdp_port)
+                launch_context(
+                    headless=self.headless,
+                    cdp_port=self.cdp_port,
+                    downloads_path=self.downloads_path,
+                )
             )
             self.page = (
                 self._context.pages[0]

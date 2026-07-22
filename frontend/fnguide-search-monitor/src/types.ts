@@ -25,7 +25,7 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
-export type CrawlMode = 'auto' | 'adhoc'
+export type CrawlMode = 'auto' | 'adhoc' | 'datacenter'
 
 export type CrawlRecord = {
   id: string
@@ -36,6 +36,7 @@ export type CrawlRecord = {
   pid: number | null
   state: CrawlState
   mode?: CrawlMode | null
+  report_limit?: number | null
   cdp_port?: number | null
   cdp_http_url?: string | null
   message: string | null

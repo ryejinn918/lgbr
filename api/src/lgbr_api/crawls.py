@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -226,17 +227,80 @@ def request_stop() -> dict[str, Any]:
     }
 
 
-def start_crawl(*, mode: str = "auto") -> dict[str, Any]:
-    if mode not in ("auto", "adhoc"):
+def shutdown_open_crawl(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
+    """Request stop on any open crawl and wait until it ends (API process exit)."""
+    open_before = _get_open_row()
+    if open_before is None:
+        return {"ok": True, "stopped": False, "timed_out": False}
+
+    request_stop()
+    deadline = time.monotonic() + max(timeout_seconds, 0.0)
+    while time.monotonic() < deadline:
+        if _get_open_row() is None:
+            return {
+                "ok": True,
+                "stopped": True,
+                "timed_out": False,
+                "crawl_id": str(open_before.get("id")),
+            }
+        time.sleep(0.5)
+
+    still_open = _get_open_row()
+    return {
+        "ok": still_open is None,
+        "stopped": still_open is None,
+        "timed_out": still_open is not None,
+        "crawl_id": str(open_before.get("id")),
+    }
+
+
+VALID_MODES = frozenset({"auto", "adhoc", "datacenter"})
+DEFAULT_REPORT_LIMIT = 5
+MIN_REPORT_LIMIT = 1
+MAX_REPORT_LIMIT = 50
+
+
+def start_crawl(*, mode: str = "auto", limit: int | None = None) -> dict[str, Any]:
+    if mode not in VALID_MODES:
         return {
             "ok": False,
             "status": 400,
             "label": "오류",
-            "message": "mode must be 'auto' or 'adhoc'",
+            "message": "mode must be 'auto', 'adhoc', or 'datacenter'",
             "crawl": None,
             "session": get_current_session(),
             "can_start": False,
         }
+
+    report_limit = DEFAULT_REPORT_LIMIT
+    if mode == "datacenter":
+        if limit is None:
+            report_limit = DEFAULT_REPORT_LIMIT
+        else:
+            try:
+                report_limit = int(limit)
+            except (TypeError, ValueError):
+                return {
+                    "ok": False,
+                    "status": 400,
+                    "label": "오류",
+                    "message": "limit must be an integer",
+                    "crawl": None,
+                    "session": get_current_session(),
+                    "can_start": False,
+                }
+        if report_limit < MIN_REPORT_LIMIT or report_limit > MAX_REPORT_LIMIT:
+            return {
+                "ok": False,
+                "status": 400,
+                "label": "오류",
+                "message": (
+                    f"limit must be between {MIN_REPORT_LIMIT} and {MAX_REPORT_LIMIT}"
+                ),
+                "crawl": None,
+                "session": get_current_session(),
+                "can_start": False,
+            }
 
     reconcile_stale_crawls()
     open_crawl = _get_open_row()
@@ -283,7 +347,7 @@ def start_crawl(*, mode: str = "auto") -> dict[str, Any]:
         }
 
     try:
-        crawl = _create_starting_crawl(mode=mode)
+        crawl = _create_starting_crawl(mode=mode, report_limit=report_limit)
     except Exception as exc:
         return {
             "ok": False,
@@ -356,17 +420,21 @@ def start_crawl(*, mode: str = "auto") -> dict[str, Any]:
     }
 
 
-def _create_starting_crawl(*, mode: str = "auto") -> dict[str, Any]:
+def _create_starting_crawl(
+    *,
+    mode: str = "auto",
+    report_limit: int = DEFAULT_REPORT_LIMIT,
+) -> dict[str, Any]:
     now = _now()
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO fnguide_crawls (started_at, state, mode)
-                VALUES (%s, 'starting', %s)
+                INSERT INTO fnguide_crawls (started_at, state, mode, report_limit)
+                VALUES (%s, 'starting', %s, %s)
                 RETURNING *
                 """,
-                (now, mode),
+                (now, mode, report_limit),
             )
             row = dict(cur.fetchone())
         conn.commit()

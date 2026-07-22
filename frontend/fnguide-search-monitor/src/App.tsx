@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useSessionStatus } from './hooks/useSessionStatus'
-import type { CrawlState, SessionRecord, SessionState } from './types'
+import type { CrawlMode, CrawlState, SessionRecord, SessionState } from './types'
 import './App.css'
 
 const CRAWL_CLASS: Record<CrawlState, string> = {
@@ -37,6 +38,7 @@ function App() {
     startCrawl,
     requestLogout,
   } = useSessionStatus()
+  const [reportLimit, setReportLimit] = useState(5)
 
   const crawlBusy =
     crawl.state === 'starting' ||
@@ -52,16 +54,17 @@ function App() {
       ? 'stale'
       : CRAWL_CLASS[crawl.state]
 
-  async function onStart(mode: 'auto' | 'adhoc' = 'auto') {
+  async function onStart(mode: CrawlMode = 'datacenter') {
+    const limit = Math.min(50, Math.max(1, Number(reportLimit) || 5))
     const label =
       mode === 'adhoc'
         ? '애드혹 크롤을 시작할까요? (CDP 원격 조작, 로그인 세션 획득)'
-        : '크롤을 시작할까요? (로그인 세션을 함께 획득합니다)'
+        : `데이터센터 리포트 ${limit}건을 다운로드할까요?`
     if (!window.confirm(label)) {
       return
     }
     try {
-      await startCrawl(mode)
+      await startCrawl(mode, limit)
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '실행 실패')
     }
@@ -95,12 +98,18 @@ function App() {
         {crawl.crawl?.mode && !fetchError ? (
           <p className="account-line">
             모드: {crawl.crawl.mode}
+            {crawl.crawl.mode === 'datacenter' && crawl.crawl.report_limit
+              ? ` · limit ${crawl.crawl.report_limit}`
+              : ''}
             {crawl.crawl.cdp_port
               ? ` · CDP ${crawl.crawl.cdp_port}`
               : crawl.crawl.mode === 'adhoc'
                 ? ' · CDP 대기'
                 : ''}
           </p>
+        ) : null}
+        {crawl.crawl?.message && !fetchError ? (
+          <p className="account-line">메시지: {crawl.crawl.message}</p>
         ) : null}
         {crawl.crawl?.cdp_http_url && !fetchError ? (
           <p className="account-line">CDP: {crawl.crawl.cdp_http_url}</p>
@@ -134,13 +143,24 @@ function App() {
         {fetchError ? <p className="warn">API 연결 실패: {fetchError}</p> : null}
 
         <div className="actions">
+          <label className="limit-field">
+            <span>보고서 수</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={reportLimit}
+              disabled={!canStart || requestingStart || !!fetchError}
+              onChange={(e) => setReportLimit(Number(e.target.value))}
+            />
+          </label>
           <button
             type="button"
             className="run-btn"
             disabled={!canStart || requestingStart || !!fetchError}
-            onClick={() => void onStart('auto')}
+            onClick={() => void onStart('datacenter')}
           >
-            {requestingStart ? '시작 중…' : '실행'}
+            {requestingStart ? '시작 중…' : '데이터센터'}
           </button>
           <button
             type="button"

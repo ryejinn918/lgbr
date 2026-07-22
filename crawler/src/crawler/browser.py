@@ -125,6 +125,7 @@ def launch_context(
     headless: bool | None = None,
     user_data_dir: Path | None = None,
     cdp_port: int | None = None,
+    downloads_path: Path | None = None,
 ) -> Iterator[BrowserContext]:
     """Launch a human-like Chrome persistent context.
 
@@ -160,7 +161,11 @@ def launch_context(
         "color_scheme": options["color_scheme"],
         "args": args,
         "ignore_default_args": ["--enable-automation"],
+        "accept_downloads": True,
     }
+    if downloads_path is not None:
+        downloads_path.mkdir(parents=True, exist_ok=True)
+        launch_kwargs["downloads_path"] = str(downloads_path)
     if headless:
         # Strip HeadlessChrome advertisement while keeping Linux Chrome identity.
         launch_kwargs["user_agent"] = options["user_agent"]
