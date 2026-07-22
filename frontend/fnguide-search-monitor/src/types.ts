@@ -132,6 +132,7 @@ export type ReportRecord = {
   last_seen_at: string | null
   downloaded_at: string | null
   published_at?: string | null
+  provider?: string | null
   page_count?: number | null
   crawl_id?: string | null
 }

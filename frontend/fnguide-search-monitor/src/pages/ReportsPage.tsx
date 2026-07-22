@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
-import { STATUS_LABEL, formatRelative } from '../lib/format'
+import { STATUS_LABEL, formatPublishedAt, formatRelative } from '../lib/format'
 
 const FILTERS = [
   'all',
@@ -95,7 +95,7 @@ export function ReportsPage() {
         <form className="search-row" onSubmit={applySearch}>
           <input
             type="search"
-            placeholder="제목 또는 rpt_id"
+            placeholder="제목, 증권사, rpt_id"
             value={qDraft}
             onChange={(e) => setQDraft(e.target.value)}
           />
@@ -116,21 +116,42 @@ export function ReportsPage() {
         ) : reports.items.length === 0 ? (
           <p className="empty">결과가 없습니다.</p>
         ) : (
-          <ul className="report-list">
-            {reports.items.map((item) => (
-              <li key={item.id}>
-                <span className={`status-pill status-${item.status}`}>
-                  {STATUS_LABEL[item.status] || item.status}
-                </span>
-                <span className="report-title">{item.title}</span>
-                <span className="report-side">
-                  <span className="mono">{item.source_key}</span>
-                  <span>{item.has_file ? item.file_name || '파일' : '—'}</span>
-                  <span>{formatRelative(item.last_seen_at)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="report-sheet">
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>상태</th>
+                  <th>제목</th>
+                  <th>증권사</th>
+                  <th>발행일</th>
+                  <th>rpt_id</th>
+                  <th>파일</th>
+                  <th>최근</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.items.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <span className={`status-pill status-${item.status}`}>
+                        {STATUS_LABEL[item.status] || item.status}
+                      </span>
+                    </td>
+                    <td className="report-title">{item.title}</td>
+                    <td>{item.provider || '—'}</td>
+                    <td className="mono">
+                      {formatPublishedAt(item.published_at)}
+                    </td>
+                    <td className="mono">{item.source_key}</td>
+                    <td className="report-file" title={item.file_name || undefined}>
+                      {item.has_file ? item.file_name || '파일' : '—'}
+                    </td>
+                    <td>{formatRelative(item.last_seen_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <div className="pager">
           <button

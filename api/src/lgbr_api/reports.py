@@ -14,6 +14,11 @@ VALID_STATUSES = frozenset(
 
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     pub = row.get("published_at")
+    attrs = row.get("attrs") or {}
+    if not isinstance(attrs, dict):
+        attrs = {}
+    provider = attrs.get("provider")
+    provider_s = str(provider).strip() if provider else None
     return {
         "id": str(row["id"]),
         "source_key": row.get("source_key"),
@@ -28,6 +33,7 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
             row["downloaded_at"].isoformat() if row.get("downloaded_at") else None
         ),
         "published_at": pub.isoformat() if pub else None,
+        "provider": provider_s or None,
         "page_count": row.get("page_count"),
         "crawl_id": str(row["crawl_id"]) if row.get("crawl_id") else None,
     }
@@ -106,8 +112,10 @@ def list_reports(
         where.append("crawl_id = %s")
         params.append(crawl_uuid)
     if q_pat:
-        where.append("(title ILIKE %s OR source_key ILIKE %s)")
-        params.extend([q_pat, q_pat])
+        where.append(
+            "(title ILIKE %s OR source_key ILIKE %s OR attrs->>'provider' ILIKE %s)"
+        )
+        params.extend([q_pat, q_pat, q_pat])
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
 
@@ -123,7 +131,7 @@ def list_reports(
                 f"""
                 SELECT id, source_key, title, status, file_path, file_name,
                        last_seen_at, downloaded_at, published_at, page_count,
-                       crawl_id
+                       crawl_id, attrs
                 FROM reports
                 {where_sql}
                 ORDER BY last_seen_at DESC NULLS LAST, id DESC
