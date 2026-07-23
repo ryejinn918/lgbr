@@ -22,6 +22,7 @@ from lgbr_api.consensus_api import (
     get_outputs,
 )
 from lgbr_api.db import load_database_env
+from lgbr_api.news_store import get_cached_search, upsert_search_results
 
 _SEOUL = ZoneInfo("Asia/Seoul")
 
@@ -31,8 +32,8 @@ WEB_SEARCH_TOOL = {
     "function": {
         "name": "web_search",
         "description": (
-            "Search the live web via Google (SerpAPI). "
-            "Use for latest news, prices, filings, or any fact beyond the "
+            "Search Google News via SerpAPI for recent headlines. "
+            "Use for latest news and time-sensitive public facts beyond the "
             "~3-month broker-report consensus frame."
         ),
         "parameters": {
@@ -40,7 +41,7 @@ WEB_SEARCH_TOOL = {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Search query (Korean or English)",
+                    "description": "News search query (Korean or English)",
                 }
             },
             "required": ["query"],
@@ -69,12 +70,16 @@ def web_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
     q = (query or "").strip()
     if not q:
         return []
+    cached = get_cached_search(q)
+    if cached is not None:
+        return cached[:num]
     params = urllib.parse.urlencode(
         {
-            "engine": "google",
+            "engine": "google_news",
             "q": q,
             "api_key": _serpapi_key(),
             "num": str(num),
+            "gl": "us",
             "hl": "ko",
         }
     )
@@ -84,16 +89,20 @@ def web_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
         data = json.loads(resp.read().decode())
     if data.get("error"):
         raise RuntimeError(str(data["error"]))
-    out: list[dict[str, str]] = []
-    for item in (data.get("organic_results") or [])[:num]:
-        out.append(
+    items: list[dict[str, Any]] = []
+    for item in (data.get("news_results") or [])[:num]:
+        items.append(
             {
                 "title": str(item.get("title") or ""),
                 "link": str(item.get("link") or ""),
                 "snippet": str(item.get("snippet") or ""),
+                "date": item.get("date"),
+                "publisher": str(item.get("source") or ""),
+                "position": item.get("position"),
+                "thumbnail": item.get("thumbnail"),
             }
         )
-    return out
+    return upsert_search_results(q, items)[:num]
 
 
 def _or_headers() -> dict[str, str]:
@@ -167,7 +176,7 @@ def _build_system(
         "(frame report slug, or web title + URL). "
         "Avoid speculation and rhetoric; if unknown, say so. "
         "Reply in Korean unless the user asks otherwise. "
-        "Call web_search for live/public facts beyond your context; "
+        "Call web_search (Google News) for live/public facts beyond your context; "
         "cite title + URL when using web results."
     )
     resolved_run_id = run_id
@@ -216,17 +225,17 @@ def _build_system(
             "Primary context is the consensus filled frame below. "
             "It synthesizes broker research reports from roughly the last 3 months. "
             "It may miss same-day or very recent news, prices, and filings. "
-            "For time-sensitive facts, use web_search, then answer citing frame vs web "
-            "sources separately. Prefer the frame's structure and consensus pillars; "
-            "if the web is newer and conflicts, state the dates and prefer the fresher "
-            "fact.\n\n"
+            "For time-sensitive facts, use web_search (news), then answer citing frame "
+            "vs news sources separately. Prefer the frame's structure and consensus "
+            "pillars; if the news is newer and conflicts, state the dates and prefer "
+            "the fresher fact.\n\n"
             f"--- CONSENSUS FRAME ---\n{frame}\n--- END FRAME ---"
         )
     elif mode == "plain":
         sys_content = (
             f"{base}\n\n"
             "No consensus frame is provided. "
-            "Use web_search to verify timely facts (news, prices, events) before answering."
+            "Use web_search (Google News) to verify timely facts before answering."
         )
     else:
         return [], "mode must be plain or grounded", None, None
