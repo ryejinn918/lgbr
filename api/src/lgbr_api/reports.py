@@ -13,7 +13,15 @@ from lgbr_api.db import connect
 VALID_STATUSES = frozenset(
     {"listed", "blind", "downloaded", "no_download", "failed"}
 )
-VALID_QUALITIES = frozenset({"pass", "fail", "pending"})
+VALID_QUALITIES = frozenset({"pass", "fail", "pending", "unauditable"})
+# Auditable pending: downloaded with a file path (matches quality_audit fetch_targets).
+_PENDING_SQL = (
+    "quality_pass IS NULL AND status = 'downloaded' AND file_path IS NOT NULL"
+)
+_UNAUDITABLE_SQL = (
+    "quality_pass IS NULL AND NOT "
+    "(status = 'downloaded' AND file_path IS NOT NULL)"
+)
 VALID_THEMES = frozenset({"datacenter", "ai", "physical_ai"})
 VALID_SORTS = frozenset({"published_at", "page_count", "last_seen_at"})
 SORT_SQL = {
@@ -41,6 +49,18 @@ def _safe_download_path(file_path: str) -> Path | None:
     return path
 
 
+def _quality_label(row: dict[str, Any]) -> str:
+    qp = row.get("quality_pass")
+    if qp is True:
+        return "pass"
+    if qp is False:
+        return "fail"
+    status = str(row.get("status") or "listed")
+    if status == "downloaded" and row.get("file_path"):
+        return "pending"
+    return "unauditable"
+
+
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     pub = row.get("published_at")
     attrs = row.get("attrs") or {}
@@ -53,7 +73,7 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     if theme_s not in VALID_THEMES:
         theme_s = None
     qp = row.get("quality_pass")
-    quality = "pending" if qp is None else ("pass" if qp else "fail")
+    quality = _quality_label(row)
     return {
         "id": str(row["id"]),
         "source_key": row.get("source_key"),
@@ -118,7 +138,8 @@ def _quality_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
         SELECT
           count(*) FILTER (WHERE quality_pass IS TRUE)::int AS pass,
           count(*) FILTER (WHERE quality_pass IS FALSE)::int AS fail,
-          count(*) FILTER (WHERE quality_pass IS NULL)::int AS pending
+          count(*) FILTER (WHERE {_PENDING_SQL})::int AS pending,
+          count(*) FILTER (WHERE {_UNAUDITABLE_SQL})::int AS unauditable
         FROM reports
         {where_sql}
         """,
@@ -129,6 +150,7 @@ def _quality_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
         "pass": int(row.get("pass") or 0),
         "fail": int(row.get("fail") or 0),
         "pending": int(row.get("pending") or 0),
+        "unauditable": int(row.get("unauditable") or 0),
     }
 
 
@@ -224,7 +246,9 @@ def list_reports(
     elif quality_filter == "fail":
         where.append("quality_pass IS FALSE")
     elif quality_filter == "pending":
-        where.append("quality_pass IS NULL")
+        where.append(_PENDING_SQL)
+    elif quality_filter == "unauditable":
+        where.append(_UNAUDITABLE_SQL)
     if theme_filter:
         where.append("attrs->>'theme' = %s")
         params.append(theme_filter)

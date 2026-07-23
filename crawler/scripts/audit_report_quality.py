@@ -119,11 +119,11 @@ def main() -> None:
                 "label": "완료",
                 "ended_at": _now(),
                 "message": (
-                    f"candidates={stats.get('candidates', 0)} "
-                    f"pass={stats.get('pass', 0)} "
-                    f"reject={stats.get('reject', 0)} "
-                    f"extract_fail={stats.get('extract_fail', 0)} "
-                    f"fail_api={stats.get('fail_api', 0)}"
+                    f"대상 {stats.get('candidates', 0)}건 · "
+                    f"적합 {stats.get('pass', 0)} · "
+                    f"부적합 {stats.get('reject', 0)} · "
+                    f"추출실패 {stats.get('extract_fail', 0)} · "
+                    f"API오류 {stats.get('fail_api', 0)}"
                 ),
                 "stats": stats,
                 "can_start": True,
@@ -137,7 +137,7 @@ def main() -> None:
                 "state": "error",
                 "label": "오류",
                 "ended_at": _now(),
-                "message": str(exc)[:500],
+                "message": f"품질 감사 중 오류: {str(exc)[:480]}",
                 "can_start": True,
             }
         )

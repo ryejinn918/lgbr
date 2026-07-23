@@ -26,10 +26,26 @@ export const STATUS_LABEL: Record<string, string> = {
 }
 
 export const QUALITY_LABEL: Record<string, string> = {
-  all: '품질전체',
-  pass: '통과',
-  fail: '탈락',
+  all: '판정전체',
+  pass: '적합',
+  fail: '부적합',
   pending: '미감사',
+  unauditable: '파일 없음',
+}
+
+/** 품질 감사 잡 stats → 현업용 한 줄 */
+export function formatAuditStats(
+  stats: Record<string, number> | null | undefined,
+): string | null {
+  if (!stats) return null
+  const bits = [
+    `대상 ${stats.candidates ?? 0}건`,
+    `적합 ${stats.pass ?? 0}`,
+    `부적합 ${stats.reject ?? 0}`,
+    `추출실패 ${stats.extract_fail ?? 0}`,
+    `API오류 ${stats.fail_api ?? 0}`,
+  ]
+  return bits.join(' · ')
 }
 
 export const THEME_LABEL: Record<string, string> = {

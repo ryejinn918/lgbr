@@ -14,6 +14,7 @@ import {
   QUALITY_LABEL,
   STATUS_LABEL,
   THEME_LABEL,
+  formatAuditStats,
   formatPublishedAt,
   formatRelative,
   formatTime,
@@ -38,11 +39,6 @@ import {
   type ReportFilters,
 } from '../lib/reportFilters'
 import type { QualityJson, ReportRecord } from '../types'
-
-function formatConfidence(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return '—'
-  return value.toFixed(2)
-}
 
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
@@ -187,7 +183,8 @@ export function ReportsPage() {
       <header className="monitor-header">
         <h1>보고서</h1>
         <p className="lede">
-          리스트·다운로드·품질 감사 상태가 기록된 전체 카탈로그입니다.
+          증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가
+          함께 표시됩니다.
         </p>
       </header>
 
@@ -209,6 +206,10 @@ export function ReportsPage() {
               · {audit.label}
               {audit.message ? ` — ${audit.message}` : ''}
             </span>
+            <p className="section-note" style={{ margin: '0.35rem 0 0' }}>
+              본문 PDF가 있는 리포트만 자동으로 품질 감사합니다. 적합 판정만
+              컨센서스 입력에 쓰입니다.
+            </p>
           </div>
           <div className="audit-actions">
             <button
@@ -221,9 +222,9 @@ export function ReportsPage() {
                     : unauditedPreset(filters),
                 )
               }
-              title="status=downloaded + quality=pending"
+              title="다운로드된 미감사 리포트만 보기"
             >
-              미감사 큐
+              미감사만 보기
             </button>
             <button
               type="button"
@@ -232,21 +233,18 @@ export function ReportsPage() {
               onClick={() => void onStartPending()}
               title={
                 filters.theme !== 'all'
-                  ? `테마 ${THEME_LABEL[filters.theme]} 미감사만`
-                  : '다운로드된 미감사 전부'
+                  ? `${THEME_LABEL[filters.theme]} 미감사만 일괄 실행`
+                  : '다운로드된 미감사 전부 일괄 실행'
               }
             >
-              {audit.busy ? '감사 중…' : '미감사 실행'}
+              {audit.busy ? '감사 중…' : '미감사 일괄 실행'}
             </button>
           </div>
         </div>
         {audit.error ? <p className="warn">{audit.error}</p> : null}
-        {audit.audit?.stats ? (
+        {formatAuditStats(audit.audit?.stats) ? (
           <p className="section-note">
-            최근 결과: candidates={audit.audit.stats.candidates ?? 0} pass=
-            {audit.audit.stats.pass ?? 0} reject={audit.audit.stats.reject ?? 0}{' '}
-            extract_fail={audit.audit.stats.extract_fail ?? 0} fail_api=
-            {audit.audit.stats.fail_api ?? 0}
+            최근 결과: {formatAuditStats(audit.audit?.stats)}
           </p>
         ) : null}
       </section>
@@ -268,7 +266,7 @@ export function ReportsPage() {
             className="filter-chip filter-reset"
             disabled={!dirty}
             onClick={() => commit(resetReportFilters())}
-            title="상태·테마·품질·검색·정렬·페이지 초기화"
+            title="상태·테마·판정·검색·정렬·페이지 초기화"
           >
             초기화
           </button>
@@ -297,7 +295,8 @@ export function ReportsPage() {
               {key === 'all'
                 ? (reports.qualityCounts.pass ?? 0) +
                   (reports.qualityCounts.fail ?? 0) +
-                  (reports.qualityCounts.pending ?? 0)
+                  (reports.qualityCounts.pending ?? 0) +
+                  (reports.qualityCounts.unauditable ?? 0)
                 : (reports.qualityCounts[key] ?? 0)}
             </button>
           ))}
@@ -340,9 +339,7 @@ export function ReportsPage() {
               <thead>
                 <tr>
                   <th className="col-status">상태</th>
-                  <th className="col-quality">품질</th>
-                  <th className="col-scope">scope</th>
-                  <th className="col-conf">conf</th>
+                  <th className="col-quality">판정</th>
                   <th className="col-title">제목</th>
                   <th className="col-provider">증권사</th>
                   <th className="col-published">
@@ -367,7 +364,7 @@ export function ReportsPage() {
                   </th>
                   <th className="col-rpt">rpt_id</th>
                   <th className="col-file">파일</th>
-                  <th className="col-qat">감사</th>
+                  <th className="col-qat">감사일</th>
                   <th className="col-seen">
                     <button
                       type="button"
@@ -397,22 +394,9 @@ export function ReportsPage() {
                         </span>
                       </td>
                       <td className="col-quality">
-                        <span
-                          className={`status-pill quality-${q}`}
-                          title={
-                            item.quality_scope
-                              ? `scope=${item.quality_scope}`
-                              : undefined
-                          }
-                        >
+                        <span className={`status-pill quality-${q}`}>
                           {QUALITY_LABEL[q] || q}
                         </span>
-                      </td>
-                      <td className="col-scope mono">
-                        {item.quality_scope || '—'}
-                      </td>
-                      <td className="col-conf mono">
-                        {formatConfidence(item.quality_confidence)}
                       </td>
                       <td className="col-title report-title" title={item.title}>
                         {item.title}
@@ -494,7 +478,7 @@ export function ReportsPage() {
       {selectedId ? (
         <section className="panel audit-detail">
           <div className="section-head">
-            <h2>감사 상세</h2>
+            <h2>품질 감사 결과</h2>
             <div className="audit-actions">
               <button
                 type="button"
@@ -502,7 +486,7 @@ export function ReportsPage() {
                 disabled={audit.busy || !detail?.has_file}
                 onClick={() => void onReauditSelected()}
               >
-                이 건 재감사
+                다시 감사
               </button>
               <button
                 type="button"
@@ -523,11 +507,9 @@ export function ReportsPage() {
                   <dd>{detail.title}</dd>
                 </div>
                 <div>
-                  <dt>품질</dt>
+                  <dt>판정</dt>
                   <dd>
-                    {QUALITY_LABEL[detail.quality || 'pending'] || detail.quality}{' '}
-                    · scope={detail.quality_scope || '—'} · conf=
-                    {formatConfidence(detail.quality_confidence)}
+                    {QUALITY_LABEL[detail.quality || 'pending'] || detail.quality}
                   </dd>
                 </div>
                 <div>
@@ -535,19 +517,15 @@ export function ReportsPage() {
                   <dd>{formatTime(detail.quality_at)}</dd>
                 </div>
                 <div>
-                  <dt>모델</dt>
-                  <dd className="mono">{detail.quality_model || '—'}</dd>
-                </div>
-                <div>
-                  <dt>topic</dt>
+                  <dt>주제</dt>
                   <dd>{String(qj.topic || '—')}</dd>
                 </div>
                 <div>
-                  <dt>framework</dt>
+                  <dt>분석 틀 요약</dt>
                   <dd>{String(qj.framework_summary || '—')}</dd>
                 </div>
                 <div>
-                  <dt>fail_reasons</dt>
+                  <dt>부적합 사유</dt>
                   <dd>
                     {failReasons.length ? (
                       <ul className="audit-list">
@@ -561,7 +539,7 @@ export function ReportsPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>pass_signals</dt>
+                  <dt>적합 근거</dt>
                   <dd>
                     {passSignals.length ? (
                       <ul className="audit-list">
@@ -575,7 +553,7 @@ export function ReportsPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>rationale</dt>
+                  <dt>판정 설명</dt>
                   <dd className="audit-rationale">
                     {String(qj.rationale || qj.error || '—')}
                   </dd>

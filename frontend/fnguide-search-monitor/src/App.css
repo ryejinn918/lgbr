@@ -1,5 +1,5 @@
 .monitor {
-  width: min(1100px, calc(100% - 2rem));
+  width: min(1200px, calc(100% - 2rem));
   margin: 0 auto;
   padding: 2rem 0 4rem;
   display: grid;
@@ -154,7 +154,8 @@
 .report-sheet {
   margin-top: 0.85rem;
   max-height: min(70vh, 720px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--line);
   background: #fff;
 }
@@ -185,7 +186,7 @@
 
 .report-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 0;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.85rem;
@@ -193,7 +194,7 @@
 }
 
 .report-table-audit {
-  min-width: 1280px;
+  min-width: 0;
 }
 
 .report-table th,
@@ -216,23 +217,15 @@
 }
 
 .report-table .col-status {
-  width: 4.6rem;
+  width: 5.2rem;
 }
 
 .report-table .col-quality {
-  width: 3.4rem;
-}
-
-.report-table .col-scope {
-  width: 3.6rem;
-}
-
-.report-table .col-conf {
-  width: 3.2rem;
+  width: 5.2rem;
 }
 
 .report-table .col-qat {
-  width: 4.5rem;
+  width: 4.2rem;
 }
 
 .report-table .col-title {
@@ -240,27 +233,27 @@
 }
 
 .report-table .col-provider {
-  width: 6.5rem;
+  width: 5.5rem;
 }
 
 .report-table .col-published {
-  width: 6.2rem;
+  width: 6rem;
 }
 
 .report-table .col-pages {
-  width: 3.6rem;
+  width: 3.2rem;
 }
 
 .report-table .col-rpt {
-  width: 5.2rem;
+  width: 5rem;
 }
 
 .report-table .col-file {
-  width: 7.5rem;
+  width: 6.5rem;
 }
 
 .report-table .col-seen {
-  width: 4.5rem;
+  width: 4.2rem;
 }
 
 .sort-th {
@@ -304,14 +297,15 @@
   text-overflow: ellipsis;
 }
 
+.report-table .col-status,
+.report-table .col-quality,
 .report-table .col-provider,
 .report-table .col-file,
 .report-table .col-seen,
 .report-table .col-qat,
 .report-table .col-rpt,
 .report-table .col-published,
-.report-table .col-scope,
-.report-table .col-conf {
+.report-table .col-pages {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -381,6 +375,11 @@
 .status-pill.quality-pending {
   border-color: color-mix(in srgb, var(--busy) 40%, var(--line));
   color: var(--busy);
+}
+
+.status-pill.quality-unauditable {
+  border-color: color-mix(in srgb, var(--muted) 55%, var(--line));
+  color: var(--muted);
 }
 
 .filter-row {

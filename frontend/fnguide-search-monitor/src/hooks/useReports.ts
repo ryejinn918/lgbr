@@ -22,6 +22,7 @@ const EMPTY_QUALITY: QualityCounts = {
   pass: 0,
   fail: 0,
   pending: 0,
+  unauditable: 0,
 }
 
 const EMPTY_THEME: ThemeCounts = {

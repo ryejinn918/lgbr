@@ -22,7 +22,7 @@ export type AuditView = {
 
 export function useAudit(): AuditView {
   const [state, setState] = useState<AuditState>('idle')
-  const [label, setLabel] = useState('대기')
+  const [label, setLabel] = useState('대기 중')
   const [message, setMessage] = useState<string | null>(null)
   const [audit, setAudit] = useState<AuditJob | null>(null)
   const [canStart, setCanStart] = useState(true)
@@ -37,7 +37,7 @@ export function useAudit(): AuditView {
         throw new Error(data.message || `HTTP ${res.status}`)
       }
       setState(data.state || 'idle')
-      setLabel(data.label || data.audit?.label || '대기')
+      setLabel(data.label || data.audit?.label || '대기 중')
       setMessage(data.message ?? data.audit?.message ?? null)
       setAudit(data.audit ?? null)
       setCanStart(data.can_start !== false)

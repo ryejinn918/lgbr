@@ -9,7 +9,13 @@ export const STATUS_FILTERS = [
   'failed',
 ] as const
 
-export const QUALITY_FILTERS = ['all', 'pass', 'fail', 'pending'] as const
+export const QUALITY_FILTERS = [
+  'all',
+  'pass',
+  'fail',
+  'pending',
+  'unauditable',
+] as const
 
 export const THEME_FILTERS = [
   'all',
@@ -167,7 +173,7 @@ export function resetReportFilters(): ReportFilters {
   return { ...DEFAULT_REPORT_FILTERS }
 }
 
-/** 다운됨 + 미감사 큐 프리셋 */
+/** 다운됨 + 미감사 프리셋 */
 export function unauditedPreset(filters?: ReportFilters): ReportFilters {
   return {
     ...(filters ?? DEFAULT_REPORT_FILTERS),

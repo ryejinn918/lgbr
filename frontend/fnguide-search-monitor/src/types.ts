@@ -122,7 +122,7 @@ export type ReportStatus =
   | 'no_download'
   | 'failed'
 
-export type ReportQuality = 'pass' | 'fail' | 'pending'
+export type ReportQuality = 'pass' | 'fail' | 'pending' | 'unauditable'
 
 export type QualityJson = {
   pass?: boolean
@@ -204,6 +204,7 @@ export type QualityCounts = {
   pass: number
   fail: number
   pending: number
+  unauditable: number
   [key: string]: number
 }
 

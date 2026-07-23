@@ -24,7 +24,7 @@ MAX_LIMIT = 500
 
 _IDLE: dict[str, Any] = {
     "state": "idle",
-    "label": "대기",
+    "label": "대기 중",
     "pid": None,
     "started_at": None,
     "ended_at": None,
@@ -105,7 +105,8 @@ def _reconcile(job: dict[str, Any]) -> dict[str, Any]:
                 "state": "error",
                 "label": "오류",
                 "ended_at": _now().isoformat(),
-                "message": job.get("message") or "audit worker never claimed pid",
+                "message": job.get("message")
+                or "품질 감사가 시작되지 않았습니다.",
                 "can_start": True,
             }
         )
@@ -120,7 +121,7 @@ def _reconcile(job: dict[str, Any]) -> dict[str, Any]:
             "label": "오류",
             "ended_at": _now().isoformat(),
             "message": job.get("message")
-            or (f"audit worker pid {pid_i} is dead"),
+            or "품질 감사가 비정상 종료되었습니다.",
             "can_start": True,
         }
     )
@@ -133,7 +134,7 @@ def get_audit_status() -> dict[str, Any]:
     return {
         "ok": True,
         "state": job.get("state") or "idle",
-        "label": job.get("label") or "대기",
+        "label": job.get("label") or "대기 중",
         "message": job.get("message"),
         "audit": job,
         "can_start": bool(job.get("can_start", True)),
@@ -156,7 +157,7 @@ def start_audit(
                 "status": 400,
                 "state": "error",
                 "label": "오류",
-                "message": "theme must be datacenter, ai, or physical_ai",
+                "message": "테마는 데이터센터, AI, Physical AI 중 하나여야 합니다.",
                 "audit": None,
                 "can_start": True,
             }
@@ -172,7 +173,7 @@ def start_audit(
                 "status": 400,
                 "state": "error",
                 "label": "오류",
-                "message": "invalid report_id",
+                "message": "리포트 번호가 올바르지 않습니다.",
                 "audit": None,
                 "can_start": True,
             }
@@ -187,7 +188,7 @@ def start_audit(
                 "status": 400,
                 "state": "error",
                 "label": "오류",
-                "message": "limit must be an integer",
+                "message": "건수 제한은 숫자여야 합니다.",
                 "audit": None,
                 "can_start": True,
             }
@@ -197,7 +198,7 @@ def start_audit(
                 "status": 400,
                 "state": "error",
                 "label": "오류",
-                "message": f"limit must be between 1 and {MAX_LIMIT}",
+                "message": f"건수 제한은 1–{MAX_LIMIT} 사이여야 합니다.",
                 "audit": None,
                 "can_start": True,
             }
@@ -211,7 +212,7 @@ def start_audit(
             "status": 400,
             "state": "error",
             "label": "오류",
-            "message": "concurrency must be an integer",
+            "message": "동시 처리 수는 숫자여야 합니다.",
             "audit": None,
             "can_start": True,
         }
@@ -222,7 +223,7 @@ def start_audit(
             "state": "error",
             "label": "오류",
             "message": (
-                f"concurrency must be between {MIN_CONCURRENCY} and {MAX_CONCURRENCY}"
+                f"동시 처리 수는 {MIN_CONCURRENCY}–{MAX_CONCURRENCY} 사이여야 합니다."
             ),
             "audit": None,
             "can_start": True,
@@ -234,8 +235,8 @@ def start_audit(
             "ok": False,
             "status": 409,
             "state": current.get("state"),
-            "label": current.get("label") or "busy",
-            "message": "이미 감사가 실행 중입니다.",
+            "label": current.get("label") or "감사 중",
+            "message": "이미 품질 감사가 실행 중입니다.",
             "audit": current,
             "can_start": False,
         }
@@ -246,7 +247,7 @@ def start_audit(
             "status": 500,
             "state": "error",
             "label": "오류",
-            "message": f"audit script missing: {SCRIPT}",
+            "message": "품질 감사 실행 파일을 찾을 수 없습니다.",
             "audit": None,
             "can_start": True,
         }
@@ -310,7 +311,7 @@ def start_audit(
                 "state": "error",
                 "label": "오류",
                 "ended_at": _now().isoformat(),
-                "message": f"spawn failed: {exc}",
+                "message": f"품질 감사 시작에 실패했습니다: {exc}",
                 "can_start": True,
             }
         )
@@ -320,7 +321,7 @@ def start_audit(
             "status": 500,
             "state": "error",
             "label": "오류",
-            "message": f"감사 시작 실패: {exc}",
+            "message": f"품질 감사 시작에 실패했습니다: {exc}",
             "audit": job,
             "can_start": True,
         }
@@ -330,7 +331,7 @@ def start_audit(
         "status": 202,
         "state": "starting",
         "label": "시작 중",
-        "message": "감사를 시작했습니다.",
+        "message": "품질 감사를 시작했습니다.",
         "audit": job,
         "can_start": False,
     }
