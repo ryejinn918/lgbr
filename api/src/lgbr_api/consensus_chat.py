@@ -8,7 +8,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from lgbr_api.consensus_api import (
     DEFAULT_MODEL,
@@ -20,6 +22,8 @@ from lgbr_api.consensus_api import (
 )
 from lgbr_api.db import load_database_env
 
+_SEOUL = ZoneInfo("Asia/Seoul")
+
 MAX_TOOL_ROUNDS = 3
 WEB_SEARCH_TOOL = {
     "type": "function",
@@ -27,7 +31,8 @@ WEB_SEARCH_TOOL = {
         "name": "web_search",
         "description": (
             "Search the live web via Google (SerpAPI). "
-            "Use for fresh facts, prices, news, or items not in the consensus frame."
+            "Use for latest news, prices, filings, or any fact beyond the "
+            "~3-month broker-report consensus frame."
         ),
         "parameters": {
             "type": "object",
@@ -144,14 +149,25 @@ def _clean_messages(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
     return clean
 
 
+def _today_seoul() -> str:
+    now = datetime.now(_SEOUL)
+    return now.strftime("%Y-%m-%d (%A)")
+
+
 def _build_system(
     mode: str, *, theme: str | None, run_id: str | None
 ) -> tuple[list[dict[str, Any]], str | None, str | None, str | None]:
     """Returns (sys_messages, error_message, resolved_run_id, resolved_theme)."""
-    base_tools = (
-        "You may call web_search when you need live/public facts beyond your context. "
-        "After searching, answer with citations (title + URL) when using web results. "
-        "Reply in Korean unless the user asks otherwise."
+    today = _today_seoul()
+    base = (
+        f"Today is {today} in Asia/Seoul.\n"
+        "You are writing for LG Economic Research Institute (LGERI) practitioners. "
+        "Be concise and logical. Ground every claim in a source "
+        "(frame report slug, or web title + URL). "
+        "Avoid speculation and rhetoric; if unknown, say so. "
+        "Reply in Korean unless the user asks otherwise. "
+        "Call web_search for live/public facts beyond your context; "
+        "cite title + URL when using web results."
     )
     resolved_run_id = run_id
     resolved_theme = theme if theme in THEMES else None
@@ -195,16 +211,21 @@ def _build_system(
                 resolved_theme,
             )
         sys_content = (
-            "You answer using the consensus filled frame as primary context. "
-            "Prefer frame facts/structure; use web_search for gaps or updates. "
-            f"{base_tools}\n\n"
+            f"{base}\n\n"
+            "Primary context is the consensus filled frame below. "
+            "It synthesizes broker research reports from roughly the last 3 months. "
+            "It may miss same-day or very recent news, prices, and filings. "
+            "For time-sensitive facts, use web_search, then answer citing frame vs web "
+            "sources separately. Prefer the frame's structure and consensus pillars; "
+            "if the web is newer and conflicts, state the dates and prefer the fresher "
+            "fact.\n\n"
             f"--- CONSENSUS FRAME ---\n{frame}\n--- END FRAME ---"
         )
     elif mode == "plain":
         sys_content = (
-            "You are a helpful research assistant with optional web_search. "
+            f"{base}\n\n"
             "No consensus frame is provided. "
-            f"{base_tools}"
+            "Use web_search to verify timely facts (news, prices, events) before answering."
         )
     else:
         return [], "mode must be plain or grounded", None, None
