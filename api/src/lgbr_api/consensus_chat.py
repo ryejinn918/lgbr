@@ -34,7 +34,10 @@ WEB_SEARCH_TOOL = {
         "description": (
             "Search Google News via SerpAPI for recent headlines. "
             "Use for latest news and time-sensitive public facts beyond the "
-            "~3-month broker-report consensus frame."
+            "~3-month broker-report consensus frame. "
+            "Match hl to the query language (en for English, ko for Korean). "
+            "If the tool returns an error or empty results, retry with a different "
+            "hl/gl or a rephrased query."
         ),
         "parameters": {
             "type": "object",
@@ -42,7 +45,15 @@ WEB_SEARCH_TOOL = {
                 "query": {
                     "type": "string",
                     "description": "News search query (Korean or English)",
-                }
+                },
+                "gl": {
+                    "type": "string",
+                    "description": "Country code for Google News (e.g. us, kr). Default us.",
+                },
+                "hl": {
+                    "type": "string",
+                    "description": "UI/result language code (e.g. en, ko). Default en.",
+                },
             },
             "required": ["query"],
         },
@@ -66,11 +77,72 @@ def _serpapi_key() -> str:
     return key
 
 
-def web_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
+def _publisher_name(source: Any) -> str:
+    if isinstance(source, dict):
+        return str(source.get("name") or "").strip()
+    return str(source or "").strip()
+
+
+def _normalize_locale(value: Any, *, default: str) -> str:
+    text = str(value or "").strip().lower()
+    if re.fullmatch(r"[a-z]{2}", text):
+        return text
+    return default
+
+
+def _cache_query(query: str, *, gl: str, hl: str) -> str:
+    # Locale is part of the cache key so en/ko retries do not collide.
+    return f"{query.strip()} [gl={gl} hl={hl}]"
+
+
+def _flatten_news_items(raw: list[Any], *, limit: int) -> list[dict[str, Any]]:
+    """Expand story clusters; keep only rows with a concrete article URL."""
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        candidates: list[dict[str, Any]] = []
+        if item.get("link"):
+            candidates.append(item)
+        for story in item.get("stories") or []:
+            if isinstance(story, dict) and story.get("link"):
+                candidates.append(story)
+        for cand in candidates:
+            link = str(cand.get("link") or "").strip()
+            if not link:
+                continue
+            out.append(
+                {
+                    "title": str(cand.get("title") or item.get("title") or ""),
+                    "link": link,
+                    "snippet": str(cand.get("snippet") or item.get("snippet") or ""),
+                    "date": cand.get("iso_date") or cand.get("date") or item.get("date"),
+                    "publisher": _publisher_name(
+                        cand.get("source") or item.get("source")
+                    ),
+                    "position": cand.get("position") or item.get("position"),
+                    "thumbnail": cand.get("thumbnail") or item.get("thumbnail"),
+                }
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def web_search(
+    query: str,
+    *,
+    gl: str = "us",
+    hl: str = "en",
+    num: int = 5,
+) -> list[dict[str, str]]:
     q = (query or "").strip()
     if not q:
         return []
-    cached = get_cached_search(q)
+    gl_n = _normalize_locale(gl, default="us")
+    hl_n = _normalize_locale(hl, default="en")
+    cache_q = _cache_query(q, gl=gl_n, hl=hl_n)
+    cached = get_cached_search(cache_q)
     if cached is not None:
         return cached[:num]
     params = urllib.parse.urlencode(
@@ -78,9 +150,8 @@ def web_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
             "engine": "google_news",
             "q": q,
             "api_key": _serpapi_key(),
-            "num": str(num),
-            "gl": "us",
-            "hl": "ko",
+            "gl": gl_n,
+            "hl": hl_n,
         }
     )
     url = f"https://serpapi.com/search.json?{params}"
@@ -89,20 +160,10 @@ def web_search(query: str, *, num: int = 5) -> list[dict[str, str]]:
         data = json.loads(resp.read().decode())
     if data.get("error"):
         raise RuntimeError(str(data["error"]))
-    items: list[dict[str, Any]] = []
-    for item in (data.get("news_results") or [])[:num]:
-        items.append(
-            {
-                "title": str(item.get("title") or ""),
-                "link": str(item.get("link") or ""),
-                "snippet": str(item.get("snippet") or ""),
-                "date": item.get("date"),
-                "publisher": str(item.get("source") or ""),
-                "position": item.get("position"),
-                "thumbnail": item.get("thumbnail"),
-            }
-        )
-    return upsert_search_results(q, items)[:num]
+    items = _flatten_news_items(list(data.get("news_results") or []), limit=num)
+    if not items:
+        return []
+    return upsert_search_results(cache_q, items)[:num]
 
 
 def _or_headers() -> dict[str, str]:
@@ -177,7 +238,9 @@ def _build_system(
         "Avoid speculation and rhetoric; if unknown, say so. "
         "Reply in Korean unless the user asks otherwise. "
         "Call web_search (Google News) for live/public facts beyond your context; "
-        "cite title + URL when using web results."
+        "set hl to match the query language (en/ko). If the tool returns an error "
+        "or empty results, retry with another hl/gl or a rephrased query. "
+        "Cite title + URL when using web results."
     )
     resolved_run_id = run_id
     resolved_theme = theme if theme in THEMES else None
@@ -461,22 +524,47 @@ def iter_compare_chat_sse(
                 tc_id = str(tc.get("id") or "")
                 results: list[dict[str, str]] = []
                 query = ""
+                gl = "us"
+                hl = "en"
                 if name != "web_search":
                     tool_payload: dict[str, Any] = {"error": f"unknown tool {name}"}
                 else:
                     query = str(args.get("query") or "").strip()
+                    gl = _normalize_locale(args.get("gl"), default="us")
+                    hl = _normalize_locale(args.get("hl"), default="en")
                     try:
-                        results = web_search(query)
-                        tool_payload = {"query": query, "results": results}
-                        collected_searches.append((query, results))
+                        results = web_search(query, gl=gl, hl=hl)
+                        tool_payload = {
+                            "query": query,
+                            "gl": gl,
+                            "hl": hl,
+                            "results": results,
+                        }
+                        if not results:
+                            tool_payload["error"] = (
+                                "No news results. Retry with a different hl/gl "
+                                "(en↔ko) or rephrase the query."
+                            )
+                        else:
+                            collected_searches.append((query, results))
                     except Exception as exc:
-                        yield _sse(
-                            "error", {"message": f"web_search failed: {exc}"}
-                        )
-                        return
+                        tool_payload = {
+                            "query": query,
+                            "gl": gl,
+                            "hl": hl,
+                            "results": [],
+                            "error": str(exc),
+                        }
                 yield _sse(
                     "tool",
-                    {"name": "web_search", "query": query, "results": results},
+                    {
+                        "name": "web_search",
+                        "query": query,
+                        "gl": gl,
+                        "hl": hl,
+                        "results": results,
+                        "error": tool_payload.get("error"),
+                    },
                 )
                 blob = json.dumps(tool_payload, ensure_ascii=False)
                 result_blobs.append(blob)
