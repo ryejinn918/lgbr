@@ -14,6 +14,7 @@ from patchright.sync_api import Page
 from crawler import reports_store
 from crawler.asset_id import DOWNLOADS_ROOT
 from crawler.crawl_log import CrawlLogger
+from crawler.session import capture_filter_failure
 
 SEARCH_URL = "https://www.fnguide.com/Research/SearchReport"
 SOURCE = reports_store.SOURCE_FNGUIDE
@@ -22,6 +23,8 @@ LIST_WAIT_MS = 2500
 MAX_LIST_PAGES = 40
 # Keep only reports longer than this (page_count <= N are ignored).
 MIN_PAGE_COUNT = 10
+FILTER_UI_TIMEOUT_MS = 30_000
+FILTER_APPLY_RETRIES = 3
 
 PERIOD_LABELS = {3: "3개월", 6: "6개월", 12: "12개월"}
 
@@ -193,17 +196,48 @@ def run_search_report_job(
             mode=profile.mode,
         )
 
-    if log:
-        with log.stage(
-            "filter",
-            keyword=keyword,
-            page_cnt_min=10,
-            theme=theme,
-            mode=profile.mode,
-        ):
+    try:
+        if log:
+            with log.stage(
+                "filter",
+                keyword=keyword,
+                page_cnt_min=10,
+                theme=theme,
+                mode=profile.mode,
+            ):
+                _apply_filters(page, profile=profile)
+        else:
             _apply_filters(page, profile=profile)
-    else:
-        _apply_filters(page, profile=profile)
+    except Exception as exc:
+        snap = capture_filter_failure(page, download_dir, prefix="filter-fail")
+        if log:
+            log.emit(
+                level="error",
+                stage="filter",
+                event="snapshot",
+                error=str(exc),
+                **{
+                    k: v
+                    for k, v in snap.items()
+                    if k
+                    in (
+                        "url",
+                        "title",
+                        "logged_in",
+                        "has_logout",
+                        "has_dropdown_text",
+                        "has_srchKeyword",
+                        "has_srchBtn",
+                        "chrome_exit_type",
+                        "screenshot",
+                        "html",
+                        "diag",
+                        "screenshot_error",
+                        "html_error",
+                    )
+                },
+            )
+        raise
     if touch:
         touch()
     _sort_by_page_count_desc(page)
@@ -544,11 +578,26 @@ class _NoDownloadError(RuntimeError):
     """Viewer has no #customDownload (typically body-restricted)."""
 
 
-def _apply_filters(page: Page, *, profile: SearchProfile) -> None:
-    page.goto(SEARCH_URL, wait_until="domcontentloaded")
-    page.wait_for_timeout(1000)
+def _browser_closed_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "has been closed" in msg or "target page, context or browser" in msg
 
-    page.locator("button.dropdown-text").first.click()
+
+def _wait_search_form(page: Page) -> None:
+    """Wait until SearchReport keyword form is interactable."""
+    page.locator("#srchKeyword").wait_for(
+        state="visible", timeout=FILTER_UI_TIMEOUT_MS
+    )
+    page.locator("button.dropdown-text").first.wait_for(
+        state="visible", timeout=FILTER_UI_TIMEOUT_MS
+    )
+
+
+def _apply_filters_once(page: Page, *, profile: SearchProfile) -> None:
+    page.goto(SEARCH_URL, wait_until="domcontentloaded")
+    _wait_search_form(page)
+
+    page.locator("button.dropdown-text").first.click(timeout=FILTER_UI_TIMEOUT_MS)
     page.wait_for_timeout(300)
     page.locator("li span.item", has_text="제목").first.click()
     page.wait_for_timeout(300)
@@ -605,6 +654,27 @@ def _apply_filters(page: Page, *, profile: SearchProfile) -> None:
     page.locator("#srchBtn").click()
     page.wait_for_load_state("domcontentloaded")
     page.wait_for_timeout(LIST_WAIT_MS)
+
+
+def _apply_filters(page: Page, *, profile: SearchProfile) -> None:
+    """Apply SearchReport filters with visible waits and short reload retries."""
+    last_exc: BaseException | None = None
+    for attempt in range(FILTER_APPLY_RETRIES):
+        try:
+            _apply_filters_once(page, profile=profile)
+            return
+        except Exception as exc:
+            last_exc = exc
+            if _browser_closed_error(exc):
+                raise
+            if attempt + 1 >= FILTER_APPLY_RETRIES:
+                raise
+            try:
+                page.reload(wait_until="domcontentloaded")
+            except Exception:
+                pass
+    assert last_exc is not None
+    raise last_exc
 
 
 def _sort_by_page_count_desc(page: Page) -> None:

@@ -114,6 +114,73 @@ def capture_login_failure(
     return detail
 
 
+def filter_diagnostics(page: Page) -> dict:
+    """Best-effort snapshot of SearchReport filter UI state."""
+    detail = login_diagnostics(page)
+    try:
+        detail["has_dropdown_text"] = page.locator("button.dropdown-text").count()
+    except Exception:
+        detail["has_dropdown_text"] = None
+    try:
+        detail["has_srchKeyword"] = page.locator("#srchKeyword").count() > 0
+    except Exception:
+        detail["has_srchKeyword"] = False
+    try:
+        detail["has_srchBtn"] = page.locator("#srchBtn").count() > 0
+    except Exception:
+        detail["has_srchBtn"] = False
+    return detail
+
+
+def read_chrome_exit_type(
+    preferences: Path = Path(".crawler/browser-profile/Default/Preferences"),
+) -> str | None:
+    """Read Chrome profile.exit_type when present (Crashed vs clean)."""
+    try:
+        data = json.loads(preferences.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    profile = data.get("profile")
+    if not isinstance(profile, dict):
+        return None
+    exit_type = profile.get("exit_type")
+    return str(exit_type) if exit_type is not None else None
+
+
+def capture_filter_failure(
+    page: Page,
+    directory: Path,
+    *,
+    prefix: str = "filter-fail",
+) -> dict:
+    """Write screenshot/html/diag for SearchReport filter failures."""
+    directory.mkdir(parents=True, exist_ok=True)
+    detail = filter_diagnostics(page)
+    detail["chrome_exit_type"] = read_chrome_exit_type()
+    shot = directory / f"{prefix}.png"
+    html_path = directory / f"{prefix}.html"
+    diag_path = directory / f"{prefix}.json"
+    try:
+        page.screenshot(path=str(shot), full_page=True)
+        detail["screenshot"] = str(shot)
+    except Exception as exc:
+        detail["screenshot_error"] = str(exc)
+    try:
+        html_path.write_text(page.content()[:500_000], encoding="utf-8")
+        detail["html"] = str(html_path)
+    except Exception as exc:
+        detail["html_error"] = str(exc)
+    try:
+        diag_path.write_text(
+            json.dumps(detail, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        detail["diag"] = str(diag_path)
+    except Exception as exc:
+        detail["diag_error"] = str(exc)
+    return detail
+
+
 def login(
     page: Page,
     *,
