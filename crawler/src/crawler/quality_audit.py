@@ -165,13 +165,28 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def fetch_targets(*, force: bool = False, limit: int | None = None) -> list[dict[str, Any]]:
+def fetch_targets(
+    *,
+    force: bool = False,
+    limit: int | None = None,
+    theme: str | None = None,
+    report_id: UUID | str | None = None,
+) -> list[dict[str, Any]]:
     where = [
         "status = 'downloaded'",
         "file_path IS NOT NULL",
     ]
-    if not force:
-        where.append("quality_at IS NULL")
+    params: list[Any] = []
+    if report_id is not None:
+        rid = report_id if isinstance(report_id, UUID) else UUID(str(report_id))
+        where.append("id = %s")
+        params.append(rid)
+    else:
+        if not force:
+            where.append("quality_at IS NULL")
+        if theme:
+            where.append("attrs->>'theme' = %s")
+            params.append(str(theme))
     where_sql = " AND ".join(where)
     sql = f"""
         SELECT id, source_key, title, file_path
@@ -179,7 +194,6 @@ def fetch_targets(*, force: bool = False, limit: int | None = None) -> list[dict
         WHERE {where_sql}
         ORDER BY last_seen_at DESC NULLS LAST, id DESC
     """
-    params: list[Any] = []
     if limit is not None:
         sql += " LIMIT %s"
         params.append(max(1, int(limit)))
@@ -392,9 +406,16 @@ async def run_audit(
     limit: int | None = None,
     concurrency: int = DEFAULT_CONCURRENCY,
     model: str = DEFAULT_MODEL,
+    theme: str | None = None,
+    report_id: UUID | str | None = None,
 ) -> dict[str, int]:
-    rows = fetch_targets(force=force, limit=limit)
-    print(f"candidates={len(rows)} force={force} concurrency={concurrency}")
+    rows = fetch_targets(
+        force=force, limit=limit, theme=theme, report_id=report_id
+    )
+    print(
+        f"candidates={len(rows)} force={force} theme={theme} "
+        f"report_id={report_id} concurrency={concurrency}"
+    )
     targets, extract_failures = prepare_targets(rows)
     for rid, err in extract_failures:
         save_unclear(rid, model=model, error=err)

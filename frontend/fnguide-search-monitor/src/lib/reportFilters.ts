@@ -166,3 +166,17 @@ export function withPage(
 export function resetReportFilters(): ReportFilters {
   return { ...DEFAULT_REPORT_FILTERS }
 }
+
+/** 다운됨 + 미감사 큐 프리셋 */
+export function unauditedPreset(filters?: ReportFilters): ReportFilters {
+  return {
+    ...(filters ?? DEFAULT_REPORT_FILTERS),
+    status: 'downloaded',
+    quality: 'pending',
+    offset: 0,
+  }
+}
+
+export function isUnauditedPreset(filters: ReportFilters): boolean {
+  return filters.status === 'downloaded' && filters.quality === 'pending'
+}

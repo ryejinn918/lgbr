@@ -277,6 +277,53 @@ def list_reports(
     }
 
 
+def get_report(report_id: str) -> dict[str, Any]:
+    try:
+        rid = str(UUID(report_id))
+    except (TypeError, ValueError):
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "invalid report id",
+            "report": None,
+        }
+
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, source_key, title, status, file_path, file_name,
+                       last_seen_at, downloaded_at, published_at, page_count,
+                       crawl_id, attrs,
+                       quality_pass, quality_scope, quality_confidence,
+                       quality_at, quality_model, quality_json
+                FROM reports
+                WHERE id = %s
+                """,
+                (rid,),
+            )
+            row = cur.fetchone()
+
+    if row is None:
+        return {
+            "ok": False,
+            "status": 404,
+            "message": "report not found",
+            "report": None,
+        }
+
+    data = _serialize(dict(row))
+    data["quality_model"] = row.get("quality_model")
+    qj = row.get("quality_json")
+    if isinstance(qj, dict):
+        data["quality_json"] = qj
+    elif qj is None:
+        data["quality_json"] = {}
+    else:
+        data["quality_json"] = {"raw": qj}
+    return {"ok": True, "report": data}
+
+
 def get_report_file(report_id: str) -> Response:
     try:
         rid = str(UUID(report_id))

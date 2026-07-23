@@ -124,6 +124,21 @@ export type ReportStatus =
 
 export type ReportQuality = 'pass' | 'fail' | 'pending'
 
+export type QualityJson = {
+  pass?: boolean
+  confidence?: number
+  has_coherent_framework?: boolean
+  has_broad_sector_coverage?: boolean
+  scope?: string
+  topic?: string
+  framework_summary?: string | null
+  fail_reasons?: string[]
+  pass_signals?: string[]
+  rationale?: string
+  error?: string
+  [key: string]: unknown
+}
+
 export type ReportRecord = {
   id: string
   source_key: string
@@ -143,6 +158,36 @@ export type ReportRecord = {
   quality_scope?: string | null
   quality_confidence?: number | null
   quality_at?: string | null
+  quality_model?: string | null
+  quality_json?: QualityJson
+}
+
+export type AuditState = 'idle' | 'starting' | 'active' | 'ended' | 'error' | string
+
+export type AuditJob = {
+  state: AuditState
+  label?: string
+  pid?: number | null
+  started_at?: string | null
+  ended_at?: string | null
+  message?: string | null
+  force?: boolean
+  limit?: number | null
+  theme?: string | null
+  report_id?: string | null
+  concurrency?: number
+  model?: string | null
+  stats?: Record<string, number> | null
+  can_start?: boolean
+}
+
+export type AuditResponse = {
+  ok?: boolean
+  state: AuditState
+  label?: string
+  message?: string | null
+  audit?: AuditJob | null
+  can_start?: boolean
 }
 
 export type ReportCounts = {

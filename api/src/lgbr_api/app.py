@@ -37,7 +37,8 @@ from lgbr_api.crawls import (
 )
 from lgbr_api.db import load_database_env
 from lgbr_api.profiles import list_profiles, update_profile
-from lgbr_api.reports import get_report_file, list_reports
+from lgbr_api.audits import get_audit_status, start_audit
+from lgbr_api.reports import get_report, get_report_file, list_reports
 from lgbr_api.sessions import get_current_session, list_history
 
 SHUTDOWN_WAIT_SECONDS = 60.0
@@ -155,8 +156,38 @@ async def reports(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
+async def report_detail(request: Request) -> JSONResponse:
+    result = get_report(str(request.path_params.get("report_id") or ""))
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
 async def report_file(request: Request):
     return get_report_file(str(request.path_params.get("report_id") or ""))
+
+
+async def audit_status(_: Request) -> JSONResponse:
+    return JSONResponse(get_audit_status())
+
+
+async def audit_start(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    result = start_audit(
+        limit=body.get("limit"),
+        force=bool(body.get("force")),
+        theme=str(body["theme"]) if body.get("theme") is not None else None,
+        concurrency=body.get("concurrency"),
+        report_id=(
+            str(body["report_id"]) if body.get("report_id") is not None else None
+        ),
+    )
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
 
 
 async def crawl_profiles(_: Request) -> JSONResponse:
@@ -330,7 +361,10 @@ def create_app() -> Starlette:
             ),
             Route("/api/cdp", cdp_status),
             Route("/api/reports", reports),
+            Route("/api/reports/{report_id}", report_detail),
             Route("/api/reports/{report_id}/file", report_file),
+            Route("/api/audit", audit_status),
+            Route("/api/audit/start", audit_start, methods=["POST"]),
             Route("/api/consensus", consensus_status),
             Route("/api/consensus/history", consensus_history),
             Route("/api/consensus/latest", consensus_latest),
