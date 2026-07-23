@@ -32,6 +32,13 @@ export const QUALITY_LABEL: Record<string, string> = {
   pending: '미감사',
 }
 
+export const THEME_LABEL: Record<string, string> = {
+  all: '테마전체',
+  datacenter: '데이터센터',
+  ai: 'AI',
+  physical_ai: 'Physical AI',
+}
+
 export function formatTime(value: string | null | undefined): string {
   if (!value) return '—'
   const ms = Date.parse(value)

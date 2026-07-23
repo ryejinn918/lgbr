@@ -11,8 +11,16 @@ export const STATUS_FILTERS = [
 
 export const QUALITY_FILTERS = ['all', 'pass', 'fail', 'pending'] as const
 
+export const THEME_FILTERS = [
+  'all',
+  'datacenter',
+  'ai',
+  'physical_ai',
+] as const
+
 export type StatusFilter = (typeof STATUS_FILTERS)[number]
 export type QualityFilter = (typeof QUALITY_FILTERS)[number]
+export type ThemeFilter = (typeof THEME_FILTERS)[number]
 
 /** null = 기본 정렬(최근)이지만 UI상 선택 없음 */
 export type ReportSortChoice = ReportSort | null
@@ -20,6 +28,7 @@ export type ReportSortChoice = ReportSort | null
 export type ReportFilters = {
   status: StatusFilter
   quality: QualityFilter
+  theme: ThemeFilter
   q: string
   sort: ReportSortChoice
   offset: number
@@ -28,6 +37,7 @@ export type ReportFilters = {
 export const DEFAULT_REPORT_FILTERS: ReportFilters = {
   status: 'all',
   quality: 'all',
+  theme: 'all',
   q: '',
   sort: null,
   offset: 0,
@@ -46,6 +56,10 @@ function isQualityFilter(value: string): value is QualityFilter {
   return (QUALITY_FILTERS as readonly string[]).includes(value)
 }
 
+function isThemeFilter(value: string): value is ThemeFilter {
+  return (THEME_FILTERS as readonly string[]).includes(value)
+}
+
 function isReportSort(value: string): value is ReportSort {
   return (
     value === 'published_at' ||
@@ -58,11 +72,13 @@ function isReportSort(value: string): value is ReportSort {
 export function parseReportFilters(params: URLSearchParams): ReportFilters {
   const rawStatus = params.get('status') || 'all'
   const rawQuality = params.get('quality') || 'all'
+  const rawTheme = params.get('theme') || 'all'
   const rawSort = params.get('sort')
   const rawOffset = Number(params.get('offset') || '0')
   return {
     status: isStatusFilter(rawStatus) ? rawStatus : 'all',
     quality: isQualityFilter(rawQuality) ? rawQuality : 'all',
+    theme: isThemeFilter(rawTheme) ? rawTheme : 'all',
     q: params.get('q') || '',
     sort: rawSort && isReportSort(rawSort) ? rawSort : null,
     offset: Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0,
@@ -74,6 +90,7 @@ export function serializeReportFilters(filters: ReportFilters): URLSearchParams 
   const params = new URLSearchParams()
   if (filters.status !== 'all') params.set('status', filters.status)
   if (filters.quality !== 'all') params.set('quality', filters.quality)
+  if (filters.theme !== 'all') params.set('theme', filters.theme)
   const q = filters.q.trim()
   if (q) params.set('q', q)
   if (filters.sort) params.set('sort', filters.sort)
@@ -87,6 +104,7 @@ export function isReportFiltersDirty(
 ): boolean {
   if (filters.status !== DEFAULT_REPORT_FILTERS.status) return true
   if (filters.quality !== DEFAULT_REPORT_FILTERS.quality) return true
+  if (filters.theme !== DEFAULT_REPORT_FILTERS.theme) return true
   if (filters.q.trim() !== DEFAULT_REPORT_FILTERS.q) return true
   if (filters.sort !== DEFAULT_REPORT_FILTERS.sort) return true
   if (filters.offset !== DEFAULT_REPORT_FILTERS.offset) return true
@@ -111,6 +129,14 @@ export function withQuality(
   const next =
     quality === 'all' || quality === filters.quality ? 'all' : quality
   return { ...filters, quality: next, offset: 0 }
+}
+
+export function withTheme(
+  filters: ReportFilters,
+  theme: ThemeFilter,
+): ReportFilters {
+  const next = theme === 'all' || theme === filters.theme ? 'all' : theme
+  return { ...filters, theme: next, offset: 0 }
 }
 
 /** 같은 정렬을 다시 누르면 선택 해제(기본 정렬로, 다른 열은 켜지지 않음) */

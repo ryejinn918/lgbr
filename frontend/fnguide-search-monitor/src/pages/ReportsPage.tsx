@@ -5,12 +5,14 @@ import { useSessionStatus } from '../hooks/useSessionStatus'
 import {
   QUALITY_LABEL,
   STATUS_LABEL,
+  THEME_LABEL,
   formatPublishedAt,
   formatRelative,
 } from '../lib/format'
 import {
   QUALITY_FILTERS,
   STATUS_FILTERS,
+  THEME_FILTERS,
   isReportFiltersDirty,
   parseReportFilters,
   resetReportFilters,
@@ -21,6 +23,7 @@ import {
   withQuery,
   withSort,
   withStatus,
+  withTheme,
   type ReportFilters,
 } from '../lib/reportFilters'
 
@@ -47,6 +50,7 @@ export function ReportsPage() {
     () => ({
       status: filters.status,
       quality: filters.quality,
+      theme: filters.theme,
       q: filters.q,
       sort: resolveReportSort(filters.sort),
       limit: 30,
@@ -105,10 +109,22 @@ export function ReportsPage() {
             className="filter-chip filter-reset"
             disabled={!dirty}
             onClick={() => commit(resetReportFilters())}
-            title="상태·품질·검색·정렬·페이지 초기화"
+            title="상태·테마·품질·검색·정렬·페이지 초기화"
           >
             초기화
           </button>
+        </div>
+        <div className="filter-row">
+          {THEME_FILTERS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={`filter-chip${filters.theme === key ? ' active' : ''}`}
+              onClick={() => commit(withTheme(filters, key))}
+            >
+              {THEME_LABEL[key]} {reports.themeCounts[key] ?? 0}
+            </button>
+          ))}
         </div>
         <div className="filter-row">
           {QUALITY_FILTERS.map((key) => (

@@ -14,6 +14,7 @@ VALID_STATUSES = frozenset(
     {"listed", "blind", "downloaded", "no_download", "failed"}
 )
 VALID_QUALITIES = frozenset({"pass", "fail", "pending"})
+VALID_THEMES = frozenset({"datacenter", "ai", "physical_ai"})
 VALID_SORTS = frozenset({"published_at", "page_count", "last_seen_at"})
 SORT_SQL = {
     "published_at": "published_at DESC NULLS LAST, id DESC",
@@ -47,6 +48,10 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         attrs = {}
     provider = attrs.get("provider")
     provider_s = str(provider).strip() if provider else None
+    theme = attrs.get("theme")
+    theme_s = str(theme).strip() if theme else None
+    if theme_s not in VALID_THEMES:
+        theme_s = None
     qp = row.get("quality_pass")
     quality = "pending" if qp is None else ("pass" if qp else "fail")
     return {
@@ -64,6 +69,7 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         ),
         "published_at": pub.isoformat() if pub else None,
         "provider": provider_s or None,
+        "theme": theme_s,
         "page_count": row.get("page_count"),
         "crawl_id": str(row["crawl_id"]) if row.get("crawl_id") else None,
         "quality": quality,
@@ -76,13 +82,22 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _status_counts(cur: Any) -> dict[str, int]:
+def _theme_where(theme: str | None) -> tuple[str, list[Any]]:
+    if not theme:
+        return "", []
+    return " WHERE attrs->>'theme' = %s", [theme]
+
+
+def _status_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
+    where_sql, params = _theme_where(theme)
     cur.execute(
-        """
+        f"""
         SELECT status, count(*)::int AS n
         FROM reports
+        {where_sql}
         GROUP BY status
-        """
+        """,
+        params,
     )
     counts = {s: 0 for s in VALID_STATUSES}
     total = 0
@@ -96,15 +111,18 @@ def _status_counts(cur: Any) -> dict[str, int]:
     return counts
 
 
-def _quality_counts(cur: Any) -> dict[str, int]:
+def _quality_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
+    where_sql, params = _theme_where(theme)
     cur.execute(
-        """
+        f"""
         SELECT
           count(*) FILTER (WHERE quality_pass IS TRUE)::int AS pass,
           count(*) FILTER (WHERE quality_pass IS FALSE)::int AS fail,
           count(*) FILTER (WHERE quality_pass IS NULL)::int AS pending
         FROM reports
-        """
+        {where_sql}
+        """,
+        params,
     )
     row = cur.fetchone() or {}
     return {
@@ -114,10 +132,32 @@ def _quality_counts(cur: Any) -> dict[str, int]:
     }
 
 
+def _theme_counts(cur: Any) -> dict[str, int]:
+    cur.execute(
+        """
+        SELECT attrs->>'theme' AS theme, count(*)::int AS n
+        FROM reports
+        WHERE attrs->>'theme' IS NOT NULL
+        GROUP BY attrs->>'theme'
+        """
+    )
+    counts = {t: 0 for t in VALID_THEMES}
+    total = 0
+    for row in cur.fetchall():
+        theme = str(row["theme"] or "")
+        n = int(row["n"])
+        if theme in counts:
+            counts[theme] = n
+        total += n
+    counts["all"] = total
+    return counts
+
+
 def list_reports(
     *,
     status: str | None = None,
     quality: str | None = None,
+    theme: str | None = None,
     q: str | None = None,
     crawl_id: str | None = None,
     sort: str | None = None,
@@ -127,73 +167,50 @@ def list_reports(
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
 
-    sort_key = (sort or "last_seen_at").strip() or "last_seen_at"
-    if sort_key not in VALID_SORTS:
+    def _error(message: str, *, sort_key: str) -> dict[str, Any]:
         return {
             "ok": False,
-            "message": f"invalid sort: {sort_key}",
+            "message": message,
             "status": 400,
             "items": [],
             "total": 0,
             "counts": {},
             "quality_counts": {},
+            "theme_counts": {},
             "limit": limit,
             "offset": offset,
             "sort": sort_key,
         }
+
+    sort_key = (sort or "last_seen_at").strip() or "last_seen_at"
+    if sort_key not in VALID_SORTS:
+        return _error(f"invalid sort: {sort_key}", sort_key=sort_key)
     order_sql = SORT_SQL[sort_key]
 
     status_filter: str | None = None
     if status and status != "all":
         if status not in VALID_STATUSES:
-            return {
-                "ok": False,
-                "message": f"invalid status: {status}",
-                "status": 400,
-                "items": [],
-                "total": 0,
-                "counts": {},
-                "quality_counts": {},
-                "limit": limit,
-                "offset": offset,
-                "sort": sort_key,
-            }
+            return _error(f"invalid status: {status}", sort_key=sort_key)
         status_filter = status
 
     quality_filter: str | None = None
     if quality and quality != "all":
         if quality not in VALID_QUALITIES:
-            return {
-                "ok": False,
-                "message": f"invalid quality: {quality}",
-                "status": 400,
-                "items": [],
-                "total": 0,
-                "counts": {},
-                "quality_counts": {},
-                "limit": limit,
-                "offset": offset,
-                "sort": sort_key,
-            }
+            return _error(f"invalid quality: {quality}", sort_key=sort_key)
         quality_filter = quality
+
+    theme_filter: str | None = None
+    if theme and theme != "all":
+        if theme not in VALID_THEMES:
+            return _error(f"invalid theme: {theme}", sort_key=sort_key)
+        theme_filter = theme
 
     crawl_uuid: str | None = None
     if crawl_id:
         try:
             crawl_uuid = str(UUID(crawl_id))
         except (TypeError, ValueError):
-            return {
-                "ok": False,
-                "message": "invalid crawl_id",
-                "status": 400,
-                "items": [],
-                "total": 0,
-                "counts": {},
-                "quality_counts": {},
-                "limit": limit,
-                "offset": offset,
-                "sort": sort_key,
-            }
+            return _error("invalid crawl_id", sort_key=sort_key)
 
     q_pat = f"%{q.strip()}%" if q and q.strip() else None
 
@@ -208,6 +225,9 @@ def list_reports(
         where.append("quality_pass IS FALSE")
     elif quality_filter == "pending":
         where.append("quality_pass IS NULL")
+    if theme_filter:
+        where.append("attrs->>'theme' = %s")
+        params.append(theme_filter)
     if crawl_uuid:
         where.append("crawl_id = %s")
         params.append(crawl_uuid)
@@ -221,8 +241,9 @@ def list_reports(
 
     with connect() as conn:
         with conn.cursor() as cur:
-            counts = _status_counts(cur)
-            quality_counts = _quality_counts(cur)
+            counts = _status_counts(cur, theme=theme_filter)
+            quality_counts = _quality_counts(cur, theme=theme_filter)
+            theme_counts = _theme_counts(cur)
             cur.execute(
                 f"SELECT count(*)::int AS n FROM reports{where_sql}",
                 params,
@@ -249,6 +270,7 @@ def list_reports(
         "total": total,
         "counts": counts,
         "quality_counts": quality_counts,
+        "theme_counts": theme_counts,
         "limit": limit,
         "offset": offset,
         "sort": sort_key,

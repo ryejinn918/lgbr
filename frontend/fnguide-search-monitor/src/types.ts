@@ -135,6 +135,7 @@ export type ReportRecord = {
   downloaded_at: string | null
   published_at?: string | null
   provider?: string | null
+  theme?: string | null
   page_count?: number | null
   crawl_id?: string | null
   quality?: ReportQuality
@@ -161,12 +162,21 @@ export type QualityCounts = {
   [key: string]: number
 }
 
+export type ThemeCounts = {
+  all: number
+  datacenter: number
+  ai: number
+  physical_ai: number
+  [key: string]: number
+}
+
 export type ReportsResponse = {
   ok?: boolean
   items: ReportRecord[]
   total: number
   counts: ReportCounts
   quality_counts?: QualityCounts
+  theme_counts?: ThemeCounts
   limit: number
   offset: number
   message?: string
