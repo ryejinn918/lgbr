@@ -1,3 +1,5 @@
+import { labelStage } from './labels'
+
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -12,7 +14,7 @@ export function formatTime(iso: string | null | undefined): string {
 }
 
 export function formatProgress(progress: Record<string, unknown>): string {
-  const stage = progress.stage != null ? String(progress.stage) : ''
+  const stage = progress.stage != null ? labelStage(String(progress.stage)) : ''
   const done = progress.docs_done
   const total = progress.docs_total
   const parts: string[] = []

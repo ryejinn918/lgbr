@@ -1,4 +1,5 @@
 import { Navigate, NavLink, Route, Routes, useSearchParams } from 'react-router-dom'
+import { APP_BRAND, NAV } from './lib/labels'
 import { ComparePage } from './pages/ComparePage'
 import { FramesPage } from './pages/FramesPage'
 import { OpsPage } from './pages/OpsPage'
@@ -14,13 +15,13 @@ function App() {
   return (
     <div className="monitor">
       <header className="app-shell">
-        <p className="brand">fnguide-consensus</p>
+        <p className="brand">{APP_BRAND}</p>
         <nav className="app-nav" aria-label="주요 메뉴">
           <NavLink to="/" end>
-            비교
+            {NAV.compare}
           </NavLink>
-          <NavLink to="/frames">프레임</NavLink>
-          <NavLink to="/ops">운영</NavLink>
+          <NavLink to="/frames">{NAV.frames}</NavLink>
+          <NavLink to="/ops">{NAV.ops}</NavLink>
         </nav>
       </header>
       <Routes>

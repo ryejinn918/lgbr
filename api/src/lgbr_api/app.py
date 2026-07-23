@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 from lgbr_api.auth import ApiKeyMiddleware
@@ -25,6 +26,7 @@ from lgbr_api.consensus_api import (
     request_stop as consensus_request_stop,
     start_run,
 )
+from lgbr_api.consensus_chat import iter_compare_chat_sse
 from lgbr_api.crawls import (
     get_cdp_status,
     get_current_crawl,
@@ -276,6 +278,37 @@ async def consensus_chat(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
+async def consensus_chat_stream(request: Request) -> StreamingResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        messages = []
+
+    def gen() -> Iterator[str]:
+        yield from iter_compare_chat_sse(
+            mode=str(body.get("mode") or "plain"),
+            messages=messages,
+            run_id=str(body["run_id"]) if body.get("run_id") else None,
+            theme=str(body["theme"]) if body.get("theme") else None,
+            model=str(body["model"]) if body.get("model") else None,
+        )
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 def create_app() -> Starlette:
     load_database_env()
     return Starlette(
@@ -305,6 +338,11 @@ def create_app() -> Starlette:
             Route("/api/consensus/stop", consensus_stop, methods=["POST"]),
             Route("/api/consensus/inputs", consensus_inputs),
             Route("/api/consensus/chat", consensus_chat, methods=["POST"]),
+            Route(
+                "/api/consensus/chat/stream",
+                consensus_chat_stream,
+                methods=["POST"],
+            ),
             Route("/api/consensus/runs/{run_id}/outputs", consensus_outputs),
             Route("/api/consensus/runs/{run_id}/docs", consensus_docs),
         ],

@@ -1,20 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import {
+  compareReducer,
+  initialCompareState,
+  prepareSend,
+  type ColumnState,
+  type Mode,
+} from '../compare/compareState'
 import { Markdown } from '../components/Markdown'
+import { readChatSse } from '../lib/chatStream'
 import { formatTime } from '../lib/format'
-import type { ChatMessage, ConsensusRun, ConsensusTheme } from '../types'
+import {
+  CHAT_MODE,
+  CHAT_ROLE,
+  FRAME_TAB,
+  NAV,
+  labelChatPhase,
+  labelRole,
+} from '../lib/labels'
+import type { ConsensusTheme } from '../types'
 import { THEME_LABEL } from '../types'
 
-type Column = {
-  messages: ChatMessage[]
-  loading: boolean
-  error: string | null
-}
-
-type FrameTab = 'filled' | 'consensus'
-
 const THEMES: ConsensusTheme[] = ['datacenter', 'ai', 'physical_ai']
-const emptyCol = (): Column => ({ messages: [], loading: false, error: null })
 
 function parseTheme(raw: string | null): ConsensusTheme {
   if (raw && THEMES.includes(raw as ConsensusTheme)) return raw as ConsensusTheme
@@ -24,33 +31,31 @@ function parseTheme(raw: string | null): ConsensusTheme {
 export function ComparePage() {
   const [params, setParams] = useSearchParams()
   const theme = parseTheme(params.get('theme'))
-  const [run, setRun] = useState<ConsensusRun | null>(null)
-  const [filled, setFilled] = useState<string | null>(null)
-  const [consensus, setConsensus] = useState<string | null>(null)
-  const [frameTab, setFrameTab] = useState<FrameTab>('filled')
-  const [frameError, setFrameError] = useState<string | null>(null)
-  const [input, setInput] = useState('')
-  const [plain, setPlain] = useState<Column>(emptyCol)
-  const [grounded, setGrounded] = useState<Column>(emptyCol)
+  const [state, dispatch] = useReducer(compareReducer, undefined, initialCompareState)
+  const { plain, grounded, sharedDraft, frameTab, latest } = state
+  const { run, filled, consensus, error: frameError } = latest
 
   useEffect(() => {
     let cancelled = false
-    setFrameError(null)
+    dispatch({ type: 'latest_loading' })
     void fetch(`/api/consensus/latest?theme=${theme}`)
       .then(async (r) => {
         const d = await r.json()
         if (!r.ok || !d.ok) throw new Error(d.message || `HTTP ${r.status}`)
         if (cancelled) return
-        setRun(d.run ?? null)
-        setFilled(d.filled_frame ?? null)
-        setConsensus(d.consensus_frame ?? null)
+        dispatch({
+          type: 'latest_ok',
+          run: d.run ?? null,
+          filled: d.filled_frame ?? null,
+          consensus: d.consensus_frame ?? null,
+        })
       })
       .catch((e) => {
         if (!cancelled) {
-          setRun(null)
-          setFilled(null)
-          setConsensus(null)
-          setFrameError(e instanceof Error ? e.message : String(e))
+          dispatch({
+            type: 'latest_err',
+            message: e instanceof Error ? e.message : String(e),
+          })
         }
       })
     return () => {
@@ -60,80 +65,132 @@ export function ComparePage() {
 
   function setTheme(next: ConsensusTheme) {
     setParams({ theme: next }, { replace: true })
-    setPlain(emptyCol())
-    setGrounded(emptyCol())
-    setFrameTab('filled')
+    dispatch({ type: 'theme_reset' })
   }
 
-  async function sendBoth() {
-    const text = input.trim()
-    if (!text) return
-    if (!run) {
-      window.alert('이 섹터에 ended run이 없습니다. 운영에서 먼저 실행하세요.')
-      return
-    }
-    setInput('')
-    const userMsg: ChatMessage = { role: 'user', content: text }
-    const plainMsgs = [...plain.messages, userMsg]
-    const groundedMsgs = [...grounded.messages, userMsg]
-    setPlain({ messages: plainMsgs, loading: true, error: null })
-    setGrounded({ messages: groundedMsgs, loading: true, error: null })
-
-    const call = async (mode: 'plain' | 'grounded', messages: ChatMessage[]) => {
-      const res = await fetch('/api/consensus/chat', {
+  async function runStream(
+    mode: Mode,
+    apiMessages: { role: string; content: string }[],
+    turnId: string,
+  ) {
+    try {
+      const res = await fetch('/api/consensus/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, theme, messages }),
+        body: JSON.stringify({ mode, theme, messages: apiMessages }),
       })
-      const data = await res.json()
-      if (!res.ok || !data.ok) {
-        throw new Error(data.message || `HTTP ${res.status}`)
+      let errored = false
+      await readChatSse(res, {
+        onStatus: (phase) => {
+          dispatch({ type: 'stream_status', mode, turnId, phase })
+        },
+        onTool: (tool) => {
+          dispatch({ type: 'stream_tool', mode, turnId, tool })
+        },
+        onDelta: (chunk) => {
+          dispatch({ type: 'stream_delta', mode, turnId, text: chunk })
+        },
+        onDone: () => {
+          dispatch({ type: 'stream_done', mode, turnId })
+        },
+        onError: (message) => {
+          errored = true
+          dispatch({ type: 'stream_error', mode, turnId, message })
+        },
+      })
+      if (!errored) {
+        dispatch({ type: 'stream_done', mode, turnId })
       }
-      return String(data.content || '')
-    }
-
-    const [p, g] = await Promise.allSettled([
-      call('plain', plainMsgs),
-      call('grounded', groundedMsgs),
-    ])
-
-    if (p.status === 'fulfilled') {
-      setPlain({
-        messages: [...plainMsgs, { role: 'assistant', content: p.value }],
-        loading: false,
-        error: null,
-      })
-    } else {
-      setPlain({
-        messages: plainMsgs,
-        loading: false,
-        error: p.reason instanceof Error ? p.reason.message : String(p.reason),
-      })
-    }
-    if (g.status === 'fulfilled') {
-      setGrounded({
-        messages: [...groundedMsgs, { role: 'assistant', content: g.value }],
-        loading: false,
-        error: null,
-      })
-    } else {
-      setGrounded({
-        messages: groundedMsgs,
-        loading: false,
-        error: g.reason instanceof Error ? g.reason.message : String(g.reason),
+    } catch (e) {
+      dispatch({
+        type: 'stream_error',
+        mode,
+        turnId,
+        message: e instanceof Error ? e.message : String(e),
       })
     }
   }
 
-  const frameBody =
-    frameTab === 'filled' ? filled : consensus
+  async function streamColumn(mode: Mode, userText: string) {
+    if (mode === 'grounded' && !state.latest.run) {
+      window.alert(
+        `이 섹터에 완료된 실행이 없습니다. ${NAV.ops}에서 먼저 생성하세요.`,
+      )
+      return
+    }
+    const prepared = prepareSend(state, mode, userText)
+    if (!prepared) return
+    dispatch({
+      type: 'send_start',
+      mode,
+      text: prepared.text,
+      turnId: prepared.turnId,
+    })
+    await runStream(mode, prepared.apiMessages, prepared.turnId)
+  }
+
+  async function sendColumn(mode: Mode) {
+    const column = mode === 'plain' ? plain : grounded
+    await streamColumn(mode, column.input)
+  }
+
+  async function sendBothSame() {
+    const text =
+      sharedDraft.trim() || plain.input.trim() || grounded.input.trim()
+    if (!text) return
+    if (plain.loading || grounded.loading) return
+
+    const plainPrep = prepareSend(state, 'plain', text)
+    const groundedPrep = prepareSend(state, 'grounded', text)
+    if (!plainPrep && !groundedPrep) {
+      if (!state.latest.run) {
+        window.alert(
+          `이 섹터에 완료된 실행이 없습니다. ${NAV.ops}에서 먼저 생성하세요.`,
+        )
+      }
+      return
+    }
+
+    dispatch({ type: 'set_shared_draft', value: '' })
+
+    const jobs: Promise<void>[] = []
+    if (plainPrep) {
+      dispatch({
+        type: 'send_start',
+        mode: 'plain',
+        text: plainPrep.text,
+        turnId: plainPrep.turnId,
+      })
+      jobs.push(runStream('plain', plainPrep.apiMessages, plainPrep.turnId))
+    }
+    if (groundedPrep) {
+      dispatch({
+        type: 'send_start',
+        mode: 'grounded',
+        text: groundedPrep.text,
+        turnId: groundedPrep.turnId,
+      })
+      jobs.push(
+        runStream('grounded', groundedPrep.apiMessages, groundedPrep.turnId),
+      )
+    } else if (!state.latest.run) {
+      window.alert(
+        `이 섹터에 완료된 실행이 없습니다. ${CHAT_MODE.grounded}은 건너뜁니다.`,
+      )
+    }
+    await Promise.all(jobs)
+  }
+
+  const frameBody = frameTab === 'filled' ? filled : consensus
 
   return (
     <>
       <header className="monitor-header">
-        <h1>비교</h1>
+        <h1>{NAV.compare}</h1>
         <p className="lede">
-          섹터 최신 프레임을 읽고, Plain / Grounded 응답을 나란히 비교합니다.
+          왼쪽이 {CHAT_MODE.grounded}({CHAT_ROLE.ours}), 오른쪽이{' '}
+          {CHAT_MODE.plain}({CHAT_ROLE.control})입니다. 열마다 다른 질문·이어
+          묻기도 가능합니다.
         </p>
       </header>
 
@@ -156,28 +213,65 @@ export function ComparePage() {
           </p>
         ) : (
           <p className="section-note">
-            이 섹터에 ended run이 없습니다.{' '}
-            <Link to={`/ops?theme=${theme}`}>운영에서 실행</Link>
+            {CHAT_MODE.grounded}에 쓸 완료된 실행이 없습니다.{' '}
+            <Link to={`/ops?theme=${theme}`}>{NAV.ops}에서 생성</Link>
           </p>
         )}
         {frameError && <p className="error-line">{frameError}</p>}
+        <div className="compare-toolbar">
+          <label className="shared-draft">
+            동일 질문 (양쪽)
+            <input
+              value={sharedDraft}
+              placeholder="비교용 공통 질문…"
+              onChange={(e) =>
+                dispatch({ type: 'set_shared_draft', value: e.target.value })
+              }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void sendBothSame()
+                }
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn"
+            disabled={
+              plain.loading ||
+              grounded.loading ||
+              !(sharedDraft.trim() || plain.input.trim() || grounded.input.trim())
+            }
+            onClick={() => void sendBothSame()}
+          >
+            양쪽 동일 전송
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => dispatch({ type: 'clear_chats' })}
+          >
+            대화 초기화
+          </button>
+        </div>
       </section>
 
       <section className="panel">
         <div className="section-head">
-          <h2>프레임 논지</h2>
+          <h2>참고 논지</h2>
           <div className="chip-row">
             {(
               [
-                ['filled', 'Filled'],
-                ['consensus', 'Consensus'],
+                ['filled', FRAME_TAB.filled],
+                ['consensus', FRAME_TAB.consensus],
               ] as const
             ).map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 className={`chip ${frameTab === k ? 'active' : ''}`}
-                onClick={() => setFrameTab(k)}
+                onClick={() => dispatch({ type: 'set_frame_tab', tab: k })}
               >
                 {label}
               </button>
@@ -189,73 +283,123 @@ export function ComparePage() {
             <Markdown>{frameBody}</Markdown>
           </div>
         ) : (
-          <p className="section-note">표시할 프레임이 없습니다.</p>
+          <p className="section-note">표시할 논지가 없습니다.</p>
         )}
       </section>
 
       <section className="compare-grid">
-        <ChatColumn title="Plain" column={plain} />
-        <ChatColumn title="Grounded" column={grounded} />
-      </section>
-
-      <section className="panel compare-compose">
-        <textarea
-          rows={3}
-          value={input}
-          placeholder="비교할 질문을 입력… (Ctrl/⌘+Enter)"
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              void sendBoth()
-            }
-          }}
+        <ChatColumn
+          variant="ours"
+          eyebrow={CHAT_ROLE.ours}
+          title={CHAT_MODE.grounded}
+          hint="최신 상세 논지를 참고합니다."
+          column={grounded}
+          onInput={(v) =>
+            dispatch({ type: 'set_input', mode: 'grounded', value: v })
+          }
+          onSend={() => void sendColumn('grounded')}
+          sendDisabled={grounded.loading || !grounded.input.trim() || !run}
         />
-        <div className="compare-toolbar">
-          <button
-            type="button"
-            className="btn"
-            disabled={plain.loading || grounded.loading || !input.trim() || !run}
-            onClick={() => void sendBoth()}
-          >
-            양쪽 전송
-          </button>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => {
-              setPlain(emptyCol())
-              setGrounded(emptyCol())
-            }}
-          >
-            대화 초기화
-          </button>
-        </div>
+        <ChatColumn
+          variant="control"
+          eyebrow={CHAT_ROLE.control}
+          title={CHAT_MODE.plain}
+          hint="웹검색만 사용. 섹터 논지는 보지 않습니다."
+          column={plain}
+          onInput={(v) => dispatch({ type: 'set_input', mode: 'plain', value: v })}
+          onSend={() => void sendColumn('plain')}
+          sendDisabled={plain.loading || !plain.input.trim()}
+        />
       </section>
     </>
   )
 }
 
-function ChatColumn({ title, column }: { title: string; column: Column }) {
+function ChatColumn({
+  variant,
+  eyebrow,
+  title,
+  hint,
+  column,
+  onInput,
+  onSend,
+  sendDisabled,
+}: {
+  variant: 'ours' | 'control'
+  eyebrow: string
+  title: string
+  hint: string
+  column: ColumnState
+  onInput: (v: string) => void
+  onSend: () => void
+  sendDisabled: boolean
+}) {
   return (
-    <div className="panel chat-col">
+    <div className={`panel chat-col ${variant}`}>
+      <p className="chat-eyebrow">{eyebrow}</p>
       <h2>{title}</h2>
+      <p className="section-note">{hint}</p>
       <div className="chat-log">
         {column.messages.length === 0 && (
           <p className="section-note">아직 메시지 없음</p>
         )}
         {column.messages.map((m, i) => (
-          <div key={i} className={`bubble role-${m.role}`}>
-            <p className="bubble-role">{m.role}</p>
+          <div key={m.turnId ?? `m-${i}`} className={`bubble role-${m.role}`}>
+            <p className="bubble-role">{labelRole(m.role)}</p>
+            {m.tools && m.tools.length > 0 && (
+              <ul className="tool-list">
+                {m.tools.map((t, j) => (
+                  <li key={j}>
+                    <span className="tool-query">웹검색: {t.query}</span>
+                    <ul className="tool-links">
+                      {t.results.slice(0, 3).map((r, k) => (
+                        <li key={k}>
+                          <a href={r.link} target="_blank" rel="noreferrer">
+                            {r.title || r.link}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
             {m.role === 'assistant' ? (
-              <Markdown>{m.content}</Markdown>
+              <>
+                <Markdown>{m.content || (m.streaming ? '…' : '')}</Markdown>
+                {m.streaming && <span className="stream-cursor" aria-hidden />}
+              </>
             ) : (
               <p className="bubble-text">{m.content}</p>
             )}
           </div>
         ))}
-        {column.loading && <p className="section-note">응답 대기…</p>}
+        {column.loading && column.phase && (
+          <p className="section-note">{labelChatPhase(column.phase)}</p>
+        )}
         {column.error && <p className="error-line">{column.error}</p>}
+      </div>
+      <div className="col-compose">
+        <textarea
+          rows={3}
+          value={column.input}
+          placeholder={`${title}에 질문… (Ctrl/⌘+Enter)`}
+          onChange={(e) => onInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              onSend()
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="btn"
+          disabled={sendDisabled}
+          onClick={onSend}
+        >
+          {column.loading ? '응답 중…' : '전송'}
+        </button>
       </div>
     </div>
   )

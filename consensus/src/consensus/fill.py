@@ -260,32 +260,37 @@ def fill_frame(
         f"### OPEN {d['slug']}/{d['slice_id']} | slot={d['slot']} | why={d['why']}\n{d['body']}"
         for d in chosen
     )
-    prompt = f"""Keep the locked consensus frame. Thicken pillars using **only**
+    prompt = f"""Preserve the locked frame's roof/pillar titles. Thicken pillars using **only**
 sentences/numbers that actually appear in the OPEN excerpts below.
-Do not rename roof/pillar titles.
 Never invent numbers, company facts, or prices missing from OPEN; put gaps under empty slots.
 Cite slug in evidence.
 
+The output must be a **standalone, self-contained document** readable without the locked
+frame or any prior draft. Do not point at omitted text. Forbidden shorthand includes:
+(unchanged), same as above, as in locked frame, 중략, 생략, 同上, …(기존과 동일), and similar.
+Rewrite every section in full sentences—even claims that stay the same.
+
 Question: {question}
 
-## Locked frame
+## Locked frame (structure/titles to preserve; rewrite fully in the output)
 {frame}
 
 ## Opened body excerpts
 {dossier_txt}
 
 Output (English headers; Korean body OK for Korean sources):
-# Filled frame (structure preserved)
+# Filled frame
 
 ## Roof
-(same intent as locked frame)
+(full prose restating the roof; never "(unchanged)" or pointers to the locked frame)
 
 ## Pillar enrichment
 ### 1. (existing pillar title)
+- **Role of this pillar** (full prose; no shorthand)
 - **Claim**
 - **Evidence (number / date / slug)**
 - **Watch**
-(dense)
+(dense; self-contained)
 
 ## Still-empty slots (defer to web/other sources)
 - Only items not filled from literature. One follow-up query candidate each.
@@ -299,7 +304,9 @@ Output (English headers; Korean body OK for Korean sources):
                 "role": "system",
                 "content": (
                     "Enrich a locked consensus frame with opened report bodies. "
-                    "Keep roof/pillars. Grow density. No invented facts. "
+                    "Keep roof/pillar titles. Grow density. No invented facts. "
+                    "Emit a standalone document: never use (unchanged), 중략, or any "
+                    "shorthand that refers to a prior draft or the locked frame. "
                     "English headers; Korean body when sources are Korean."
                 ),
             },

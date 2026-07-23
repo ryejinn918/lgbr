@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Markdown } from '../components/Markdown'
 import { formatTime } from '../lib/format'
+import { FRAME_TAB, NAV, labelDocStatus } from '../lib/labels'
 import type { ConsensusRun, ConsensusTheme } from '../types'
 import { THEME_LABEL } from '../types'
 
@@ -92,9 +93,9 @@ export function FramesPage() {
   return (
     <>
       <header className="monitor-header">
-        <h1>프레임</h1>
+        <h1>{NAV.frames}</h1>
         <p className="lede">
-          섹터 최신 논지와, 재료로 쓴 보고서 압축본을 읽습니다.
+          섹터별 최신 논지와, 근거로 쓴 리포트 요약을 확인합니다.
         </p>
       </header>
 
@@ -120,12 +121,12 @@ export function FramesPage() {
           </p>
         ) : (
           <p className="section-note">
-            이 섹터에 ended run이 없습니다.{' '}
-            <Link to={`/ops?theme=${theme}`}>운영에서 실행</Link>
+            이 섹터에 완료된 실행이 없습니다.{' '}
+            <Link to={`/ops?theme=${theme}`}>{NAV.ops}에서 생성</Link>
           </p>
         )}
         <Link className="btn" to={`/?theme=${theme}`}>
-          이 섹터로 비교
+          이 섹터로 {NAV.compare}
         </Link>
         {error && <p className="error-line">{error}</p>}
       </section>
@@ -134,9 +135,9 @@ export function FramesPage() {
         <div className="chip-row">
           {(
             [
-              ['filled', 'Filled'],
-              ['consensus', 'Consensus'],
-              ['materials', '재료'],
+              ['filled', FRAME_TAB.filled],
+              ['consensus', FRAME_TAB.consensus],
+              ['materials', FRAME_TAB.materials],
             ] as const
           ).map(([k, label]) => (
             <button
@@ -149,6 +150,21 @@ export function FramesPage() {
             </button>
           ))}
         </div>
+        {tab === 'filled' && (
+          <p className="section-note">
+            골격에 근거·수치를 채운 본문입니다. 비교 시 기본으로 참고합니다.
+          </p>
+        )}
+        {tab === 'consensus' && (
+          <p className="section-note">
+            여러 리포트가 수렴한 총론·핵심 축 수준의 골격입니다.
+          </p>
+        )}
+        {tab === 'materials' && (
+          <p className="section-note">
+            이번 실행에 선정된 증권사 리포트와 문서별 요약입니다.
+          </p>
+        )}
 
         {tab !== 'materials' &&
           (frameBody ? (
@@ -156,14 +172,14 @@ export function FramesPage() {
               <Markdown>{frameBody}</Markdown>
             </div>
           ) : (
-            <p className="section-note">표시할 프레임이 없습니다.</p>
+            <p className="section-note">표시할 논지가 없습니다.</p>
           ))}
 
         {tab === 'materials' && (
           <div className="materials-layout">
             <ul className="materials-list">
               {selectedDocs.length === 0 && (
-                <li className="section-note">선정 문서 없음</li>
+                <li className="section-note">선정 리포트 없음</li>
               )}
               {selectedDocs.map((d) => (
                 <li key={d.report_id}>
@@ -176,8 +192,8 @@ export function FramesPage() {
                   >
                     <span className="materials-title">{d.title}</span>
                     <span className="section-note">
-                      {d.provider ?? '—'} · {d.doc_status}
-                      {d.has_compress ? '' : ' · 압축 없음'}
+                      {d.provider ?? '—'} · {labelDocStatus(d.doc_status)}
+                      {d.has_compress ? '' : ' · 요약 없음'}
                     </span>
                   </button>
                 </li>
@@ -189,7 +205,7 @@ export function FramesPage() {
                   <p className="section-note">
                     {selectedDoc.title}
                     {selectedDoc.slice_count != null
-                      ? ` · slices ${selectedDoc.slice_count}`
+                      ? ` · 요약 구간 ${selectedDoc.slice_count}개`
                       : ''}
                   </p>
                   <div className="frame-scroll tall">
@@ -199,8 +215,8 @@ export function FramesPage() {
               ) : (
                 <p className="section-note">
                   {selectedDoc
-                    ? '이 문서의 압축본이 없습니다.'
-                    : '문서를 선택하세요.'}
+                    ? '이 리포트의 요약이 없습니다.'
+                    : '리포트를 선택하세요.'}
                 </p>
               )}
             </div>

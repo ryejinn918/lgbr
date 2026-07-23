@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Markdown } from '../components/Markdown'
 import { useConsensusStatus } from '../hooks/useConsensusStatus'
 import { formatEventDetail, formatProgress, formatTime } from '../lib/format'
+import { FRAME_TAB, NAV, labelRunState, labelStage } from '../lib/labels'
 import type { ConsensusTheme, InputReport } from '../types'
 import {
   DEFAULT_QUESTION,
@@ -74,7 +75,13 @@ export function OpsPage() {
   const themeHistory = history.filter((h) => h.theme === theme)
 
   async function onStart() {
-    if (!window.confirm(`${THEME_LABEL[theme]} 컨센서스를 시작할까요?`)) return
+    if (
+      !window.confirm(
+        `${THEME_LABEL[theme]} 섹터 컨센서스 생성을 시작할까요?`,
+      )
+    ) {
+      return
+    }
     try {
       await startRun(theme, question)
     } catch (e) {
@@ -95,7 +102,9 @@ export function OpsPage() {
       const res = await fetch(`/api/consensus/runs/${runId}/outputs`)
       const data = await res.json()
       if (!res.ok || !data.ok) throw new Error(data.message || `HTTP ${res.status}`)
-      setPreviewMd(data.filled_frame || data.consensus_frame || '(프레임 없음)')
+      setPreviewMd(
+        data.filled_frame || data.consensus_frame || '(논지 없음)',
+      )
     } catch (e) {
       setPreviewMd(e instanceof Error ? e.message : String(e))
     } finally {
@@ -106,9 +115,9 @@ export function OpsPage() {
   return (
     <>
       <header className="monitor-header">
-        <h1>운영</h1>
+        <h1>{NAV.ops}</h1>
         <p className="lede">
-          섹터별 입력 확인 · 실행 · 진행 감시 · run 이력입니다.
+          섹터별 입력 리포트 확인, 컨센서스 생성, 진행 상황·이력을 관리합니다.
         </p>
       </header>
 
@@ -126,22 +135,22 @@ export function OpsPage() {
           ))}
         </div>
         <Link className="text-link" to={`/?theme=${theme}`}>
-          이 섹터 최신으로 비교
+          이 섹터 최신으로 {NAV.compare}
         </Link>
       </section>
 
       <section className={`panel badge-panel state-${badge}`}>
-        <p className="badge-label">런</p>
+        <p className="badge-label">현재 실행</p>
         <p className="badge-value">
-          {fetchError ? 'API Offline' : status.label}
+          {fetchError ? 'API 연결 끊김' : status.label}
         </p>
         <p className="section-note">
           {status.run
             ? `${THEME_LABEL[status.run.theme as ConsensusTheme] ?? status.run.theme} · ${status.run.asset_id}`
-            : '실행 중인 런 없음'}
+            : '실행 중인 작업 없음'}
         </p>
         <p className="section-note">
-          progress: {formatProgress(status.progress)}
+          진행: {formatProgress(status.progress)}
         </p>
         {status.message && <p className="section-note">{status.message}</p>}
         {busy && (
@@ -156,17 +165,17 @@ export function OpsPage() {
               )
             }}
           >
-            Stop 요청
+            종료 요청
           </button>
         )}
       </section>
 
       <section className="panel">
         <div className="section-head">
-          <h2>실행</h2>
+          <h2>생성</h2>
         </div>
         <label>
-          Question
+          분석 질문
           <textarea
             rows={2}
             value={question}
@@ -179,16 +188,16 @@ export function OpsPage() {
           disabled={!status.can_start || busy || requestingStart}
           onClick={() => void onStart()}
         >
-          {requestingStart ? '시작 중…' : 'Start'}
+          {requestingStart ? '시작 중…' : '생성 시작'}
         </button>
         {!status.can_start && (
-          <p className="section-note">이미 실행 중인 런이 있습니다.</p>
+          <p className="section-note">이미 실행 중인 작업이 있습니다.</p>
         )}
       </section>
 
       <section className="panel">
         <div className="section-head">
-          <h2>입력</h2>
+          <h2>입력 리포트</h2>
           <p className="section-note">
             선정 예정 {selectedCount} / {inputs.length}
           </p>
@@ -202,7 +211,7 @@ export function OpsPage() {
               <th>증권사</th>
               <th>일자</th>
               <th>쪽</th>
-              <th>quality</th>
+              <th>품질</th>
             </tr>
           </thead>
           <tbody>
@@ -215,10 +224,10 @@ export function OpsPage() {
                 <td>{r.page_count ?? '—'}</td>
                 <td>
                   {r.quality_pass === true
-                    ? 'pass'
+                    ? '통과'
                     : r.quality_pass === false
-                      ? `fail/${r.quality_scope ?? '?'}`
-                      : 'pending'}
+                      ? `미달/${r.quality_scope ?? '?'}`
+                      : '대기'}
                 </td>
               </tr>
             ))}
@@ -228,17 +237,17 @@ export function OpsPage() {
 
       <section className="panel">
         <div className="section-head">
-          <h2>이벤트</h2>
+          <h2>진행 로그</h2>
         </div>
         <ul className="event-list">
           {status.events.length === 0 && (
-            <li className="section-note">이벤트 없음</li>
+            <li className="section-note">로그 없음</li>
           )}
           {status.events.map((ev) => (
             <li key={ev.id}>
               <span className="mono">{formatTime(ev.at)}</span>{' '}
               <strong>
-                {ev.stage}/{ev.event}
+                {labelStage(ev.stage)}/{ev.event}
               </strong>{' '}
               <span className="section-note">
                 {formatEventDetail(ev.detail)}
@@ -255,9 +264,9 @@ export function OpsPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>asset</th>
-              <th>state</th>
-              <th>ended</th>
+              <th>실행 ID</th>
+              <th>상태</th>
+              <th>종료</th>
               <th></th>
             </tr>
           </thead>
@@ -273,7 +282,7 @@ export function OpsPage() {
               <Fragment key={h.id}>
                 <tr>
                   <td className="mono">{h.asset_id}</td>
-                  <td>{h.state}</td>
+                  <td>{labelRunState(h.state)}</td>
                   <td>{formatTime(h.ended_at)}</td>
                   <td>
                     <button
@@ -281,7 +290,7 @@ export function OpsPage() {
                       className="btn ghost"
                       onClick={() => void togglePreview(h.id)}
                     >
-                      {expandedId === h.id ? '접기' : '프레임'}
+                      {expandedId === h.id ? '접기' : FRAME_TAB.filled}
                     </button>
                   </td>
                 </tr>

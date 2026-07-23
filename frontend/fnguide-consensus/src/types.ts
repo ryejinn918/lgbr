@@ -65,13 +65,13 @@ export type ChatMessage = {
 export const THEME_LABEL: Record<ConsensusTheme, string> = {
   datacenter: '데이터센터',
   ai: 'AI',
-  physical_ai: 'Physical AI',
+  physical_ai: '피지컬 AI',
 }
 
 export const DEFAULT_QUESTION: Record<ConsensusTheme, string> = {
   datacenter: '데이터센터, 지금 뭐 보면 돼?',
   ai: 'AI, 지금 뭐 보면 돼?',
-  physical_ai: 'Physical AI, 지금 뭐 보면 돼?',
+  physical_ai: '피지컬 AI, 지금 뭐 보면 돼?',
 }
 
 export const STATE_CLASS: Record<ConsensusState, string> = {
