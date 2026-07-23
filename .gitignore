@@ -11,5 +11,6 @@ wheels/
 
 # Local secrets / captured sessions
 .crawler/
+.consensus/
 .env
 .env.*

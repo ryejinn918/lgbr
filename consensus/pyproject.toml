@@ -1,0 +1,18 @@
+[project]
+name = "consensus"
+version = "0.1.0"
+description = "Theme report compress → consensus frame → fill"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.4",
+    "pymupdf>=1.25.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.scripts]
+consensus = "consensus.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
