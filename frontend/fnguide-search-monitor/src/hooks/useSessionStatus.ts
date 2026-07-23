@@ -3,11 +3,13 @@ import type {
   CrawlMode,
   CrawlResponse,
   HistoryResponse,
+  SessionRecord,
   SessionResponse,
 } from '../types'
 
 const STALE_AFTER_MS = 30_000
 const POLL_MS = 2_000
+const DEFAULT_HISTORY_LIMIT = 10
 
 const EMPTY_SESSION: SessionResponse = {
   state: 'ended',
@@ -28,7 +30,11 @@ const EMPTY_CRAWL: CrawlResponse = {
 export type SessionView = {
   crawl: CrawlResponse
   status: SessionResponse
-  history: HistoryResponse['items']
+  history: SessionRecord[]
+  historyTotal: number
+  historyLimit: number
+  historyOffset: number
+  setHistoryOffset: (offset: number) => void
   stale: boolean
   fetchError: string | null
   requestingStart: boolean
@@ -70,10 +76,15 @@ function applyCrawl(data: CrawlResponse): CrawlResponse {
   }
 }
 
-export function useSessionStatus(): SessionView {
+export function useSessionStatus(opts?: {
+  historyLimit?: number
+}): SessionView {
+  const historyLimit = opts?.historyLimit ?? DEFAULT_HISTORY_LIMIT
   const [crawl, setCrawl] = useState<CrawlResponse>(EMPTY_CRAWL)
   const [status, setStatus] = useState<SessionResponse>(EMPTY_SESSION)
-  const [history, setHistory] = useState<HistoryResponse['items']>([])
+  const [history, setHistory] = useState<SessionRecord[]>([])
+  const [historyTotal, setHistoryTotal] = useState(0)
+  const [historyOffset, setHistoryOffset] = useState(0)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [requestingStart, setRequestingStart] = useState(false)
@@ -84,9 +95,13 @@ export function useSessionStatus(): SessionView {
 
     async function poll() {
       try {
+        const params = new URLSearchParams({
+          limit: String(historyLimit),
+          offset: String(historyOffset),
+        })
         const [crawlRes, historyRes] = await Promise.all([
           fetch('/api/crawl'),
-          fetch('/api/session/history?limit=30'),
+          fetch(`/api/session/history?${params}`),
         ])
         if (!crawlRes.ok) throw new Error(`HTTP ${crawlRes.status}`)
         if (!historyRes.ok) throw new Error(`HTTP ${historyRes.status}`)
@@ -96,6 +111,7 @@ export function useSessionStatus(): SessionView {
         setCrawl(applyCrawl(crawlData))
         setStatus(crawlData.session ?? EMPTY_SESSION)
         setHistory(historyData.items ?? [])
+        setHistoryTotal(historyData.total ?? historyData.items?.length ?? 0)
         setFetchError(null)
         setNow(Date.now())
       } catch (err) {
@@ -114,7 +130,7 @@ export function useSessionStatus(): SessionView {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [])
+  }, [historyLimit, historyOffset])
 
   async function startCrawl(
     mode: CrawlMode = 'datacenter',
@@ -168,6 +184,10 @@ export function useSessionStatus(): SessionView {
     crawl,
     status,
     history,
+    historyTotal,
+    historyLimit,
+    historyOffset,
+    setHistoryOffset,
     stale: isStale(status, now),
     fetchError,
     requestingStart,

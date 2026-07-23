@@ -744,6 +744,72 @@
   align-items: baseline;
 }
 
+.session-cards {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.session-card {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 55%, #fff);
+}
+
+.session-card.expanded {
+  border-color: color-mix(in srgb, var(--active) 40%, var(--line));
+  background: color-mix(in srgb, var(--panel) 70%, #fff);
+}
+
+.session-card-head {
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+  font: inherit;
+  color: inherit;
+}
+
+.session-card-head:hover {
+  background: color-mix(in srgb, var(--active) 6%, transparent);
+}
+
+.session-card-body {
+  padding: 0 0.8rem 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.session-card-body ul {
+  margin-top: 0.65rem;
+}
+
+.session-card-body .pager {
+  margin-top: 0.65rem;
+}
+
+.kind-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.08rem 0.35rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.kind-pill.kind-session {
+  border-color: color-mix(in srgb, var(--busy) 40%, var(--line));
+  color: var(--busy);
+}
+
+.kind-pill.kind-crawl {
+  border-color: color-mix(in srgb, var(--active) 45%, var(--line));
+  color: var(--active);
+}
+
 .history-label {
   font-weight: 600;
   color: var(--ink);

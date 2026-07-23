@@ -40,6 +40,7 @@ from lgbr_api.profiles import list_profiles, update_profile
 from lgbr_api.audits import get_audit_status, start_audit
 from lgbr_api.reports import get_report, get_report_file, list_reports
 from lgbr_api.sessions import get_current_session, list_history
+from lgbr_api.timeline import list_session_timeline, list_timeline
 
 SHUTDOWN_WAIT_SECONDS = 60.0
 
@@ -71,7 +72,40 @@ async def session_history(request: Request) -> JSONResponse:
         limit = int(request.query_params.get("limit", "50"))
     except ValueError:
         limit = 50
-    return JSONResponse({"items": list_history(limit=limit)})
+    try:
+        offset = int(request.query_params.get("offset", "0"))
+    except ValueError:
+        offset = 0
+    return JSONResponse(list_history(limit=limit, offset=offset))
+
+
+async def timeline(request: Request) -> JSONResponse:
+    try:
+        limit = int(request.query_params.get("limit", "10"))
+    except ValueError:
+        limit = 10
+    try:
+        offset = int(request.query_params.get("offset", "0"))
+    except ValueError:
+        offset = 0
+    return JSONResponse(list_timeline(limit=limit, offset=offset))
+
+
+async def timeline_session(request: Request) -> JSONResponse:
+    session_id = str(request.path_params.get("session_id") or "")
+    try:
+        limit = int(request.query_params.get("limit", "50"))
+    except ValueError:
+        limit = 50
+    try:
+        offset = int(request.query_params.get("offset", "0"))
+    except ValueError:
+        offset = 0
+    result = list_session_timeline(
+        session_id, limit=limit, offset=offset
+    )
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
 
 
 async def crawl(request: Request) -> JSONResponse:
@@ -349,6 +383,8 @@ def create_app() -> Starlette:
             Route("/api/session", session),
             Route("/api/session/logout", session_logout, methods=["POST"]),
             Route("/api/session/history", session_history),
+            Route("/api/timeline", timeline),
+            Route("/api/timeline/sessions/{session_id}", timeline_session),
             Route("/api/crawl", crawl),
             Route("/api/crawl/events", crawl_events),
             Route("/api/crawl/start", crawl_start, methods=["POST"]),

@@ -98,20 +98,31 @@ def request_logout() -> dict[str, Any]:
     }
 
 
-def list_history(*, limit: int = 50) -> list[dict[str, Any]]:
+def list_history(
+    *, limit: int = 50, offset: int = 0
+) -> dict[str, Any]:
+    limit = max(1, min(int(limit), 200))
+    offset = max(0, int(offset))
     with connect() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT count(*)::int AS n FROM fnguide_sessions")
+            total = int(cur.fetchone()["n"])
             cur.execute(
                 """
                 SELECT *
                 FROM fnguide_sessions
                 ORDER BY started_at DESC
-                LIMIT %s
+                LIMIT %s OFFSET %s
                 """,
-                (max(1, min(limit, 200)),),
+                (limit, offset),
             )
             rows = cur.fetchall()
-    return [_serialize(dict(r)) for r in rows]
+    return {
+        "items": [_serialize(dict(r)) for r in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:

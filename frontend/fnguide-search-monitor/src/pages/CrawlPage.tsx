@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCrawlProfiles } from '../hooks/useCrawlProfiles'
 import { useSessionStatus } from '../hooks/useSessionStatus'
-import type { CrawlEvent, CrawlMode, SessionRecord } from '../types'
+import { useTimeline } from '../hooks/useTimeline'
+import type { CrawlMode, TimelineItem, TimelineSession } from '../types'
 import {
   CRAWL_CLASS,
   SESSION_CLASS,
@@ -16,7 +17,6 @@ export function CrawlPage() {
   const {
     crawl,
     status,
-    history,
     stale,
     fetchError,
     requestingStart,
@@ -24,6 +24,7 @@ export function CrawlPage() {
     startCrawl,
     requestLogout,
   } = useSessionStatus()
+  const timeline = useTimeline({ limit: 10, eventLimit: 30 })
   const profiles = useCrawlProfiles()
   const [reportLimit, setReportLimit] = useState(5)
   const [debugMode, setDebugMode] = useState(false)
@@ -261,50 +262,169 @@ export function CrawlPage() {
       </section>
 
       <section className="panel history events">
-        <h2>크롤 이벤트</h2>
-        {!crawl.events || crawl.events.length === 0 ? (
-          <p className="empty">이벤트가 없습니다.</p>
+        <h2>활동 타임라인</h2>
+        <p className="section-note" style={{ marginTop: 0 }}>
+          로그인 세션 단위로 묶입니다. 카드를 누르면 그 세션의 로그인·크롤
+          이벤트를 봅니다.
+        </p>
+        {timeline.error ? <p className="warn">{timeline.error}</p> : null}
+        {timeline.loading && timeline.sessions.length === 0 ? (
+          <p className="empty">불러오는 중…</p>
+        ) : timeline.sessions.length === 0 ? (
+          <p className="empty">세션이 없습니다.</p>
         ) : (
-          <ul>
-            {crawl.events.map((item: CrawlEvent) => (
-              <li key={item.id} className={`event-level-${item.level}`}>
-                <div className="history-main">
-                  <span className="history-label">
-                    {item.stage || '—'}/{item.event}
-                  </span>
-                  <span className="history-user">{item.level}</span>
-                </div>
-                <div className="history-meta">
-                  {formatTime(item.at)}
-                  {formatEventDetail(item.detail)
-                    ? ` · ${formatEventDetail(item.detail)}`
-                    : ''}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="panel history">
-        <h2>로그인 이력</h2>
-        {history.length === 0 ? (
-          <p className="empty">이력이 없습니다.</p>
-        ) : (
-          <ul>
-            {history.map((item: SessionRecord) => (
-              <li key={item.id}>
-                <div className="history-main">
-                  <span className="history-label">{item.label}</span>
-                  <span className="history-user">{item.fnguide_user_id}</span>
-                </div>
-                <div className="history-meta">
-                  {formatTime(item.started_at)} ~ {formatTime(item.ended_at)}
-                  {item.end_reason_label ? ` · ${item.end_reason_label}` : ''}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="session-cards">
+              {timeline.sessions.map((sess: TimelineSession) => {
+                const expanded = timeline.expandedId === sess.id
+                return (
+                  <div
+                    key={sess.id}
+                    className={`session-card${expanded ? ' expanded' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="session-card-head"
+                      onClick={() => timeline.setExpandedId(sess.id)}
+                    >
+                      <div className="history-main">
+                        <span className="history-label">{sess.label}</span>
+                        <span className="history-user">
+                          {sess.fnguide_user_id || '—'}
+                        </span>
+                      </div>
+                      <div className="history-meta">
+                        {formatTime(sess.started_at)} ~{' '}
+                        {formatTime(sess.ended_at)}
+                        {sess.end_reason_label
+                          ? ` · ${sess.end_reason_label}`
+                          : ''}
+                        {` · 이벤트 ${sess.event_count} · 크롤 ${sess.crawl_count}`}
+                      </div>
+                    </button>
+                    {expanded ? (
+                      <div className="session-card-body">
+                        {timeline.eventsError ? (
+                          <p className="warn">{timeline.eventsError}</p>
+                        ) : null}
+                        {timeline.eventsLoading &&
+                        timeline.events.length === 0 ? (
+                          <p className="empty">이벤트 불러오는 중…</p>
+                        ) : timeline.events.length === 0 ? (
+                          <p className="empty">이벤트가 없습니다.</p>
+                        ) : (
+                          <>
+                            <ul>
+                              {timeline.events.map((item: TimelineItem) => (
+                                <li
+                                  key={`${item.kind}-${item.id}`}
+                                  className={`event-level-${item.level || item.kind}`}
+                                >
+                                  <div className="history-main">
+                                    <span
+                                      className={`kind-pill kind-${item.kind}`}
+                                    >
+                                      {item.kind_label}
+                                    </span>
+                                    <span className="history-label">
+                                      {item.label}
+                                    </span>
+                                    {item.level ? (
+                                      <span className="history-user">
+                                        {item.level}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="history-meta">
+                                    {formatTime(item.at)}
+                                    {formatEventDetail(item.detail)
+                                      ? ` · ${formatEventDetail(item.detail)}`
+                                      : ''}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                            <div className="pager">
+                              <button
+                                type="button"
+                                className="run-btn"
+                                disabled={timeline.eventsOffset <= 0}
+                                onClick={() =>
+                                  timeline.setEventsOffset(
+                                    Math.max(
+                                      0,
+                                      timeline.eventsOffset -
+                                        timeline.eventsLimit,
+                                    ),
+                                  )
+                                }
+                              >
+                                이전
+                              </button>
+                              <span className="section-note">
+                                {timeline.eventsOffset + 1}–
+                                {Math.min(
+                                  timeline.eventsOffset + timeline.eventsLimit,
+                                  timeline.eventsTotal,
+                                )}{' '}
+                                / {timeline.eventsTotal}
+                              </span>
+                              <button
+                                type="button"
+                                className="run-btn"
+                                disabled={
+                                  timeline.eventsOffset +
+                                    timeline.eventsLimit >=
+                                  timeline.eventsTotal
+                                }
+                                onClick={() =>
+                                  timeline.setEventsOffset(
+                                    timeline.eventsOffset +
+                                      timeline.eventsLimit,
+                                  )
+                                }
+                              >
+                                다음
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="pager">
+              <button
+                type="button"
+                className="run-btn"
+                disabled={timeline.offset <= 0}
+                onClick={() =>
+                  timeline.setOffset(
+                    Math.max(0, timeline.offset - timeline.limit),
+                  )
+                }
+              >
+                이전
+              </button>
+              <span className="section-note">
+                {timeline.offset + 1}–
+                {Math.min(timeline.offset + timeline.limit, timeline.total)} /{' '}
+                {timeline.total}
+              </span>
+              <button
+                type="button"
+                className="run-btn"
+                disabled={timeline.offset + timeline.limit >= timeline.total}
+                onClick={() =>
+                  timeline.setOffset(timeline.offset + timeline.limit)
+                }
+              >
+                다음
+              </button>
+            </div>
+          </>
         )}
       </section>
     </>

@@ -113,6 +113,54 @@ export type CrawlResponse = {
 
 export type HistoryResponse = {
   items: SessionRecord[]
+  total?: number
+  limit?: number
+  offset?: number
+}
+
+export type TimelineKind = 'session' | 'crawl' | string
+
+export type TimelineItem = {
+  id: string
+  at: string | null
+  kind: TimelineKind
+  kind_label: string
+  event: string
+  stage?: string | null
+  level?: string | null
+  label: string
+  detail: Record<string, unknown>
+  ref_id?: string | null
+}
+
+export type TimelineSession = {
+  id: string
+  fnguide_user_id: string | null
+  started_at: string | null
+  ended_at: string | null
+  state: string
+  label: string
+  end_reason_label: string | null
+  event_count: number
+  crawl_count: number
+}
+
+export type TimelineResponse = {
+  ok?: boolean
+  items: TimelineSession[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type TimelineSessionEventsResponse = {
+  ok?: boolean
+  session_id?: string
+  items: TimelineItem[]
+  total: number
+  limit: number
+  offset: number
+  message?: string
 }
 
 export type ReportStatus =
