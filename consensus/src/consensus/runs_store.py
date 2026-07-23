@@ -19,7 +19,12 @@ DEFAULT_QUESTION = {
 
 
 def ensure_prompt_set(*, label: str, notes: str = "") -> str:
-    """Insert a prompt_set with placeholder stage rows (runtime uses code prompts)."""
+    """Create a prompt_set row for run FK / labeling only.
+
+    SSOT for prompt text is the consensus package modules (toc/compress/frame/fill),
+    not ``consensus_prompts`` rows. DB stage rows are placeholders so schema stays
+    ready for a future prompt-set editor; the worker never loads them.
+    """
     stages = (
         "toc",
         "local_compress",
@@ -29,6 +34,9 @@ def ensure_prompt_set(*, label: str, notes: str = "") -> str:
         "fill_plan",
         "fill",
     )
+    note = notes or (
+        "SSOT=consensus package code; DB prompts are placeholders (not loaded at runtime)"
+    )
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -36,7 +44,7 @@ def ensure_prompt_set(*, label: str, notes: str = "") -> str:
             VALUES (%s, %s)
             RETURNING id::text
             """,
-            (label, notes),
+            (label, note),
         )
         set_id = cur.fetchone()["id"]
         for stage in stages:
@@ -49,9 +57,9 @@ def ensure_prompt_set(*, label: str, notes: str = "") -> str:
                 (
                     set_id,
                     stage,
-                    f"[runtime] {stage} system — see consensus package code",
-                    f"[runtime] {stage} user — see consensus package code",
-                    json.dumps({"temperature": 0.2}),
+                    f"[SSOT=code] {stage} system — consensus package, not this row",
+                    f"[SSOT=code] {stage} user — consensus package, not this row",
+                    json.dumps({"temperature": 0.2, "ssot": "code"}),
                 ),
             )
         conn.commit()

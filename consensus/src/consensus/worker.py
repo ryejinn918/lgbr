@@ -302,6 +302,7 @@ async def run_pipeline(run_id: str) -> None:
                 question=question,
                 out_dir=consensus_dir,
                 model=model,
+                compress_cards=cards,
             )
             runs_store.save_output(
                 run_id, kind="fill_plan", body_json=plan_meta, body_md=None

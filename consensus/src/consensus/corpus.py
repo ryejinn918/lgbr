@@ -91,6 +91,53 @@ def front_pages_text(page_corpus: dict[str, Any], window: int = 8) -> str:
     return slice_from_pages(page_corpus, 1, end)["text"]
 
 
+def mechanical_slices(
+    page_corpus: dict[str, Any],
+    *,
+    pages_per_slice: int = 4,
+    max_chars: int = 24_000,
+) -> list[dict[str, Any]]:
+    """Page/char chunking when TOC is missing — keeps local_compress under truncate."""
+    total = page_corpus["total_pdf_pages"]
+    if total < 1:
+        return []
+
+    # Short docs: single whole slice is fine.
+    full = slice_from_pages(page_corpus, 1, total)
+    if total <= pages_per_slice and full["char_len"] <= max_chars:
+        return [
+            {
+                "slice_id": "whole",
+                "title": "whole_document",
+                "source": "mechanical_short",
+                **{k: full[k] for k in full if k != "text"},
+                "text": full["text"],
+            }
+        ]
+
+    slices: list[dict[str, Any]] = []
+    page = 1
+    idx = 1
+    while page <= total:
+        end = min(page + pages_per_slice - 1, total)
+        sl = slice_from_pages(page_corpus, page, end)
+        while end > page and sl["char_len"] > max_chars:
+            end -= 1
+            sl = slice_from_pages(page_corpus, page, end)
+        slices.append(
+            {
+                "slice_id": f"s{idx:02d}",
+                "title": f"pages_{page}-{end}",
+                "source": "mechanical",
+                **{k: sl[k] for k in sl if k != "text"},
+                "text": sl["text"],
+            }
+        )
+        idx += 1
+        page = end + 1
+    return slices
+
+
 def slices_from_toc(
     page_corpus: dict[str, Any],
     toc: dict[str, Any],
@@ -147,16 +194,7 @@ def slices_from_toc(
             )
 
     if not slices:
-        sl = slice_from_pages(page_corpus, 1, total)
-        slices.append(
-            {
-                "slice_id": "whole",
-                "title": "whole_document",
-                "source": "fallback",
-                **{k: sl[k] for k in sl if k != "text"},
-                "text": sl["text"],
-            }
-        )
+        slices = mechanical_slices(page_corpus)
     return slices
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,96 @@ def _keyword_hits(text: str, queries: list[str], window: int = 1600, max_hits: i
     return "\n\n----\n\n".join(chunks)
 
 
+def _slice_inventory(doc_dir: Path) -> list[str]:
+    inv = doc_dir / "01_inventory.json"
+    if inv.is_file():
+        try:
+            data = json.loads(inv.read_text(encoding="utf-8"))
+            ids = [
+                str(s.get("slice_id"))
+                for s in (data.get("slices") or [])
+                if s.get("slice_id")
+            ]
+            if ids:
+                return ids
+        except (json.JSONDecodeError, OSError):
+            pass
+    return sorted(p.stem for p in (doc_dir / "01_slices").glob("*.txt"))
+
+
+def _extract_reopen_section(compress_md: str) -> str:
+    """Pull the re-open candidates section from a report compress view."""
+    text = compress_md or ""
+    patterns = (
+        r"(?im)^##\s*.*(?:re-?open|본문을 더 열|Candidates to re-open).*$",
+        r"(?im)^##\s*.*후보.*$",
+    )
+    for pat in patterns:
+        m = re.search(pat, text)
+        if not m:
+            continue
+        start = m.start()
+        nxt = re.search(r"(?m)^##\s+", text[m.end() :])
+        end = m.end() + nxt.start() if nxt else len(text)
+        section = text[start:end].strip()
+        if len(section) > 40:
+            return section[:4000]
+    # Fallback: last ~2k of compress (re-open is usually near the end).
+    return text[-2000:] if text else "(no compress)"
+
+
+def _build_reopen_index(
+    compress_cards: list[dict[str, Any]],
+    slug_to_dir: dict[str, Path],
+) -> tuple[str, dict[str, list[str]]]:
+    """Return prompt block + slug→valid slice_ids map."""
+    slug_slices: dict[str, list[str]] = {}
+    blocks: list[str] = []
+    for card in compress_cards:
+        slug = str(card.get("slug") or "")
+        if not slug:
+            continue
+        doc_dir = slug_to_dir.get(slug) or Path(str(card.get("cache_dir") or ""))
+        ids = _slice_inventory(doc_dir) if doc_dir and doc_dir.is_dir() else []
+        if not ids and card.get("slice_count"):
+            ids = []
+        slug_slices[slug] = ids
+        reopen = _extract_reopen_section(str(card.get("compress") or ""))
+        blocks.append(
+            f"### INDEX slug={slug}\n"
+            f"valid_slice_ids: {json.dumps(ids, ensure_ascii=False)}\n"
+            f"{reopen}\n"
+        )
+    return "\n========\n".join(blocks), slug_slices
+
+
+def _resolve_slug(slug: str, slug_to_dir: dict[str, Path]) -> tuple[str | None, Path | None]:
+    if slug in slug_to_dir:
+        return slug, slug_to_dir[slug]
+    for k, d in slug_to_dir.items():
+        if slug and (slug in k or k in slug):
+            return k, d
+    return None, None
+
+
+def _coerce_slice_id(slice_id: str, valid: list[str]) -> str | None:
+    if not valid:
+        return None
+    sid = (slice_id or "").strip()
+    if sid in valid:
+        return sid
+    # Common mistake: plan emits whole when only s01.. exist.
+    if sid == "whole" and "whole" not in valid:
+        non_fm = [v for v in valid if v != "front_matter"]
+        return non_fm[0] if non_fm else valid[0]
+    # Prefix / fuzzy: s1 → s01
+    if re.fullmatch(r"s\d+", sid):
+        padded = f"s{int(sid[1:]):02d}"
+        if padded in valid:
+            return padded
+    return valid[0]
+
+
 def fill_frame(
     frame: str,
     slug_to_dir: dict[str, Path],
@@ -38,30 +129,52 @@ def fill_frame(
     question: str,
     out_dir: Path,
     model: str = DEFAULT_MODEL,
+    compress_cards: list[dict[str, Any]] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    slug_list = sorted(slug_to_dir)
+    cards = compress_cards or []
+    reopen_index, slug_slices = _build_reopen_index(cards, slug_to_dir)
+    if not reopen_index:
+        # Minimal index from dirs only (cache-hit path without cards).
+        parts = []
+        for slug, doc_dir in sorted(slug_to_dir.items()):
+            ids = _slice_inventory(doc_dir)
+            slug_slices[slug] = ids
+            parts.append(
+                f"### INDEX slug={slug}\n"
+                f"valid_slice_ids: {json.dumps(ids, ensure_ascii=False)}\n"
+            )
+        reopen_index = "\n========\n".join(parts)
+
+    (out_dir / "05_reopen_index.md").write_text(reopen_index, encoding="utf-8")
+
     plan_raw, _ = chat(
         [
             {
                 "role": "system",
-                "content": "Output JSON only. Plan body opens to fill frame slots.",
+                "content": (
+                    "Output JSON only. Plan body opens to fill frame slots. "
+                    "Use ONLY slugs and slice_ids listed in the reopen index. "
+                    "Prefer short verbatim keywords from the index candidates."
+                ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Question: {question}\n\nConsensus frame:\n{frame}\n\n"
-                    "To fill 'slots to fill later' and 'Body re-open priority', "
-                    "choose keywords to search in each report slice.\n"
-                    "Important: queries must be short proper nouns/keywords that may "
-                    "appear verbatim in the body — no long phrases or full sentences.\n"
+                    f"Question: {question}\n\n"
+                    f"Consensus frame:\n{frame}\n\n"
+                    "Reopen index (from report compress + real slice inventory).\n"
+                    "Rules:\n"
+                    "- slice_id MUST be one of that slug's valid_slice_ids "
+                    "(never invent whole/s05 if absent).\n"
+                    "- queries: 1–4 short tokens that may appear verbatim in the PDF "
+                    "body (proper nouns, tickers, numbers). Prefer keywords already "
+                    "listed in the index candidates. No long phrases.\n"
+                    "- Cover frame slots / body re-open priority.\n"
                     "JSON:\n"
-                    '{"opens":[{"slug":"...","slice_id":"s01|front_matter|whole",'
-                    '"queries":["RMAC","Atlas"],"slot":"pillar/slot name","why":"..."}]}\n'
-                    f"slug candidates: {slug_list}\n"
-                    "For each slug pick a plausible slice_id among "
-                    "front_matter/s01/s02/whole; use whole if unsure.\n"
-                    "Emit enough opens to cover the slots."
+                    '{"opens":[{"slug":"...","slice_id":"s01",'
+                    '"queries":["H54GV","684MW"],"slot":"pillar/slot","why":"..."}]}\n\n'
+                    f"## Reopen index\n{reopen_index}"
                 ),
             },
         ],
@@ -76,39 +189,55 @@ def fill_frame(
 
     dossiers: list[dict[str, Any]] = []
     for i, op in enumerate(opens, 1):
-        slug = (op.get("slug") or "").strip()
-        slice_id = (op.get("slice_id") or "whole").strip()
-        queries = op.get("queries") or []
-        doc_dir = slug_to_dir.get(slug)
-        if doc_dir is None:
-            for k, d in slug_to_dir.items():
-                if slug and (slug in k or k in slug):
-                    doc_dir = d
-                    slug = k
-                    break
-        if doc_dir is None:
+        raw_slug = (op.get("slug") or "").strip()
+        slug, doc_dir = _resolve_slug(raw_slug, slug_to_dir)
+        if doc_dir is None or slug is None:
             log(f"  skip open {i}: unknown slug={op.get('slug')}")
             continue
 
-        slice_path = doc_dir / "01_slices" / f"{slice_id}.txt"
+        valid = slug_slices.get(slug) or _slice_inventory(doc_dir)
+        coerced = _coerce_slice_id(str(op.get("slice_id") or ""), valid)
+        if not coerced:
+            log(f"  skip open {i}: no slices in {slug}")
+            continue
+        if coerced != (op.get("slice_id") or "").strip():
+            log(
+                f"  open {i}: slice coerce "
+                f"{op.get('slice_id')!r} → {coerced!r} valid={valid}"
+            )
+
+        slice_path = doc_dir / "01_slices" / f"{coerced}.txt"
         if not slice_path.is_file():
             candidates = sorted((doc_dir / "01_slices").glob("*.txt"))
             if not candidates:
-                log(f"  skip open {i}: no slices in {slug}")
+                log(f"  skip open {i}: missing file {slug}/{coerced}")
                 continue
-            whole = doc_dir / "01_slices" / "whole.txt"
-            slice_path = whole if whole.is_file() else candidates[0]
-            slice_id = slice_path.stem
-            log(f"  open {i}: slice fallback → {slice_id}")
+            slice_path = candidates[0]
+            coerced = slice_path.stem
+            log(f"  open {i}: slice file fallback → {coerced}")
+
+        queries = [str(q).strip() for q in (op.get("queries") or []) if str(q).strip()]
+        # Drop long phrase queries (>40 chars) — they almost never hit verbatim.
+        short_q = [q for q in queries if len(q) <= 40]
+        if not short_q and queries:
+            # Keep first token-ish chunks from long phrases.
+            for q in queries:
+                for part in re.split(r"[\s,/|]+", q):
+                    part = part.strip()
+                    if 2 <= len(part) <= 40:
+                        short_q.append(part)
+                if len(short_q) >= 4:
+                    break
+        queries = short_q[:6] or queries[:3]
 
         text = slice_path.read_text(encoding="utf-8")
         body = _keyword_hits(text, list(queries))
         hit_n = 0 if body.startswith("[no keyword hits]") else body.count("[hit ")
-        log(f"  open [{i}] {slug}/{slice_id} queries={queries} hits={hit_n}")
+        log(f"  open [{i}] {slug}/{coerced} queries={queries} hits={hit_n}")
         dossiers.append(
             {
                 "slug": slug,
-                "slice_id": slice_id,
+                "slice_id": coerced,
                 "slot": op.get("slot"),
                 "why": op.get("why"),
                 "queries": queries,
@@ -183,4 +312,10 @@ Output (English headers; Korean body OK for Korean sources):
     )
     (out_dir / "06_filled_frame.md").write_text(content, encoding="utf-8")
     log("fill DONE")
-    return content, {"plan": plan, "raw": plan_raw, "opens_used": len(chosen)}
+    return content, {
+        "plan": plan,
+        "raw": plan_raw,
+        "opens_used": len(chosen),
+        "opens_with_hits": len(with_hits),
+        "slug_slices": slug_slices,
+    }

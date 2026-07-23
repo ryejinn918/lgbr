@@ -432,6 +432,7 @@ def get_run_docs(run_id: str) -> dict[str, Any]:
 
 
 def _ensure_prompt_set(label: str) -> str:
+    """FK/label only — prompt SSOT is consensus package code (not these rows)."""
     stages = (
         "toc",
         "local_compress",
@@ -448,7 +449,10 @@ def _ensure_prompt_set(label: str) -> str:
             VALUES (%s, %s)
             RETURNING id::text
             """,
-            (label, "created by API start"),
+            (
+                label,
+                "SSOT=consensus package code; DB prompts are placeholders (not loaded)",
+            ),
         )
         set_id = cur.fetchone()["id"]
         for stage in stages:
@@ -461,8 +465,8 @@ def _ensure_prompt_set(label: str) -> str:
                 (
                     set_id,
                     stage,
-                    f"[runtime] {stage}",
-                    f"[runtime] {stage}",
+                    f"[SSOT=code] {stage} system — consensus package, not this row",
+                    f"[SSOT=code] {stage} user — consensus package, not this row",
                 ),
             )
         conn.commit()
