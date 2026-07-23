@@ -425,6 +425,64 @@ input {
   font-weight: 500;
 }
 
+.compare-export-root {
+  display: grid;
+  gap: 0.75rem;
+  background: var(--bg-bottom);
+}
+
+.compare-export-meta {
+  display: none;
+}
+
+.compare-export-brand {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.compare-export-root.is-exporting .compare-export-meta {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--panel) 88%, white);
+  border: 1px solid var(--line);
+}
+
+.compare-export-root.is-exporting .chat-log {
+  max-height: none;
+  overflow: visible;
+}
+
+.compare-export-root.is-exporting .col-compose,
+.compare-export-root.is-exporting .chat-hint,
+.compare-export-root.is-exporting .btn-copy {
+  display: none;
+}
+
+.bubble-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.btn-copy {
+  margin: 0;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.btn-copy:hover {
+  color: var(--ink);
+  border-color: var(--active);
+}
+
 .chat-log {
   display: grid;
   gap: 0.65rem;

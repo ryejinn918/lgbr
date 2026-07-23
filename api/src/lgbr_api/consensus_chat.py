@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -250,6 +251,122 @@ def _parse_tool_args(raw: Any) -> dict[str, Any]:
     return {}
 
 
+# DeepSeek sometimes emits tool calls as DSML text in `content` instead of
+# structured `tool_calls` (seen as <|DSML|…> with fullwidth bars ｜).
+_DSML_MARK = re.compile(r"<\s*[|｜]\s*DSML\s*[|｜]", re.IGNORECASE)
+_DSML_BLOCK = re.compile(
+    r"<\s*[|｜]\s*DSML\s*[|｜]\s*tool_calls\s*>"
+    r".*?"
+    r"<\s*/\s*[|｜]\s*DSML\s*[|｜]\s*tool_calls\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_DSML_INVOKE = re.compile(
+    r"<\s*[|｜]\s*DSML\s*[|｜]\s*invoke\s+name\s*=\s*[\"']([^\"']+)[\"']\s*>"
+    r"(.*?)"
+    r"<\s*/\s*[|｜]\s*DSML\s*[|｜]\s*invoke\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_DSML_PARAM = re.compile(
+    r"<\s*[|｜]\s*DSML\s*[|｜]\s*parameter\s+name\s*=\s*[\"']([^\"']+)[\"'][^>]*>"
+    r"(.*?)"
+    r"<\s*/\s*[|｜]\s*DSML\s*[|｜]\s*parameter\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _content_has_dsml(text: str) -> bool:
+    return bool(text and _DSML_MARK.search(text))
+
+
+def _strip_dsml(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = _DSML_BLOCK.sub("", text)
+    # Drop leftover partial tags if any.
+    cleaned = re.sub(
+        r"<\s*/?\s*[|｜]\s*DSML\s*[|｜][^>]*>",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    return cleaned.strip()
+
+
+def _tool_calls_from_dsml(content: str) -> list[dict[str, Any]]:
+    """Parse DSML tool markup into OpenAI-style tool_calls."""
+    if not content or not _content_has_dsml(content):
+        return []
+    out: list[dict[str, Any]] = []
+    for i, m in enumerate(_DSML_INVOKE.finditer(content)):
+        name = (m.group(1) or "").strip()
+        body = m.group(2) or ""
+        args: dict[str, Any] = {}
+        for pm in _DSML_PARAM.finditer(body):
+            key = (pm.group(1) or "").strip()
+            val = (pm.group(2) or "").strip()
+            if key:
+                args[key] = val
+        if not name:
+            continue
+        out.append(
+            {
+                "id": f"dsml_{i}_{name}",
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": json.dumps(args, ensure_ascii=False),
+                },
+            }
+        )
+    return out
+
+
+def _normalize_assistant_tools(
+    msg: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str]:
+    """Return (tool_calls, prose_content) handling DSML-in-content fallbacks."""
+    tool_calls = list(msg.get("tool_calls") or [])
+    content = str(msg.get("content") or "")
+    if not tool_calls:
+        tool_calls = _tool_calls_from_dsml(content)
+    prose = _strip_dsml(content).strip()
+    return tool_calls, prose
+
+
+class _DsmlStreamFilter:
+    """Strip DSML tool markup from streamed answer deltas."""
+
+    def __init__(self) -> None:
+        self._buf = ""
+
+    def feed(self, piece: str) -> str:
+        if not piece:
+            return ""
+        self._buf += piece
+        if not _content_has_dsml(self._buf) and "<" not in self._buf[-12:]:
+            out = self._buf
+            self._buf = ""
+            return out
+        # Hold back if an open DSML/tag might still be arriving.
+        if re.search(r"<\s*[|｜]?\s*D?S?M?L?\s*[|｜]?\s*$", self._buf[-24:]):
+            return ""
+        if _DSML_MARK.search(self._buf) and not _DSML_BLOCK.search(self._buf):
+            # Incomplete block — wait for more chunks (cap buffer).
+            if len(self._buf) < 8000:
+                return ""
+        cleaned = _strip_dsml(self._buf)
+        # If strip removed everything but buffer still growing mid-block, hold.
+        if not cleaned and _content_has_dsml(self._buf):
+            return ""
+        self._buf = ""
+        return cleaned
+
+    def flush(self) -> str:
+        out = _strip_dsml(self._buf)
+        self._buf = ""
+        return out
+
+
 def iter_compare_chat_sse(
     *,
     mode: str,
@@ -271,14 +388,16 @@ def iter_compare_chat_sse(
         yield _sse("error", {"message": err})
         return
 
-    chain: list[dict[str, Any]] = list(sys_msgs) + [
+    user_chain: list[dict[str, Any]] = [
         m for m in clean if m["role"] != "system"
     ]
+    chain: list[dict[str, Any]] = list(sys_msgs) + list(user_chain)
 
     try:
         yield _sse("status", {"phase": "planning"})
         used_tools = False
         early_answer: str | None = None
+        collected_searches: list[tuple[str, list[dict[str, str]]]] = []
 
         for _round in range(MAX_TOOL_ROUNDS):
             with _or_chat(
@@ -296,24 +415,36 @@ def iter_compare_chat_sse(
                 yield _sse("error", {"message": "empty choices"})
                 return
             msg = choices[0].get("message") or {}
-            tool_calls = msg.get("tool_calls") or []
-            content = (msg.get("content") or "").strip()
+            native_tools = bool(msg.get("tool_calls"))
+            tool_calls, prose = _normalize_assistant_tools(msg)
 
             if not tool_calls:
-                if not used_tools and content:
-                    # No search needed — reuse this completion (avoid a second call).
-                    early_answer = content
+                if prose:
+                    early_answer = prose
                 break
 
             used_tools = True
             yield _sse("status", {"phase": "search"})
-            chain.append(
-                {
-                    "role": "assistant",
-                    "content": msg.get("content"),
-                    "tool_calls": tool_calls,
-                }
-            )
+
+            # DeepSeek often emits tools as DSML text. Keep those off the
+            # OpenAI tool_calls protocol so the model can leave tool-mode later.
+            if native_tools:
+                chain.append(
+                    {
+                        "role": "assistant",
+                        "content": prose or None,
+                        "tool_calls": tool_calls,
+                    }
+                )
+            else:
+                chain.append(
+                    {
+                        "role": "assistant",
+                        "content": prose or "(web_search)",
+                    }
+                )
+
+            result_blobs: list[str] = []
             for tc in tool_calls:
                 fn = (tc.get("function") or {}) if isinstance(tc, dict) else {}
                 name = str(fn.get("name") or "")
@@ -328,6 +459,7 @@ def iter_compare_chat_sse(
                     try:
                         results = web_search(query)
                         tool_payload = {"query": query, "results": results}
+                        collected_searches.append((query, results))
                     except Exception as exc:
                         yield _sse(
                             "error", {"message": f"web_search failed: {exc}"}
@@ -337,22 +469,66 @@ def iter_compare_chat_sse(
                     "tool",
                     {"name": "web_search", "query": query, "results": results},
                 )
+                blob = json.dumps(tool_payload, ensure_ascii=False)
+                result_blobs.append(blob)
+                if native_tools:
+                    chain.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "content": blob,
+                        }
+                    )
+
+            if not native_tools and result_blobs:
                 chain.append(
                     {
-                        "role": "tool",
-                        "tool_call_id": tc_id,
-                        "content": json.dumps(tool_payload, ensure_ascii=False),
+                        "role": "user",
+                        "content": (
+                            "web_search 결과:\n"
+                            + "\n\n".join(result_blobs)
+                            + "\n\n추가 검색이 필요하면 web_search를 다시 호출하고, "
+                            "충분하면 최종 답변을 작성하세요."
+                        ),
                     }
                 )
 
         yield _sse("status", {"phase": "answer", "searched": used_tools})
-        if early_answer is not None:
-            # Soft-stream in chunks for UI parity.
+        if early_answer is not None and not used_tools:
             step = 48
             for i in range(0, len(early_answer), step):
                 yield _sse("delta", {"text": early_answer[i : i + step]})
         else:
-            with _or_chat(chain, model=use_model, tools=None, stream=True) as resp:
+            # Fresh text-only chain: prior tool_calls poison DeepSeek into
+            # emitting more tool deltas with empty content.
+            answer_chain: list[dict[str, Any]] = list(sys_msgs) + list(user_chain)
+            if collected_searches:
+                blocks = []
+                for query, results in collected_searches:
+                    blocks.append(
+                        f"### web_search: {query}\n"
+                        + json.dumps(results, ensure_ascii=False)
+                    )
+                answer_chain.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "아래는 방금 수행한 웹검색 결과입니다. "
+                            "도구를 다시 호출하지 말고, 이 결과와 주어진 컨텍스트만으로 "
+                            "최종 답변을 한국어로 작성하세요.\n\n"
+                            + "\n\n".join(blocks)
+                        ),
+                    }
+                )
+            elif early_answer:
+                # Had prose after tools somehow — still prefer rewrite on clean chain.
+                pass
+
+            answer_text = ""
+            filt = _DsmlStreamFilter()
+            with _or_chat(
+                answer_chain, model=use_model, tools=None, stream=True
+            ) as resp:
                 while True:
                     line = resp.readline()
                     if not line:
@@ -379,8 +555,51 @@ def iter_compare_chat_sse(
                         return
                     ch0 = (chunk.get("choices") or [{}])[0]
                     piece = (ch0.get("delta") or {}).get("content") or ""
-                    if piece:
-                        yield _sse("delta", {"text": piece})
+                    safe = filt.feed(piece)
+                    if safe:
+                        answer_text += safe
+                        yield _sse("delta", {"text": safe})
+            tail = filt.flush()
+            if tail:
+                answer_text += tail
+                yield _sse("delta", {"text": tail})
+
+            if not answer_text.strip():
+                # Non-stream fallback if the model only emitted tool deltas.
+                with _or_chat(
+                    answer_chain
+                    + [
+                        {
+                            "role": "user",
+                            "content": "도구 호출 없이 최종 답변 본문만 출력하세요.",
+                        }
+                    ],
+                    model=use_model,
+                    tools=None,
+                    stream=False,
+                ) as resp:
+                    data = json.loads(resp.read().decode())
+                if data.get("error"):
+                    yield _sse(
+                        "error",
+                        {
+                            "message": json.dumps(
+                                data["error"], ensure_ascii=False
+                            )
+                        },
+                    )
+                    return
+                msg = ((data.get("choices") or [{}])[0].get("message") or {})
+                fallback = _strip_dsml(str(msg.get("content") or "")).strip()
+                if not fallback:
+                    yield _sse(
+                        "error",
+                        {"message": "model returned empty answer after search"},
+                    )
+                    return
+                step = 48
+                for i in range(0, len(fallback), step):
+                    yield _sse("delta", {"text": fallback[i : i + step]})
 
         yield _sse(
             "done",

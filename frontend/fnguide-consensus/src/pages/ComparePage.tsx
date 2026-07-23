@@ -1,16 +1,13 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toPng } from 'html-to-image'
 import { Link, useSearchParams } from 'react-router-dom'
-import {
-  compareReducer,
-  initialCompareState,
-  prepareSend,
-  type ColumnState,
-  type Mode,
-} from '../compare/compareState'
+import { useCompareStore } from '../compare/CompareStore'
+import { prepareSend, type ColumnState, type Mode } from '../compare/compareState'
 import { Markdown } from '../components/Markdown'
 import { readChatSse } from '../lib/chatStream'
 import { formatTime } from '../lib/format'
 import {
+  APP_BRAND,
   CHAT_MODE,
   CHAT_ROLE,
   FRAME_TAB,
@@ -28,12 +25,23 @@ function parseTheme(raw: string | null): ConsensusTheme {
   return 'datacenter'
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+function exportStamp(): string {
+  const d = new Date()
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`
+}
+
 export function ComparePage() {
   const [params, setParams] = useSearchParams()
   const theme = parseTheme(params.get('theme'))
-  const [state, dispatch] = useReducer(compareReducer, undefined, initialCompareState)
+  const { state, dispatch } = useCompareStore(theme)
   const { plain, grounded, sharedDraft, frameTab, latest } = state
   const { run, filled, consensus, error: frameError } = latest
+  const exportRef = useRef<HTMLDivElement>(null)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -61,11 +69,10 @@ export function ComparePage() {
     return () => {
       cancelled = true
     }
-  }, [theme])
+  }, [theme, dispatch])
 
   function setTheme(next: ConsensusTheme) {
     setParams({ theme: next }, { replace: true })
-    dispatch({ type: 'theme_reset' })
   }
 
   async function runStream(
@@ -181,7 +188,36 @@ export function ComparePage() {
     await Promise.all(jobs)
   }
 
+  async function exportPng() {
+    const node = exportRef.current
+    if (!node) return
+    setExporting(true)
+    try {
+      // Wait for React paint so .is-exporting expands chat logs.
+      await new Promise<void>((r) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => r()))
+      })
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: '#f7f9fb',
+      })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `compare-${theme}-${exportStamp()}.png`
+      a.click()
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : '이미지 내보내기에 실패했습니다.',
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const frameBody = frameTab === 'filled' ? filled : consensus
+  const hasAnyMessages =
+    plain.messages.length > 0 || grounded.messages.length > 0
 
   return (
     <>
@@ -190,7 +226,7 @@ export function ComparePage() {
         <p className="lede">
           왼쪽이 {CHAT_MODE.grounded}({CHAT_ROLE.ours}), 오른쪽이{' '}
           {CHAT_MODE.plain}({CHAT_ROLE.control})입니다. 열마다 다른 질문·이어
-          묻기도 가능합니다.
+          묻기도 가능합니다. 섹터별 대화는 탭을 옮겨도 유지됩니다.
         </p>
       </header>
 
@@ -250,6 +286,14 @@ export function ComparePage() {
           <button
             type="button"
             className="btn ghost"
+            disabled={!hasAnyMessages || exporting}
+            onClick={() => void exportPng()}
+          >
+            {exporting ? '내보내는 중…' : '이미지로 내보내기'}
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
             onClick={() => dispatch({ type: 'clear_chats' })}
           >
             대화 초기화
@@ -287,30 +331,47 @@ export function ComparePage() {
         )}
       </section>
 
-      <section className="compare-grid">
-        <ChatColumn
-          variant="ours"
-          eyebrow={CHAT_ROLE.ours}
-          title={CHAT_MODE.grounded}
-          hint="최신 상세 논지를 참고합니다."
-          column={grounded}
-          onInput={(v) =>
-            dispatch({ type: 'set_input', mode: 'grounded', value: v })
-          }
-          onSend={() => void sendColumn('grounded')}
-          sendDisabled={grounded.loading || !grounded.input.trim() || !run}
-        />
-        <ChatColumn
-          variant="control"
-          eyebrow={CHAT_ROLE.control}
-          title={CHAT_MODE.plain}
-          hint="웹검색만 사용. 섹터 논지는 보지 않습니다."
-          column={plain}
-          onInput={(v) => dispatch({ type: 'set_input', mode: 'plain', value: v })}
-          onSend={() => void sendColumn('plain')}
-          sendDisabled={plain.loading || !plain.input.trim()}
-        />
-      </section>
+      <div
+        ref={exportRef}
+        className={`compare-export-root${exporting ? ' is-exporting' : ''}`}
+      >
+        <div className="compare-export-meta">
+          <p className="compare-export-brand">
+            {APP_BRAND} · {THEME_LABEL[theme]}
+          </p>
+          <p className="section-note">
+            {run
+              ? `${run.asset_id} · ${formatTime(run.ended_at)} · ${run.question}`
+              : '완료된 실행 없음'}
+          </p>
+        </div>
+        <section className="compare-grid">
+          <ChatColumn
+            variant="ours"
+            eyebrow={CHAT_ROLE.ours}
+            title={CHAT_MODE.grounded}
+            hint="최신 상세 논지를 참고합니다."
+            column={grounded}
+            onInput={(v) =>
+              dispatch({ type: 'set_input', mode: 'grounded', value: v })
+            }
+            onSend={() => void sendColumn('grounded')}
+            sendDisabled={grounded.loading || !grounded.input.trim() || !run}
+          />
+          <ChatColumn
+            variant="control"
+            eyebrow={CHAT_ROLE.control}
+            title={CHAT_MODE.plain}
+            hint="웹검색만 사용. 섹터 논지는 보지 않습니다."
+            column={plain}
+            onInput={(v) =>
+              dispatch({ type: 'set_input', mode: 'plain', value: v })
+            }
+            onSend={() => void sendColumn('plain')}
+            sendDisabled={plain.loading || !plain.input.trim()}
+          />
+        </section>
+      </div>
     </>
   )
 }
@@ -338,14 +399,21 @@ function ChatColumn({
     <div className={`panel chat-col ${variant}`}>
       <p className="chat-eyebrow">{eyebrow}</p>
       <h2>{title}</h2>
-      <p className="section-note">{hint}</p>
+      <p className="section-note chat-hint">{hint}</p>
       <div className="chat-log">
         {column.messages.length === 0 && (
           <p className="section-note">아직 메시지 없음</p>
         )}
         {column.messages.map((m, i) => (
           <div key={m.turnId ?? `m-${i}`} className={`bubble role-${m.role}`}>
-            <p className="bubble-role">{labelRole(m.role)}</p>
+            <div className="bubble-head">
+              <p className="bubble-role">{labelRole(m.role)}</p>
+              {m.role === 'assistant' &&
+                !m.streaming &&
+                m.content.trim() && (
+                  <CopyAnswerButton text={m.content} />
+                )}
+            </div>
             {m.tools && m.tools.length > 0 && (
               <ul className="tool-list">
                 {m.tools.map((t, j) => (
@@ -402,5 +470,25 @@ function ChatColumn({
         </button>
       </div>
     </div>
+  )
+}
+
+function CopyAnswerButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function onCopy() {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      window.alert('클립보드에 복사하지 못했습니다.')
+    }
+  }
+
+  return (
+    <button type="button" className="btn-copy" onClick={() => void onCopy()}>
+      {copied ? '복사됨' : '복사'}
+    </button>
   )
 }
