@@ -52,6 +52,7 @@ export default defineConfig(({ mode }) => {
   const localEnv = loadEnv(mode, __dirname, '')
   const env = { ...rootEnv, ...localEnv }
 
+  const apiKey = env.LGBR_API_KEY || ''
   const uiUser = env.LGBR_UI_USER || 'lgbr'
   const uiPassword = env.LGBR_UI_PASSWORD || ''
 
@@ -64,6 +65,14 @@ export default defineConfig(({ mode }) => {
     )
   }
 
+  const apiProxy = {
+    '/api': {
+      target: 'http://127.0.0.1:8787',
+      changeOrigin: true,
+      headers: apiKey ? { 'X-API-Key': apiKey } : {},
+    },
+  } as const
+
   return {
     plugins,
     server: {
@@ -71,12 +80,14 @@ export default defineConfig(({ mode }) => {
       port: 8001,
       strictPort: true,
       allowedHosts: ['lgbrwsl.tail700203.ts.net'],
+      proxy: apiProxy,
     },
     preview: {
       host: '127.0.0.1',
       port: 8001,
       strictPort: true,
       allowedHosts: ['lgbrwsl.tail700203.ts.net'],
+      proxy: apiProxy,
     },
   }
 })

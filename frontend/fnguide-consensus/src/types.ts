@@ -1,0 +1,84 @@
+export type ConsensusTheme = 'datacenter' | 'ai' | 'physical_ai'
+
+export type ConsensusState =
+  | 'idle'
+  | 'starting'
+  | 'active'
+  | 'stopping'
+  | 'ended'
+  | 'error'
+
+export type ConsensusRun = {
+  id: string
+  asset_id: string
+  theme: ConsensusTheme
+  question: string
+  model: string
+  state: ConsensusState
+  label: string
+  progress: Record<string, unknown>
+  message?: string | null
+  pid?: number | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at?: string | null
+}
+
+export type ConsensusEvent = {
+  id: string
+  run_id: string
+  at: string | null
+  level: string
+  stage: string
+  event: string
+  detail: Record<string, unknown>
+}
+
+export type ConsensusStatusResponse = {
+  ok: boolean
+  label: string
+  state: ConsensusState
+  run: ConsensusRun | null
+  progress: Record<string, unknown>
+  events: ConsensusEvent[]
+  can_start: boolean
+  message?: string | null
+}
+
+export type InputReport = {
+  id: string
+  source_key: string
+  title: string
+  provider?: string | null
+  page_count?: number | null
+  published_at?: string | null
+  quality_pass?: boolean | null
+  quality_scope?: string | null
+  will_select: boolean
+}
+
+export type ChatMessage = {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+export const THEME_LABEL: Record<ConsensusTheme, string> = {
+  datacenter: '데이터센터',
+  ai: 'AI',
+  physical_ai: 'Physical AI',
+}
+
+export const DEFAULT_QUESTION: Record<ConsensusTheme, string> = {
+  datacenter: '데이터센터, 지금 뭐 보면 돼?',
+  ai: 'AI, 지금 뭐 보면 돼?',
+  physical_ai: 'Physical AI, 지금 뭐 보면 돼?',
+}
+
+export const STATE_CLASS: Record<ConsensusState, string> = {
+  idle: 'idle',
+  starting: 'busy',
+  active: 'active',
+  stopping: 'busy',
+  ended: 'idle',
+  error: 'danger',
+}

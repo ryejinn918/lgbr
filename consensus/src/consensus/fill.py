@@ -50,17 +50,18 @@ def fill_frame(
             {
                 "role": "user",
                 "content": (
-                    f"질문: {question}\n\n컨센서스 프레임:\n{frame}\n\n"
-                    "프레임의 '나중에 채울 슬롯'과 '본문 재조사 우선순위'를 채우기 위해 "
-                    "각 리포트 슬라이스에서 찾을 키워드를 정해라.\n"
-                    "중요: queries는 문장/긴 구절 금지. 본문에 그대로 있을 짧은 고유명사·키워드만.\n"
+                    f"Question: {question}\n\nConsensus frame:\n{frame}\n\n"
+                    "To fill 'slots to fill later' and 'Body re-open priority', "
+                    "choose keywords to search in each report slice.\n"
+                    "Important: queries must be short proper nouns/keywords that may "
+                    "appear verbatim in the body — no long phrases or full sentences.\n"
                     "JSON:\n"
                     '{"opens":[{"slug":"...","slice_id":"s01|front_matter|whole",'
-                    '"queries":["RMAC","Atlas"],"slot":"칸 이름/슬롯","why":"..."}]}\n'
-                    f"slug 후보: {slug_list}\n"
-                    "각 slug의 slice_id는 front_matter/s01/s02/whole 중 그럴듯한 것을 쓰고, "
-                    "없으면 whole를 써라.\n"
-                    "슬롯을 커버할 만큼 opens를 잡아라."
+                    '"queries":["RMAC","Atlas"],"slot":"pillar/slot name","why":"..."}]}\n'
+                    f"slug candidates: {slug_list}\n"
+                    "For each slug pick a plausible slice_id among "
+                    "front_matter/s01/s02/whole; use whole if unsure.\n"
+                    "Emit enough opens to cover the slots."
                 ),
             },
         ],
@@ -130,36 +131,37 @@ def fill_frame(
         f"### OPEN {d['slug']}/{d['slice_id']} | slot={d['slot']} | why={d['why']}\n{d['body']}"
         for d in chosen
     )
-    prompt = f"""잠긴 컨센서스 큰 틀은 유지하고, 아래 OPEN 조각에 **실제로 나온 문장·수치만**으로 칸을 두껍게 채워라.
-큰 칸 제목/지붕을 바꾸지 마라.
-OPEN에 없는 수치·기업 사실·가격을 절대 만들지 마라. 없으면 '아직 빈 슬롯'에 넣어라.
-출처로 slug를 근거에 붙여라.
+    prompt = f"""Keep the locked consensus frame. Thicken pillars using **only**
+sentences/numbers that actually appear in the OPEN excerpts below.
+Do not rename roof/pillar titles.
+Never invent numbers, company facts, or prices missing from OPEN; put gaps under empty slots.
+Cite slug in evidence.
 
-질문: {question}
+Question: {question}
 
-## 잠긴 큰 틀
+## Locked frame
 {frame}
 
-## 본문에서 연 조각
+## Opened body excerpts
 {dossier_txt}
 
-출력:
-# 보강된 프레임 (큰 틀 유지)
+Output (English headers; Korean body OK for Korean sources):
+# Filled frame (structure preserved)
 
-## 지붕
-(틀과 동일 취지)
+## Roof
+(same intent as locked frame)
 
-## 칸별 보강
-### 1. (기존 칸 제목)
-- **주장**
-- **근거(수치·시점·출처 slug)**
-- **추적**
-(두껍게)
+## Pillar enrichment
+### 1. (existing pillar title)
+- **Claim**
+- **Evidence (number / date / slug)**
+- **Watch**
+(dense)
 
-## 아직 빈 슬롯 (웹/다른 소스로 넘길 것)
-- 문헌에서 못 채운 항목만. 각 항목에 다음에 쓸 질의 후보 한 줄.
+## Still-empty slots (defer to web/other sources)
+- Only items not filled from literature. One follow-up query candidate each.
 
-## 참고 리포트
+## Reference reports
 ...
 """
     content, _ = chat(
@@ -168,7 +170,8 @@ OPEN에 없는 수치·기업 사실·가격을 절대 만들지 마라. 없으�
                 "role": "system",
                 "content": (
                     "Enrich a locked consensus frame with opened report bodies. "
-                    "Keep roof/pillars. Grow density. Korean. No invented facts."
+                    "Keep roof/pillars. Grow density. No invented facts. "
+                    "English headers; Korean body when sources are Korean."
                 ),
             },
             {"role": "user", "content": prompt},

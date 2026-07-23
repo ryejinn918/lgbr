@@ -1,0 +1,748 @@
+"""Consensus run status, start, inputs, outputs, and compare-chat API."""
+
+from __future__ import annotations
+
+import json
+import os
+import secrets
+import subprocess
+import sys
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from lgbr_api.db import connect, load_database_env
+
+ROOT = Path(__file__).resolve().parents[3]
+CONSENSUS_LOG = ROOT / ".consensus" / "consensus.log"
+DEFAULT_EVENT_LIMIT = 50
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+_SEOUL = ZoneInfo("Asia/Seoul")
+
+THEMES = frozenset({"datacenter", "ai", "physical_ai"})
+THEME_ABBREV = {"datacenter": "dc", "ai": "ai", "physical_ai": "pai"}
+DEFAULT_QUESTION = {
+    "datacenter": "데이터센터, 지금 뭐 보면 돼?",
+    "ai": "AI, 지금 뭐 보면 돼?",
+    "physical_ai": "Physical AI, 지금 뭐 보면 돼?",
+}
+STATE_LABELS = {
+    "starting": "시작 중",
+    "active": "실행 중",
+    "stopping": "종료 중",
+    "ended": "종료",
+    "error": "오류",
+    "idle": "대기",
+}
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _pid_alive(pid: int | None) -> bool:
+    if pid is None or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _make_asset_id(theme: str) -> str:
+    abbrev = THEME_ABBREV[theme]
+    day = datetime.now(_SEOUL).strftime("%y%m%d")
+    return f"cs-{abbrev}-{day}-{secrets.token_hex(3)}"
+
+
+def _serialize_run(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    state = str(row.get("state") or "idle")
+    progress = row.get("progress") or {}
+    if isinstance(progress, str):
+        try:
+            progress = json.loads(progress)
+        except json.JSONDecodeError:
+            progress = {}
+    return {
+        "id": str(row["id"]),
+        "asset_id": row.get("asset_id"),
+        "theme": row.get("theme"),
+        "question": row.get("question"),
+        "model": row.get("model"),
+        "state": state,
+        "label": STATE_LABELS.get(state, state),
+        "progress": progress,
+        "message": row.get("message"),
+        "pid": row.get("pid"),
+        "started_at": row["started_at"].isoformat() if row.get("started_at") else None,
+        "ended_at": row["ended_at"].isoformat() if row.get("ended_at") else None,
+        "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+        "stop_requested_at": (
+            row["stop_requested_at"].isoformat()
+            if row.get("stop_requested_at")
+            else None
+        ),
+    }
+
+
+def reconcile_stale_runs() -> None:
+    now = _now()
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, pid, state, started_at
+            FROM consensus_runs
+            WHERE ended_at IS NULL
+            """
+        )
+        for row in cur.fetchall():
+            pid = row.get("pid")
+            if pid is None:
+                started = row.get("started_at")
+                age = 9999.0
+                if isinstance(started, datetime):
+                    age = (now - started.astimezone(timezone.utc)).total_seconds()
+                if row.get("state") == "starting" and age < 60:
+                    continue
+                message = "consensus worker never claimed pid"
+            elif _pid_alive(int(pid)):
+                continue
+            else:
+                message = f"consensus worker pid {pid} is dead"
+            cur.execute(
+                """
+                UPDATE consensus_runs
+                SET state = 'error', ended_at = %s,
+                    message = COALESCE(message, %s)
+                WHERE id = %s AND ended_at IS NULL
+                """,
+                (now, message, row["id"]),
+            )
+        conn.commit()
+
+
+def _get_open_row() -> dict[str, Any] | None:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT * FROM consensus_runs
+            WHERE ended_at IS NULL
+            ORDER BY started_at DESC
+            LIMIT 1
+            """
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def _get_run_row(run_id: str | None) -> dict[str, Any] | None:
+    with connect() as conn, conn.cursor() as cur:
+        if run_id:
+            cur.execute("SELECT * FROM consensus_runs WHERE id = %s::uuid", (run_id,))
+        else:
+            cur.execute(
+                """
+                SELECT * FROM consensus_runs
+                ORDER BY COALESCE(ended_at, started_at) DESC NULLS LAST
+                LIMIT 1
+                """
+            )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_events(run_id: str | None = None, *, limit: int = DEFAULT_EVENT_LIMIT) -> dict:
+    limit = max(1, min(int(limit), 200))
+    with connect() as conn, conn.cursor() as cur:
+        if not run_id:
+            cur.execute(
+                """
+                SELECT id::text FROM consensus_runs
+                ORDER BY started_at DESC LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"ok": True, "items": [], "run_id": None}
+            run_id = row["id"]
+        cur.execute(
+            """
+            SELECT id::text, run_id::text, at, level, stage, event, detail
+            FROM consensus_run_events
+            WHERE run_id = %s::uuid
+            ORDER BY at DESC
+            LIMIT %s
+            """,
+            (run_id, limit),
+        )
+        items = []
+        for r in cur.fetchall():
+            detail = r.get("detail") or {}
+            items.append(
+                {
+                    "id": r["id"],
+                    "run_id": r["run_id"],
+                    "at": r["at"].isoformat() if r.get("at") else None,
+                    "level": r["level"],
+                    "stage": r["stage"],
+                    "event": r["event"],
+                    "detail": detail,
+                }
+            )
+    return {"ok": True, "items": items, "run_id": run_id}
+
+
+def get_current_run(
+    *, run_id: str | None = None, event_limit: int = DEFAULT_EVENT_LIMIT
+) -> dict[str, Any]:
+    reconcile_stale_runs()
+    open_row = _get_open_row()
+    row = _get_run_row(run_id) if run_id else (open_row or _get_run_row(None))
+    run = _serialize_run(row)
+    events = list_events(run["id"] if run else None, limit=event_limit)
+    can_start = open_row is None
+    state = run["state"] if run else "idle"
+    return {
+        "ok": True,
+        "label": STATE_LABELS.get(state, state),
+        "state": state,
+        "run": run,
+        "progress": (run or {}).get("progress") or {},
+        "events": events.get("items") or [],
+        "can_start": can_start,
+        "message": (run or {}).get("message"),
+    }
+
+
+def list_history(*, limit: int = 30, theme: str | None = None) -> dict[str, Any]:
+    limit = max(1, min(int(limit), 100))
+    if theme is not None and theme not in THEMES:
+        return {"ok": False, "status": 400, "message": "invalid theme", "items": []}
+    with connect() as conn, conn.cursor() as cur:
+        if theme:
+            cur.execute(
+                """
+                SELECT id, asset_id, theme, question, model, state, message,
+                       started_at, ended_at
+                FROM consensus_runs
+                WHERE theme = %s
+                ORDER BY COALESCE(ended_at, started_at) DESC NULLS LAST
+                LIMIT %s
+                """,
+                (theme, limit),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id, asset_id, theme, question, model, state, message,
+                       started_at, ended_at
+                FROM consensus_runs
+                ORDER BY COALESCE(ended_at, started_at) DESC NULLS LAST
+                LIMIT %s
+                """,
+                (limit,),
+            )
+        items = [_serialize_run(dict(r)) for r in cur.fetchall()]
+    return {"ok": True, "items": items, "theme": theme}
+
+
+def get_latest_ended(*, theme: str) -> dict[str, Any]:
+    """Latest ended run for a theme, including frame markdown bodies."""
+    if theme not in THEMES:
+        return {"ok": False, "status": 400, "message": "invalid theme", "run": None}
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT *
+            FROM consensus_runs
+            WHERE theme = %s AND state = 'ended'
+            ORDER BY COALESCE(ended_at, started_at) DESC NULLS LAST
+            LIMIT 1
+            """,
+            (theme,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"ok": True, "theme": theme, "run": None, "filled_frame": None,
+                "consensus_frame": None}
+    run = _serialize_run(dict(row))
+    assert run is not None
+    out = get_outputs(run["id"])
+    if not out.get("ok"):
+        return {
+            "ok": True,
+            "theme": theme,
+            "run": run,
+            "filled_frame": None,
+            "consensus_frame": None,
+        }
+    return {
+        "ok": True,
+        "theme": theme,
+        "run": run,
+        "filled_frame": out.get("filled_frame"),
+        "consensus_frame": out.get("consensus_frame"),
+    }
+
+
+def list_inputs(*, theme: str) -> dict[str, Any]:
+    if theme not in THEMES:
+        return {"ok": False, "status": 400, "message": "invalid theme", "items": []}
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id::text, source_key, title, page_count, published_at,
+                   quality_pass, quality_scope, status,
+                   attrs->>'provider' AS provider,
+                   (quality_pass IS TRUE) AS will_select
+            FROM reports
+            WHERE status = 'downloaded'
+              AND attrs->>'theme' = %s
+            ORDER BY
+              CASE WHEN quality_pass IS TRUE THEN 0 ELSE 1 END,
+              published_at DESC NULLS LAST
+            """,
+            (theme,),
+        )
+        items = []
+        for r in cur.fetchall():
+            items.append(
+                {
+                    "id": r["id"],
+                    "source_key": r["source_key"],
+                    "title": r["title"],
+                    "provider": r.get("provider"),
+                    "page_count": r.get("page_count"),
+                    "published_at": (
+                        r["published_at"].isoformat() if r.get("published_at") else None
+                    ),
+                    "quality_pass": r.get("quality_pass"),
+                    "quality_scope": r.get("quality_scope"),
+                    "will_select": bool(r.get("will_select")),
+                }
+            )
+    selected = sum(1 for i in items if i["will_select"])
+    return {
+        "ok": True,
+        "theme": theme,
+        "items": items,
+        "selected_count": selected,
+        "total": len(items),
+    }
+
+
+def get_outputs(run_id: str) -> dict[str, Any]:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT kind, ordinal, body_md, body_json, created_at
+            FROM consensus_outputs
+            WHERE run_id = %s::uuid
+            ORDER BY kind, ordinal
+            """,
+            (run_id,),
+        )
+        outputs = {}
+        for r in cur.fetchall():
+            outputs[r["kind"]] = {
+                "kind": r["kind"],
+                "ordinal": r["ordinal"],
+                "body_md": r.get("body_md"),
+                "body_json": r.get("body_json"),
+                "created_at": (
+                    r["created_at"].isoformat() if r.get("created_at") else None
+                ),
+            }
+        cur.execute(
+            "SELECT id::text, state, theme, asset_id FROM consensus_runs WHERE id=%s::uuid",
+            (run_id,),
+        )
+        run = cur.fetchone()
+    if not run:
+        return {"ok": False, "status": 404, "message": "run not found"}
+    return {
+        "ok": True,
+        "run_id": str(run["id"]),
+        "state": run["state"],
+        "theme": run["theme"],
+        "asset_id": run["asset_id"],
+        "filled_frame": (outputs.get("filled_frame") or {}).get("body_md"),
+        "consensus_frame": (outputs.get("consensus_frame") or {}).get("body_md"),
+        "fill_plan": (outputs.get("fill_plan") or {}).get("body_json"),
+        "outputs": outputs,
+    }
+
+
+def get_run_docs(run_id: str) -> dict[str, Any]:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT d.role, d.rank, d.doc_status, d.exclude_reason, d.error,
+                   r.id::text AS report_id, r.source_key, r.title,
+                   r.page_count, r.quality_pass, r.quality_scope,
+                   r.attrs->>'provider' AS provider,
+                   a.id::text AS artifact_id,
+                   a.compress_md,
+                   a.slice_count,
+                   a.toc_found
+            FROM consensus_run_docs d
+            JOIN reports r ON r.id = d.report_id
+            LEFT JOIN consensus_doc_artifacts a ON a.id = d.artifact_id
+            WHERE d.run_id = %s::uuid
+            ORDER BY
+              CASE d.role WHEN 'selected' THEN 0 ELSE 1 END,
+              d.rank NULLS LAST
+            """,
+            (run_id,),
+        )
+        items = []
+        for r in cur.fetchall():
+            row = dict(r)
+            md = row.get("compress_md")
+            items.append(
+                {
+                    "role": row["role"],
+                    "rank": row.get("rank"),
+                    "doc_status": row["doc_status"],
+                    "exclude_reason": row.get("exclude_reason"),
+                    "error": row.get("error"),
+                    "report_id": row["report_id"],
+                    "source_key": row["source_key"],
+                    "title": row["title"],
+                    "page_count": row.get("page_count"),
+                    "quality_pass": row.get("quality_pass"),
+                    "quality_scope": row.get("quality_scope"),
+                    "provider": row.get("provider"),
+                    "artifact_id": row.get("artifact_id"),
+                    "has_compress": bool(md),
+                    "compress_md": md,
+                    "slice_count": row.get("slice_count"),
+                    "toc_found": row.get("toc_found"),
+                }
+            )
+    return {"ok": True, "run_id": run_id, "items": items}
+
+
+def _ensure_prompt_set(label: str) -> str:
+    stages = (
+        "toc",
+        "local_compress",
+        "report_compress",
+        "consensus",
+        "reduce",
+        "fill_plan",
+        "fill",
+    )
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO consensus_prompt_sets (label, notes)
+            VALUES (%s, %s)
+            RETURNING id::text
+            """,
+            (label, "created by API start"),
+        )
+        set_id = cur.fetchone()["id"]
+        for stage in stages:
+            cur.execute(
+                """
+                INSERT INTO consensus_prompts
+                    (prompt_set_id, stage, system_text, user_template)
+                VALUES (%s::uuid, %s, %s, %s)
+                """,
+                (
+                    set_id,
+                    stage,
+                    f"[runtime] {stage}",
+                    f"[runtime] {stage}",
+                ),
+            )
+        conn.commit()
+    return set_id
+
+
+def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
+    if theme not in THEMES:
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "theme must be datacenter, ai, or physical_ai",
+            "can_start": False,
+            "run": None,
+        }
+    reconcile_stale_runs()
+    open_row = _get_open_row()
+    if open_row:
+        run = _serialize_run(open_row)
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "이미 컨센서스 런이 실행 중입니다.",
+            "label": run["label"] if run else "busy",
+            "can_start": False,
+            "run": run,
+        }
+
+    q = (question or "").strip() or DEFAULT_QUESTION[theme]
+    model = DEFAULT_MODEL
+    try:
+        prompt_set_id = _ensure_prompt_set(label=f"{theme}-api-v1")
+        asset_id = _make_asset_id(theme)
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO consensus_runs (
+                    asset_id, prompt_set_id, theme, question, criteria, model, state
+                )
+                VALUES (%s, %s::uuid, %s, %s, %s::jsonb, %s, 'starting')
+                RETURNING *
+                """,
+                (
+                    asset_id,
+                    prompt_set_id,
+                    theme,
+                    q,
+                    json.dumps({"quality_pass": True, "theme": theme}),
+                    model,
+                ),
+            )
+            row = dict(cur.fetchone())
+            conn.commit()
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": 500,
+            "message": f"run 생성 실패: {exc}",
+            "can_start": False,
+            "run": None,
+        }
+
+    run_id = str(row["id"])
+    python = ROOT / ".venv" / "bin" / "python"
+    if not python.is_file():
+        python = Path(sys.executable)
+
+    CONSENSUS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log_f = open(CONSENSUS_LOG, "a", encoding="utf-8")  # noqa: SIM115
+    try:
+        log_f.write(f"\n--- consensus start {_now().isoformat()} id={run_id} ---\n")
+        log_f.flush()
+        subprocess.Popen(
+            [str(python), "-m", "consensus", "run", "--run-id", run_id],
+            cwd=str(ROOT),
+            stdout=log_f,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except Exception as exc:
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE consensus_runs
+                SET state='error', ended_at=now(), message=%s
+                WHERE id=%s::uuid
+                """,
+                (f"spawn failed: {exc}", run_id),
+            )
+            conn.commit()
+        return {
+            "ok": False,
+            "status": 500,
+            "message": f"워커 기동 실패: {exc}",
+            "can_start": True,
+            "run": _serialize_run(row),
+        }
+
+    return {
+        "ok": True,
+        "status": 202,
+        "message": "컨센서스 런을 시작했습니다.",
+        "label": "시작 중",
+        "can_start": False,
+        "run": _serialize_run(row),
+    }
+
+
+def request_stop() -> dict[str, Any]:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET stop_requested_at = now(),
+                state = CASE WHEN state = 'active' THEN 'stopping' ELSE state END
+            WHERE ended_at IS NULL
+            RETURNING *
+            """
+        )
+        row = cur.fetchone()
+        conn.commit()
+    if not row:
+        return {
+            "ok": True,
+            "message": "실행 중인 런이 없습니다.",
+            "run": None,
+            "can_start": True,
+        }
+    return {
+        "ok": True,
+        "message": "종료를 요청했습니다.",
+        "run": _serialize_run(dict(row)),
+        "can_start": False,
+    }
+
+
+def _openrouter_key() -> str:
+    load_database_env()
+    key = (os.environ.get("OPENROUTER_API_KEY") or "").strip()
+    if not key:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+    return key
+
+
+def _chat_completion(
+    messages: list[dict[str, str]], *, model: str, temperature: float = 0.3
+) -> str:
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": False,
+        "reasoning": {"effort": "none"},
+    }
+    req = urllib.request.Request(
+        OPENROUTER_URL,
+        data=json.dumps(payload).encode(),
+        headers={
+            "Authorization": f"Bearer {_openrouter_key()}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/lgbr",
+            "X-Title": "lgbr-consensus-compare",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        data = json.loads(resp.read().decode())
+    if data.get("error"):
+        raise RuntimeError(json.dumps(data["error"], ensure_ascii=False))
+    choices = data.get("choices") or []
+    if not choices:
+        raise RuntimeError("empty choices")
+    content = ((choices[0].get("message") or {}).get("content") or "").strip()
+    if not content:
+        raise RuntimeError("empty content")
+    return content
+
+
+def compare_chat(
+    *,
+    mode: str,
+    messages: list[dict[str, Any]],
+    run_id: str | None = None,
+    theme: str | None = None,
+    model: str | None = None,
+) -> dict[str, Any]:
+    if mode not in {"plain", "grounded"}:
+        return {"ok": False, "status": 400, "message": "mode must be plain or grounded"}
+    if not isinstance(messages, list) or not messages:
+        return {"ok": False, "status": 400, "message": "messages required"}
+    clean: list[dict[str, str]] = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        role = str(m.get("role") or "")
+        content = str(m.get("content") or "").strip()
+        if role not in {"user", "assistant", "system"} or not content:
+            continue
+        clean.append({"role": role, "content": content})
+    if not any(m["role"] == "user" for m in clean):
+        return {"ok": False, "status": 400, "message": "at least one user message required"}
+
+    use_model = (model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    sys_msgs: list[dict[str, str]] = []
+    resolved_run_id = run_id
+    resolved_theme = theme if theme in THEMES else None
+
+    if mode == "grounded":
+        if not resolved_run_id and resolved_theme:
+            latest = get_latest_ended(theme=resolved_theme)
+            if not latest.get("ok"):
+                return latest
+            run = latest.get("run")
+            if not run:
+                return {
+                    "ok": False,
+                    "status": 400,
+                    "message": f"no ended run for theme={resolved_theme}",
+                }
+            resolved_run_id = str(run["id"])
+            frame = latest.get("filled_frame") or latest.get("consensus_frame")
+        elif resolved_run_id:
+            out = get_outputs(resolved_run_id)
+            if not out.get("ok"):
+                return out
+            if out.get("state") != "ended":
+                return {
+                    "ok": False,
+                    "status": 400,
+                    "message": f"run state is {out.get('state')}, need ended",
+                }
+            frame = out.get("filled_frame") or out.get("consensus_frame")
+            resolved_theme = out.get("theme") or resolved_theme
+        else:
+            return {
+                "ok": False,
+                "status": 400,
+                "message": "theme or run_id required for grounded",
+            }
+        if not frame:
+            return {
+                "ok": False,
+                "status": 400,
+                "message": "run has no filled_frame/consensus_frame yet",
+            }
+        sys_msgs.append(
+            {
+                "role": "system",
+                "content": (
+                    "You answer using the consensus filled frame below as primary context. "
+                    "Prefer facts and structure from the frame; say when something is not "
+                    "covered. Reply in Korean unless the user asks otherwise.\n\n"
+                    f"--- CONSENSUS FRAME ---\n{frame}\n--- END FRAME ---"
+                ),
+            }
+        )
+    else:
+        sys_msgs.append(
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful research assistant. "
+                    "Reply in Korean unless the user asks otherwise. "
+                    "No external consensus frame is provided."
+                ),
+            }
+        )
+
+    # Drop client system messages; we inject our own.
+    user_chain = [m for m in clean if m["role"] != "system"]
+    try:
+        content = _chat_completion(sys_msgs + user_chain, model=use_model)
+    except Exception as exc:
+        return {"ok": False, "status": 500, "message": str(exc)}
+
+    return {
+        "ok": True,
+        "mode": mode,
+        "content": content,
+        "run_id": resolved_run_id if mode == "grounded" else None,
+        "theme": resolved_theme if mode == "grounded" else None,
+        "model": use_model,
+    }

@@ -13,6 +13,18 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from lgbr_api.auth import ApiKeyMiddleware
+from lgbr_api.consensus_api import (
+    compare_chat,
+    get_current_run,
+    get_latest_ended,
+    get_outputs,
+    get_run_docs,
+    list_events as list_consensus_events,
+    list_history as list_consensus_history,
+    list_inputs,
+    request_stop as consensus_request_stop,
+    start_run,
+)
 from lgbr_api.crawls import (
     get_cdp_status,
     get_current_crawl,
@@ -163,6 +175,107 @@ async def crawl_profile_patch(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
+async def consensus_status(request: Request) -> JSONResponse:
+    try:
+        event_limit = int(request.query_params.get("events", "50"))
+    except ValueError:
+        event_limit = 50
+    run_id = request.query_params.get("run_id")
+    return JSONResponse(
+        get_current_run(run_id=run_id, event_limit=event_limit)
+    )
+
+
+async def consensus_history(request: Request) -> JSONResponse:
+    try:
+        limit = int(request.query_params.get("limit", "30"))
+    except ValueError:
+        limit = 30
+    theme = request.query_params.get("theme")
+    result = list_consensus_history(
+        limit=limit, theme=str(theme) if theme else None
+    )
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_latest(request: Request) -> JSONResponse:
+    theme = request.query_params.get("theme") or "datacenter"
+    result = get_latest_ended(theme=str(theme))
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_events(request: Request) -> JSONResponse:
+    run_id = request.query_params.get("run_id")
+    try:
+        limit = int(request.query_params.get("limit", "50"))
+    except ValueError:
+        limit = 50
+    return JSONResponse(list_consensus_events(run_id, limit=limit))
+
+
+async def consensus_start(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    theme = str(body.get("theme") or "datacenter")
+    question = body.get("question")
+    result = start_run(
+        theme=theme,
+        question=str(question) if question is not None else None,
+    )
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_stop(_: Request) -> JSONResponse:
+    return JSONResponse(consensus_request_stop())
+
+
+async def consensus_inputs(request: Request) -> JSONResponse:
+    theme = request.query_params.get("theme") or "datacenter"
+    result = list_inputs(theme=str(theme))
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_outputs(request: Request) -> JSONResponse:
+    run_id = str(request.path_params.get("run_id") or "")
+    result = get_outputs(run_id)
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_docs(request: Request) -> JSONResponse:
+    run_id = str(request.path_params.get("run_id") or "")
+    return JSONResponse(get_run_docs(run_id))
+
+
+async def consensus_chat(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        messages = []
+    result = compare_chat(
+        mode=str(body.get("mode") or "plain"),
+        messages=messages,
+        run_id=str(body["run_id"]) if body.get("run_id") else None,
+        theme=str(body["theme"]) if body.get("theme") else None,
+        model=str(body["model"]) if body.get("model") else None,
+    )
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
 def create_app() -> Starlette:
     load_database_env()
     return Starlette(
@@ -184,6 +297,16 @@ def create_app() -> Starlette:
             Route("/api/cdp", cdp_status),
             Route("/api/reports", reports),
             Route("/api/reports/{report_id}/file", report_file),
+            Route("/api/consensus", consensus_status),
+            Route("/api/consensus/history", consensus_history),
+            Route("/api/consensus/latest", consensus_latest),
+            Route("/api/consensus/events", consensus_events),
+            Route("/api/consensus/start", consensus_start, methods=["POST"]),
+            Route("/api/consensus/stop", consensus_stop, methods=["POST"]),
+            Route("/api/consensus/inputs", consensus_inputs),
+            Route("/api/consensus/chat", consensus_chat, methods=["POST"]),
+            Route("/api/consensus/runs/{run_id}/outputs", consensus_outputs),
+            Route("/api/consensus/runs/{run_id}/docs", consensus_docs),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],
         lifespan=lifespan,

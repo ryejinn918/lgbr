@@ -24,6 +24,10 @@ from consensus.paths import doc_cache_dir, make_asset_id, run_dir
 from consensus.run_log import ConsensusLogger
 from consensus.toc import probe_toc
 
+# OpenRouter-bound I/O: parallelize docs and in-doc slices.
+DOC_CONCURRENCY = 4
+SLICE_CONCURRENCY = 4
+
 
 async def _process_doc(
     report: dict[str, Any],
@@ -72,6 +76,7 @@ async def _process_doc(
             "report_id": report_id,
             "toc_found": existing.get("toc_found"),
             "slice_count": existing.get("slice_count"),
+            "from_cache": True,
         }
 
     log_c.emit(
@@ -97,7 +102,11 @@ async def _process_doc(
     )
 
     cards = await local_compress_all(
-        slices, question=question, out_dir=cache, model=model, concurrency=3
+        slices,
+        question=question,
+        out_dir=cache,
+        model=model,
+        concurrency=SLICE_CONCURRENCY,
     )
     meta = {
         "slug": slug,
@@ -135,6 +144,7 @@ async def _process_doc(
         "report_id": report_id,
         "toc_found": bool(toc.get("toc_found")),
         "slice_count": len(slices),
+        "from_cache": False,
     }
 
 
@@ -211,10 +221,15 @@ async def run_pipeline(run_id: str) -> None:
         cards: list[dict[str, Any]] = []
         slug_dirs: dict[str, Path] = {}
         docs_done = docs_failed = docs_cache_hit = 0
+        progress_lock = asyncio.Lock()
+        doc_sem = asyncio.Semaphore(DOC_CONCURRENCY)
 
-        with log_c.stage("doc", count=len(selected)):
-            for report in selected:
-                rid = str(report["id"])
+        async def _one_doc(
+            index: int, report: dict[str, Any]
+        ) -> tuple[int, dict[str, Any] | None]:
+            nonlocal docs_done, docs_failed, docs_cache_hit
+            rid = str(report["id"])
+            async with doc_sem:
                 log_c.set_progress(current_report_id=rid, stage="doc")
                 try:
                     card = await _process_doc(
@@ -225,12 +240,24 @@ async def run_pipeline(run_id: str) -> None:
                         model=model,
                         log_c=log_c,
                     )
-                    cards.append(card)
-                    slug_dirs[card["slug"]] = Path(card["cache_dir"])
-                    docs_done += 1
-                    # detect cache via status — recount roughly
+                    async with progress_lock:
+                        docs_done += 1
+                        if card.get("from_cache"):
+                            docs_cache_hit += 1
+                        log_c.set_progress(
+                            docs_done=docs_done,
+                            docs_failed=docs_failed,
+                            docs_cache_hit=docs_cache_hit,
+                        )
+                    return index, card
                 except Exception as exc:
-                    docs_failed += 1
+                    async with progress_lock:
+                        docs_failed += 1
+                        log_c.set_progress(
+                            docs_done=docs_done,
+                            docs_failed=docs_failed,
+                            docs_cache_hit=docs_cache_hit,
+                        )
                     runs_store.update_run_doc(
                         run_id, rid, doc_status="failed", error=str(exc)
                     )
@@ -241,11 +268,22 @@ async def run_pipeline(run_id: str) -> None:
                         report_id=rid,
                         error=str(exc),
                     )
-                log_c.set_progress(
-                    docs_done=docs_done,
-                    docs_failed=docs_failed,
-                    docs_cache_hit=docs_cache_hit,
-                )
+                    return index, None
+
+        with log_c.stage(
+            "doc",
+            count=len(selected),
+            doc_concurrency=DOC_CONCURRENCY,
+            slice_concurrency=SLICE_CONCURRENCY,
+        ):
+            results = await asyncio.gather(
+                *[_one_doc(i, r) for i, r in enumerate(selected)]
+            )
+            for _i, card in sorted(results, key=lambda x: x[0]):
+                if card is None:
+                    continue
+                cards.append(card)
+                slug_dirs[card["slug"]] = Path(card["cache_dir"])
 
         if not cards:
             raise RuntimeError("all documents failed compress")

@@ -36,26 +36,29 @@ def local_compress(
         "char_len": slice_row["char_len"],
         "text_sha256": slice_row["text_sha256"],
     }
-    prompt = f"""이 슬라이스는 증권 리포트의 한 구간이다.
-너의 일은 내용을 폐기하는 것이 아니라, 나중에 여러 슬라이스를 합칠 수 있게 **정리 카드**로 만드는 것이다.
-노이즈는 메모만 하고, 여기서 구간을 삭제하지 마라.
+    prompt = f"""This is one slice of a broker research PDF.
+Your job is NOT to discard content; turn it into a **mergeable card** for later aggregation.
+Memo noise; do not delete sections here.
 
-질문 맥락: {question}
+Question context: {question}
 
-슬라이스 메타(JSON):
+Slice meta (JSON):
 {json.dumps(meta_in, ensure_ascii=False)}
 
-원문:
+Source text (may be Korean):
 {_truncate(slice_row["text"])}
 
-마크다운 출력:
+Markdown output (section headers in English; body may be Korean to match the source):
 # slice {slice_row["slice_id"]}
 ## meta
-- title / pages / char_len / text_sha256 을 그대로
-## 이 구간의 논지·사실 (빠짐없이 짧게 정리)
-## 숫자·시점
-## 고유명사·키워드 (나중에 본문 재오픈용)
-## 합칠 때 참고 (표/반복/광고성 등 — 삭제가 아니라 메모)
+- keep title / pages / char_len / text_sha256 as given
+## claims and facts
+- short, complete coverage of this slice
+## numbers and dates
+## proper nouns / keywords
+- for later body re-open
+## merge notes
+- tables / repetition / promo — memo only, not deletion
 """
     content, usage = chat(
         [
@@ -63,7 +66,8 @@ def local_compress(
                 "role": "system",
                 "content": (
                     "Organize one report slice into a mergeable card. "
-                    "Do not drop sections because you think they are noise. Korean."
+                    "Do not drop sections as noise. "
+                    "Use English section headers; write body in Korean when the source is Korean."
                 ),
             },
             {"role": "user", "content": prompt},
@@ -89,7 +93,7 @@ async def local_compress_all(
     question: str,
     out_dir: Path,
     model: str = DEFAULT_MODEL,
-    concurrency: int = 3,
+    concurrency: int = 4,
 ) -> list[dict[str, Any]]:
     sem = asyncio.Semaphore(concurrency)
 
@@ -116,34 +120,34 @@ def report_compress(
         f"{c['local_compress_md']}"
         for c in cards
     )
-    prompt = f"""아래는 한 리포트를 슬라이스별로 정리한 카드들이다.
-너는 이 카드들을 **네 방식으로 합쳐** 리포트 단위 압축 뷰를 만들어라.
-카드를 버릴지 말지, 무엇을 중심에 둘지는 네가 판단한다.
-다만 합친 결과에서 각 핵심 주장 옆에 가능하면 slice_id / page 출처를 남겨라.
+    prompt = f"""Below are per-slice cards from one report.
+Merge them **your way** into a single report-level compress view.
+You decide what to keep central and what to de-emphasize.
+Keep slice_id / page provenance next to key claims when possible.
 
-질문: {question}
-문서: {doc_meta.get("source_pdf")}
+Question: {question}
+Document: {doc_meta.get("source_pdf")}
 slug: {doc_meta.get("slug")}
 corpus_char_len={doc_meta.get("corpus_char_len")} slices={len(cards)}
 
-카드들:
+Cards:
 {joined}
 
-출력:
-# 리포트 압축 뷰
-## 이 리포트의 관점(한 줄)
-## 세상을 가르는 축
-## 꼭 남는 숫자/주장 (출처 slice_id)
-## 이 리포트만의 각도
-## 본문을 더 열어야 할 후보 (slice_id + 키워드)
+Output (English headers; Korean body OK for Korean sources):
+# Report compress view
+## One-line thesis
+## Axes that split the world
+## Must-keep numbers / claims (with slice_id)
+## Angle unique to this report
+## Candidates to re-open in the body (slice_id + keywords)
 """
     content, _ = chat(
         [
             {
                 "role": "system",
                 "content": (
-                    "Merge slice cards into one report compress view in your own way. "
-                    "Keep provenance. Korean."
+                    "Merge slice cards into one report compress view. "
+                    "Keep provenance. English headers; Korean body when source is Korean."
                 ),
             },
             {"role": "user", "content": prompt},
