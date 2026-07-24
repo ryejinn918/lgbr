@@ -334,7 +334,10 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
         sys.path.insert(0, src)
 
     if theme == "ai":
-        from consensus.runs_store import list_pool_reports  # noqa: WPS433
+        from consensus.runs_store import (  # noqa: WPS433
+            PERIOD_MONTHS_DEFAULT,
+            list_pool_reports,
+        )
         from consensus.select import AI_POOL_THEMES  # noqa: WPS433
 
         pool = list_pool_reports(themes=AI_POOL_THEMES)
@@ -350,6 +353,7 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
             "criteria": {
                 "theme": theme,
                 "pool_themes": list(AI_POOL_THEMES),
+                "period_months": PERIOD_MONTHS_DEFAULT,
                 "quality_pass": True,
                 "pool_count": len(items),
                 "quality_pass_count": qp_count,

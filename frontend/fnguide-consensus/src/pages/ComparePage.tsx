@@ -110,7 +110,7 @@ export function ComparePage() {
   async function streamColumn(mode: Mode, userText: string) {
     if (mode === 'grounded' && !state.latest.run) {
       window.alert(
-        `이 섹터에 완료된 실행이 없습니다. ${NAV.ops}에서 먼저 생성하세요.`,
+        `이 섹터에 완료된 실행이 없습니다. ${NAV.ops}에서 먼저 시작하세요.`,
       )
       return
     }
@@ -141,7 +141,7 @@ export function ComparePage() {
     if (!plainPrep && !groundedPrep) {
       if (!state.latest.run) {
         window.alert(
-          `이 섹터에 완료된 실행이 없습니다. ${NAV.ops}에서 먼저 생성하세요.`,
+          `이 섹터에 완료된 실행이 없습니다. ${NAV.ops}에서 먼저 시작하세요.`,
         )
       }
       return
@@ -215,9 +215,8 @@ export function ComparePage() {
           {THEME_LABEL[theme]} · {NAV.compare}
         </h1>
         <p className="lede">
-          왼쪽이 {CHAT_MODE.grounded}({CHAT_ROLE.ours}), 오른쪽이{' '}
-          {CHAT_MODE.plain}({CHAT_ROLE.control})입니다. 열마다 다른 질문·이어
-          묻기도 가능합니다. 섹터별 대화는 탭을 옮겨도 유지됩니다.
+          섹터 논지를 근거로 질문하고 답합니다. 오른쪽에 일반 답변을 두고
+          나란히 볼 수 있습니다.
         </p>
       </header>
 
@@ -229,7 +228,7 @@ export function ComparePage() {
         ) : (
           <p className="section-note">
             {CHAT_MODE.grounded}에 쓸 완료된 실행이 없습니다.{' '}
-            <Link to={themePath(theme, 'ops')}>{NAV.ops}에서 생성</Link>
+            <Link to={themePath(theme, 'ops')}>{NAV.ops}에서 시작</Link>
           </p>
         )}
         {frameError && <p className="error-line">{frameError}</p>}
@@ -238,7 +237,7 @@ export function ComparePage() {
             동일 질문 (양쪽)
             <input
               value={sharedDraft}
-              placeholder="비교용 공통 질문…"
+              placeholder="공통 질문…"
               onChange={(e) =>
                 dispatch({ type: 'set_shared_draft', value: e.target.value })
               }
@@ -282,7 +281,7 @@ export function ComparePage() {
 
       <section className="panel">
         <div className="section-head">
-          <h2>참고 논지</h2>
+          <h2>참고할 논지</h2>
           <div className="chip-row">
             {(
               [
@@ -329,7 +328,7 @@ export function ComparePage() {
             variant="ours"
             eyebrow={CHAT_ROLE.ours}
             title={CHAT_MODE.grounded}
-            hint="최신 상세 논지를 참고합니다."
+            hint="최근 살 붙인 논지를 참고합니다."
             column={grounded}
             onInput={(v) =>
               dispatch({ type: 'set_input', mode: 'grounded', value: v })
@@ -341,7 +340,7 @@ export function ComparePage() {
             variant="control"
             eyebrow={CHAT_ROLE.control}
             title={CHAT_MODE.plain}
-            hint="웹검색만 사용. 섹터 논지는 보지 않습니다."
+            hint="웹 검색만 사용합니다. 이 섹터 논지는 보지 않습니다."
             column={plain}
             onInput={(v) =>
               dispatch({ type: 'set_input', mode: 'plain', value: v })

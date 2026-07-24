@@ -7,6 +7,7 @@ from typing import Any
 
 from consensus import runs_store
 from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
+from consensus.runs_store import PERIOD_MONTHS_DEFAULT
 
 CORE_MAX = 10
 AI_POOL_THEMES = ("ai", "datacenter")
@@ -225,6 +226,7 @@ def select_for_theme(
             "status": "downloaded",
             "theme": theme,
             "pool_themes": list(AI_POOL_THEMES),
+            "period_months": PERIOD_MONTHS_DEFAULT,
             "select": "llm_audit_pack",
             "core_max": core_max,
             "core_count": len(core_pairs),
@@ -252,6 +254,7 @@ def select_for_theme(
         "quality_pass": True,
         "status": "downloaded",
         "theme": theme,
+        "period_months": PERIOD_MONTHS_DEFAULT,
         "selected_count": len(selected),
         "excluded_count": len(excluded),
     }

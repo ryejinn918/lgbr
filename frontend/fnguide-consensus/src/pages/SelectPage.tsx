@@ -131,24 +131,24 @@ export function SelectPage() {
     <>
       <header className="monitor-header">
         <h1>
-          {THEME_LABEL[theme]} · {NAV.select}
+          {THEME_LABEL[theme]} · 보고서 선별
         </h1>
         <p className="lede">
-          후보를 걸러 팩(골격·참고)에 넣은 결과와 후보 풀을 확인합니다. 생성은{' '}
+          컨센서스에 쓸 보고서를 어떻게 골랐는지 봅니다. 시작은{' '}
           <Link className="text-link" to={themePath(theme, 'ops')}>
             {NAV.ops}
-          </Link>
-          에서 합니다.
+          </Link>{' '}
+          메뉴에서 합니다.
         </p>
       </header>
 
       <section className="panel">
         <div className="section-head">
-          <h2>실행 선별</h2>
+          <h2>이번 선별 결과</h2>
           <p className="section-note">
             {packRun && packLabel
-              ? `${packLabel} · ${labelRunState(packRun.state)} · 골격 ${coreDocs.length} · 참고 ${biblioDocs.length}`
-              : '이 섹터 실행 이력이 없습니다. 생성 시작하면 여기에 선별 결과가 남습니다.'}
+              ? `${packLabel} · ${labelRunState(packRun.state)} · 골격용 ${coreDocs.length} · 참고용 ${biblioDocs.length}`
+              : '이 섹터 실행 이력이 없습니다. 컨센서스를 시작하면 여기에 선별 결과가 남습니다.'}
           </p>
         </div>
         {themeHistory.length > 1 && (
@@ -168,7 +168,7 @@ export function SelectPage() {
         {docsError && <p className="error-line">{docsError}</p>}
         {hasPackReview && (
           <div className="select-review">
-            <h3>선별 심사평</h3>
+            <h3>선별 이유</h3>
             {packCriteria?.coverage_notes ? (
               <p className="select-review-body">
                 {packCriteria.coverage_notes}
@@ -177,7 +177,7 @@ export function SelectPage() {
             {packCriteria?.pillar_sketch &&
             packCriteria.pillar_sketch.length > 0 ? (
               <>
-                <p className="section-note">축 초안</p>
+                <p className="section-note">다룰 주제</p>
                 <ul className="select-review-list">
                   {packCriteria.pillar_sketch.map((p, i) => (
                     <li key={`${i}-${p}`}>{p}</li>
@@ -189,18 +189,19 @@ export function SelectPage() {
         )}
         {packRun && packDocs.length === 0 && !docsError && (
           <p className="section-note">
-            아직 선별 단계 전입니다. 선별이 끝나면 골격/참고와 사유가 채워집니다.
+            아직 보고서 선별 전입니다. 선별이 끝나면 골격용·참고용 목록과 이유가
+            채워집니다.
           </p>
         )}
         {packDocs.length > 0 && (
           <table className="data-table">
             <thead>
               <tr>
-                <th>역할</th>
+                <th>구분</th>
                 <th>제목</th>
                 <th>증권사</th>
                 <th>쪽</th>
-                <th>사유</th>
+                <th>이유</th>
               </tr>
             </thead>
             <tbody>
@@ -220,8 +221,8 @@ export function SelectPage() {
                       <tr className={`input-group-row role-${role}`}>
                         <td colSpan={5}>
                           {role === 'core'
-                            ? `골격논지 (frame) · ${coreDocs.length}건`
-                            : `참고문헌 (fill) · ${biblioDocs.length}건`}
+                            ? `골격용 · ${coreDocs.length}건`
+                            : `참고용 · ${biblioDocs.length}건`}
                         </td>
                       </tr>
                     )}
@@ -248,18 +249,18 @@ export function SelectPage() {
 
       <section className="panel">
         <div className="section-head">
-          <h2>{theme === 'ai' ? '후보 풀' : '입력 리포트'}</h2>
+          <h2>후보 보고서</h2>
           <p className="section-note">
             {theme === 'ai' ? (
               <>
-                후보 {inputs.length}
-                {poolQpCount != null ? ` · 품질통과 ${poolQpCount}` : ''}
-                {' · '}선별은 {NAV.ops} 생성 시작 시
+                최근 3개월 · 후보 {inputs.length}
+                {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
+                {' · '}선별은 {NAV.ops}에서 컨센서스 시작 시
               </>
             ) : (
               <>
-                선별 {selectedCount}
-                {secondaryCount > 0 ? ` · 참고 ${secondaryCount}` : ''} /{' '}
+                최근 3개월 · 쓸 보고서 {selectedCount}
+                {secondaryCount > 0 ? ` · 참고용 ${secondaryCount}` : ''} /{' '}
                 {inputs.length}
               </>
             )}

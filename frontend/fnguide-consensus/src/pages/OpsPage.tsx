@@ -2,22 +2,20 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Markdown } from '../components/Markdown'
 import { useConsensusStatus } from '../hooks/useConsensusStatus'
-import { formatEventDetail, formatProgress, formatTime } from '../lib/format'
 import {
-  FRAME_TAB,
-  NAV,
-  labelRunSlot,
-  labelRunState,
-  labelStage,
-} from '../lib/labels'
+  formatEventDetail,
+  formatEventLine,
+  formatProgress,
+  formatTime,
+} from '../lib/format'
+import { NAV, labelRunSlot, labelRunState } from '../lib/labels'
 import { parseTheme, themePath } from '../lib/theme'
 import type { ConsensusTheme } from '../types'
-import { DEFAULT_QUESTION, STATE_CLASS, THEME_LABEL } from '../types'
+import { STATE_CLASS, THEME_LABEL } from '../types'
 
 export function OpsPage() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
-  const [question, setQuestion] = useState(DEFAULT_QUESTION[theme])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [previewMd, setPreviewMd] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -38,7 +36,6 @@ export function OpsPage() {
   )
 
   useEffect(() => {
-    setQuestion(DEFAULT_QUESTION[theme])
     setExpandedId(null)
     setPreviewMd(null)
   }, [theme])
@@ -52,13 +49,13 @@ export function OpsPage() {
   async function onStart() {
     if (
       !window.confirm(
-        `${THEME_LABEL[theme]} 섹터 컨센서스 생성을 시작할까요?`,
+        `${THEME_LABEL[theme]} 섹터 컨센서스를 시작할까요?`,
       )
     ) {
       return
     }
     try {
-      await startRun(theme, question)
+      await startRun(theme)
     } catch (e) {
       window.alert(e instanceof Error ? e.message : '시작 실패')
     }
@@ -94,11 +91,7 @@ export function OpsPage() {
           {THEME_LABEL[theme]} · {NAV.ops}
         </h1>
         <p className="lede">
-          컨센서스 생성과 진행·이력을 관리합니다. 선별 심사평·후보 풀은{' '}
-          <Link className="text-link" to={themePath(theme, 'select')}>
-            {NAV.select}
-          </Link>
-          에서 봅니다.
+          이 섹터 컨센서스를 시작하고, 진행 상황과 이력을 봅니다.
         </p>
       </header>
 
@@ -137,35 +130,27 @@ export function OpsPage() {
 
       <section className="panel">
         <div className="section-head">
-          <h2>생성</h2>
+          <h2>시작</h2>
         </div>
-        <label>
-          분석 질문
-          <textarea
-            rows={2}
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-          />
-        </label>
         <button
           type="button"
           className="btn"
           disabled={!status.can_start || busy || requestingStart}
           onClick={() => void onStart()}
         >
-          {requestingStart ? '시작 중…' : '생성 시작'}
+          {requestingStart ? '시작 중…' : '컨센서스 시작'}
         </button>
         {!status.can_start && (
           <p className="section-note">이미 실행 중인 작업이 있습니다.</p>
         )}
         {theme === 'ai' && (
           <p className="section-note">
-            생성 시작 시 팩 선별(골격≤10 + 참고) 후 골격·채움까지 한 번에
-            실행합니다. 결과는{' '}
+            시작하면 최근 3개월 보고서 선별 → 요약 → 골격 → 살 붙이기까지
+            이어서 진행됩니다. 선별 결과는{' '}
             <Link className="text-link" to={themePath(theme, 'select')}>
               {NAV.select}
-            </Link>
-            에서 확인합니다.
+            </Link>{' '}
+            메뉴에서 확인합니다.
           </p>
         )}
       </section>
@@ -181,9 +166,7 @@ export function OpsPage() {
           {status.events.map((ev) => (
             <li key={ev.id}>
               <span className="mono">{formatTime(ev.at)}</span>{' '}
-              <strong>
-                {labelStage(ev.stage)}/{ev.event}
-              </strong>{' '}
+              <strong>{formatEventLine(ev.stage, ev.event)}</strong>{' '}
               <span className="section-note">
                 {formatEventDetail(ev.detail)}
               </span>
@@ -231,7 +214,7 @@ export function OpsPage() {
                       className="btn ghost"
                       onClick={() => void togglePreview(h.id)}
                     >
-                      {expandedId === h.id ? '접기' : FRAME_TAB.filled}
+                      {expandedId === h.id ? '접기' : '논지 보기'}
                     </button>
                   </td>
                 </tr>

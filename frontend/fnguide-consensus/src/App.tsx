@@ -64,9 +64,7 @@ function AppShell() {
           ))}
         </div>
         <nav className="app-nav" aria-label="주요 메뉴">
-          <NavLink to={themePath(theme, 'compare')} end>
-            {NAV.compare}
-          </NavLink>
+          <NavLink to={themePath(theme, 'compare')}>{NAV.compare}</NavLink>
           <NavLink to={themePath(theme, 'frames')}>{NAV.frames}</NavLink>
           <NavLink to={themePath(theme, 'select')}>{NAV.select}</NavLink>
           <NavLink to={themePath(theme, 'ops')}>{NAV.ops}</NavLink>
@@ -83,7 +81,7 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={<Navigate to={themePath(DEFAULT_THEME, 'compare')} replace />}
+          element={<Navigate to={themePath(DEFAULT_THEME, 'ops')} replace />}
         />
         <Route path="/compare" element={<LegacyThemeRedirect tab="compare" />} />
         <Route path="/frames" element={<LegacyThemeRedirect tab="frames" />} />
@@ -97,12 +95,12 @@ function App() {
         <Route path="/run" element={<LegacyThemeRedirect tab="ops" />} />
         <Route path="/monitor" element={<LegacyThemeRedirect tab="ops" />} />
         <Route path="/:theme" element={<AppShell />}>
-          <Route index element={<Navigate to="compare" replace />} />
-          <Route path="compare" element={<ComparePage />} />
-          <Route path="frames" element={<FramesPage />} />
+          <Route index element={<Navigate to="ops" replace />} />
           <Route path="ops" element={<OpsPage />} />
           <Route path="select" element={<SelectPage />} />
-          <Route path="*" element={<Navigate to="compare" replace />} />
+          <Route path="frames" element={<FramesPage />} />
+          <Route path="compare" element={<ComparePage />} />
+          <Route path="*" element={<Navigate to="ops" replace />} />
         </Route>
       </Routes>
     </CompareStoreProvider>

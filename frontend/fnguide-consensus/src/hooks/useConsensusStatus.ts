@@ -56,13 +56,13 @@ export function useConsensusStatus(theme?: ConsensusTheme) {
   }, [refresh])
 
   const startRun = useCallback(
-    async (runTheme: ConsensusTheme, question?: string) => {
+    async (runTheme: ConsensusTheme) => {
       setRequestingStart(true)
       try {
         const res = await fetch('/api/consensus/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ theme: runTheme, question }),
+          body: JSON.stringify({ theme: runTheme }),
         })
         const data = await res.json()
         if (!res.ok || !data.ok) {

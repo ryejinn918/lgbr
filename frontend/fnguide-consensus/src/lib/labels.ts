@@ -2,29 +2,30 @@
 
 export const APP_BRAND = '섹터 컨센서스'
 
+/** Nav labels; display order in App is compare → frames → select → ops. */
 export const NAV = {
-  compare: '비교',
-  frames: '논지',
-  select: '선별',
   ops: '실행',
+  select: '선별',
+  frames: '논지',
+  compare: '채팅',
 } as const
 
 /** Frame product views (API kinds stay filled_frame / consensus_frame). */
 export const FRAME_TAB = {
-  filled: '상세 논지',
-  consensus: '골격 논지',
-  materials: '근거 리포트',
+  filled: '살 붙인 논지',
+  consensus: '골격',
+  materials: '근거 보고서',
 } as const
 
 export const CHAT_MODE = {
   plain: '일반 답변',
-  grounded: '논지 근거 답변',
+  grounded: '컨센서스 근거 답변',
 } as const
 
 /** Compare-column roles: ours = grounded, control = plain. */
 export const CHAT_ROLE = {
-  ours: '우리',
-  control: '대조군',
+  ours: '근거 있음',
+  control: '근거 없음',
 } as const
 
 export const ROLE_LABEL: Record<string, string> = {
@@ -42,10 +43,25 @@ export const CHAT_PHASE: Record<string, string> = {
 /** Pipeline stages shown in progress / events. */
 export const STAGE_LABEL: Record<string, string> = {
   run: '실행',
-  select: '리포트 선별',
-  doc: '리포트 분석',
-  consensus: '골격 논지',
-  fill: '상세 논지',
+  select: '보고서 선별',
+  doc: '보고서 요약',
+  consensus: '골격',
+  fill: '살 붙이기',
+}
+
+export const EVENT_LABEL: Record<string, string> = {
+  claimed: '시작됨',
+  stage_start: '시작',
+  stage_end: '끝',
+  selected: '선별 완료',
+  cache_hit: '요약 재사용',
+  cache_miss: '새로 요약',
+  compress_done: '요약 완료',
+  doc_failed: '요약 실패',
+  frame_validated: '골격 완료',
+  filled_done: '살 붙이기 완료',
+  ended: '완료',
+  error: '오류',
 }
 
 export const RUN_STATE: Record<string, string> = {
@@ -62,11 +78,16 @@ export const DOC_STATUS: Record<string, string> = {
   cache_hit: '요약 재사용',
   ok: '완료',
   error: '오류',
+  failed: '실패',
   excluded: '제외',
 }
 
 export function labelStage(stage: string): string {
   return STAGE_LABEL[stage] ?? stage
+}
+
+export function labelEvent(event: string): string {
+  return EVENT_LABEL[event] ?? event
 }
 
 export function labelChatPhase(phase: string): string {

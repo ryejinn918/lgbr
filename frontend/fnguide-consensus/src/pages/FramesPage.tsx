@@ -80,6 +80,22 @@ export function FramesPage() {
       docs.filter((d) => d.role === 'selected' || d.role === 'fill_extra'),
     [docs],
   )
+  const coreDocs = useMemo(
+    () => selectedDocs.filter((d) => d.role === 'selected'),
+    [selectedDocs],
+  )
+  const biblioDocs = useMemo(
+    () => selectedDocs.filter((d) => d.role === 'fill_extra'),
+    [selectedDocs],
+  )
+  const materialGroups = useMemo(
+    () =>
+      [
+        { key: 'core' as const, label: '골격용', items: coreDocs },
+        { key: 'biblio' as const, label: '참고용', items: biblioDocs },
+      ].filter((g) => g.items.length > 0),
+    [coreDocs, biblioDocs],
+  )
   const selectedDoc =
     selectedDocs.find((d) => d.report_id === selectedDocId) ??
     selectedDocs[0] ??
@@ -94,7 +110,7 @@ export function FramesPage() {
           {THEME_LABEL[theme]} · {NAV.frames}
         </h1>
         <p className="lede">
-          섹터별 최신 논지와, 근거로 쓴 리포트 요약을 확인합니다.
+          요약·골격·살 붙인 논지와, 근거로 쓴 보고서 요약을 봅니다.
         </p>
       </header>
 
@@ -106,11 +122,11 @@ export function FramesPage() {
         ) : (
           <p className="section-note">
             이 섹터에 완료된 실행이 없습니다.{' '}
-            <Link to={themePath(theme, 'ops')}>{NAV.ops}에서 생성</Link>
+            <Link to={themePath(theme, 'ops')}>{NAV.ops}에서 시작</Link>
           </p>
         )}
         <Link className="btn" to={themePath(theme, 'compare')}>
-          이 섹터로 {NAV.compare}
+          {NAV.compare}로 가기
         </Link>
         {error && <p className="error-line">{error}</p>}
       </section>
@@ -136,17 +152,21 @@ export function FramesPage() {
         </div>
         {tab === 'filled' && (
           <p className="section-note">
-            골격에 근거·수치를 채운 본문입니다. 비교 시 기본으로 참고합니다.
+            골격에 근거와 수치를 채워 넣은 본문입니다. 채팅 답변의 기본
+            참고입니다.
           </p>
         )}
         {tab === 'consensus' && (
           <p className="section-note">
-            여러 리포트가 수렴한 총론·핵심 축 수준의 골격입니다.
+            여러 보고서가 모인 총론·핵심 주제 수준의 골격입니다.
           </p>
         )}
         {tab === 'materials' && (
           <p className="section-note">
-            이번 실행에 선별된 증권사 리포트와 문서별 요약입니다.
+            골격용·참고용으로 나눈 선별 보고서와 문서별 요약입니다.
+            {selectedDocs.length > 0
+              ? ` · 골격용 ${coreDocs.length} · 참고용 ${biblioDocs.length}`
+              : ''}
           </p>
         )}
 
@@ -163,37 +183,66 @@ export function FramesPage() {
           <div className="materials-layout">
             <ul className="materials-list">
               {selectedDocs.length === 0 && (
-                <li className="section-note">선별 리포트 없음</li>
+                <li className="section-note">선별된 보고서 없음</li>
               )}
-              {selectedDocs.map((d) => (
-                <li key={d.report_id}>
-                  <button
-                    type="button"
-                    className={`materials-item ${
-                      selectedDoc?.report_id === d.report_id ? 'active' : ''
-                    }`}
-                    onClick={() => setSelectedDocId(d.report_id)}
-                  >
-                    <span className="materials-title">{d.title}</span>
-                    <span className="section-note">
-                      {d.role === 'fill_extra' ? '참고 · ' : '골격 · '}
-                      {d.provider ?? '—'} · {labelDocStatus(d.doc_status)}
-                      {d.has_compress ? '' : ' · 요약 없음'}
-                    </span>
-                    {d.select_why ? (
-                      <span className="section-note materials-why">
-                        {d.select_why}
-                      </span>
-                    ) : null}
-                  </button>
+              {materialGroups.map((g) => (
+                <li key={g.key} className="materials-group">
+                  <p className={`materials-group-label role-${g.key}`}>
+                    {g.label} · {g.items.length}건
+                  </p>
+                  <ul className="materials-group-items">
+                    {g.items.map((d) => {
+                      const role = d.role === 'fill_extra' ? 'biblio' : 'core'
+                      return (
+                        <li key={d.report_id}>
+                          <button
+                            type="button"
+                            className={`materials-item role-${role}${
+                              selectedDoc?.report_id === d.report_id
+                                ? ' active'
+                                : ''
+                            }`}
+                            onClick={() => setSelectedDocId(d.report_id)}
+                          >
+                            <span className="materials-item-head">
+                              <span className={`role-badge role-${role}`}>
+                                {role === 'core' ? '골격' : '참고'}
+                              </span>
+                              <span className="materials-title">{d.title}</span>
+                            </span>
+                            <span className="section-note">
+                              {d.provider ?? '—'} ·{' '}
+                              {labelDocStatus(d.doc_status)}
+                              {d.has_compress ? '' : ' · 요약 없음'}
+                            </span>
+                            {d.select_why ? (
+                              <span className="section-note materials-why">
+                                {d.select_why}
+                              </span>
+                            ) : null}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </li>
               ))}
             </ul>
             <div className="materials-body">
               {selectedDoc ? (
                 <>
+                  <p className="materials-item-head">
+                    <span
+                      className={`role-badge role-${
+                        selectedDoc.role === 'fill_extra' ? 'biblio' : 'core'
+                      }`}
+                    >
+                      {selectedDoc.role === 'fill_extra' ? '참고' : '골격'}
+                    </span>
+                    <span className="materials-title">{selectedDoc.title}</span>
+                  </p>
                   <p className="section-note">
-                    {selectedDoc.title}
+                    {selectedDoc.provider ?? '—'}
                     {selectedDoc.slice_count != null
                       ? ` · 요약 구간 ${selectedDoc.slice_count}개`
                       : ''}

@@ -16,6 +16,8 @@ DEFAULT_QUESTION = {
     "ai": "AI, 지금 뭐 보면 돼?",
     "physical_ai": "Physical AI, 지금 뭐 보면 돼?",
 }
+# Consensus pool: only reports with published_at within this many calendar months.
+PERIOD_MONTHS_DEFAULT = 3
 
 
 def ensure_prompt_set(*, label: str, notes: str = "") -> str:
@@ -180,10 +182,19 @@ def list_theme_reports(theme: str) -> list[dict[str, Any]]:
     return list_pool_reports(themes=(theme,))
 
 
-def list_pool_reports(*, themes: tuple[str, ...]) -> list[dict[str, Any]]:
-    """Downloaded reports with attrs.theme in themes (qp first)."""
+def list_pool_reports(
+    *,
+    themes: tuple[str, ...],
+    period_months: int = PERIOD_MONTHS_DEFAULT,
+) -> list[dict[str, Any]]:
+    """Downloaded reports with attrs.theme in themes (qp first).
+
+    Only includes rows with published_at within the last ``period_months``
+    calendar months (NULL published_at excluded).
+    """
     if not themes:
         return []
+    months = max(1, int(period_months))
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -195,12 +206,14 @@ def list_pool_reports(*, themes: tuple[str, ...]) -> list[dict[str, Any]]:
             WHERE status = 'downloaded'
               AND attrs->>'theme' = ANY(%s)
               AND coalesce(file_path, '') <> ''
+              AND published_at IS NOT NULL
+              AND published_at >= (CURRENT_DATE - make_interval(months => %s))
             ORDER BY
               CASE WHEN quality_pass IS TRUE THEN 0 ELSE 1 END,
               published_at DESC NULLS LAST,
               page_count DESC NULLS LAST
             """,
-            (list(themes),),
+            (list(themes), months),
         )
         return [dict(r) for r in cur.fetchall()]
 
