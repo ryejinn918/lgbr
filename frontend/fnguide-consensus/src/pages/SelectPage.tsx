@@ -216,7 +216,7 @@ export function SelectPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>구분</th>
+                <th className="col-role">구분</th>
                 <th>제목</th>
                 <th>증권사</th>
                 <th>쪽</th>
@@ -246,12 +246,21 @@ export function SelectPage() {
                       </tr>
                     )}
                     <tr className={`input-row role-${role}`}>
-                      <td>
+                      <td className="col-role">
                         <span className={`role-badge role-${role}`}>
                           {role === 'core' ? '골격' : '참고'}
                         </span>
                       </td>
-                      <td>{d.title}</td>
+                      <td>
+                        <a
+                          className="text-link"
+                          href={`/api/reports/${d.report_id}/file`}
+                          download
+                          title="보고서 받기"
+                        >
+                          {d.title}
+                        </a>
+                      </td>
                       <td>{d.provider ?? '—'}</td>
                       <td>{d.page_count ?? '—'}</td>
                       <td title={d.select_why ?? undefined}>
@@ -281,13 +290,13 @@ export function SelectPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>구분</th>
+              <th className="col-role">구분</th>
               <th>제목</th>
               <th>출처</th>
               <th>증권사</th>
               <th>일자</th>
               <th>쪽</th>
-              <th>품질</th>
+              <th className="col-quality">품질</th>
               <th>이유</th>
             </tr>
           </thead>
@@ -321,19 +330,34 @@ export function SelectPage() {
                       : 'input-row role-omit'
               return (
                 <tr key={r.id} className={rowClass}>
-                  <td>
+                  <td className="col-role">
                     <span className={`role-badge role-${kind}`}>{badge}</span>
                   </td>
-                  <td>{r.title}</td>
+                  <td>
+                    <a
+                      className="text-link"
+                      href={`/api/reports/${r.id}/file`}
+                      download
+                      title="보고서 받기"
+                    >
+                      {r.title}
+                    </a>
+                  </td>
                   <td>{r.theme_tag ?? '—'}</td>
                   <td>{r.provider ?? '—'}</td>
                   <td>{r.published_at ?? '—'}</td>
                   <td>{r.page_count ?? '—'}</td>
-                  <td>
+                  <td className="col-quality">
                     {r.quality_pass === true
                       ? '통과'
                       : r.quality_pass === false
-                        ? `미달/${r.quality_scope ?? '?'}`
+                        ? (
+                            <>
+                              미달/
+                              <wbr />
+                              {r.quality_scope ?? '?'}
+                            </>
+                          )
                         : '대기'}
                   </td>
                   <td title={why ?? undefined}>{why ?? '—'}</td>

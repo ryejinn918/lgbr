@@ -156,9 +156,6 @@ export function FramesPage() {
         <p className="lede">
           요약·골격·살 붙인 논지와, 근거로 쓴 보고서 요약을 봅니다.
         </p>
-      </header>
-
-      <section className="panel">
         {run ? (
           <p className="section-note">
             최근 실행 · {formatTime(run.ended_at)} · {run.question}
@@ -166,14 +163,13 @@ export function FramesPage() {
         ) : (
           <p className="section-note">
             이 섹터에 완료된 실행이 없습니다.{' '}
-            <Link to={themePath(theme, 'ops')}>{NAV.ops}에서 시작</Link>
+            <Link className="text-link" to={themePath(theme, 'ops')}>
+              {NAV.ops}에서 시작
+            </Link>
           </p>
         )}
-        <Link className="btn" to={themePath(theme, 'compare')}>
-          {NAV.compare}로 가기
-        </Link>
         {error && <p className="error-line">{error}</p>}
-      </section>
+      </header>
 
       <section className="panel">
         <div className="chip-row">
