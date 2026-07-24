@@ -1,10 +1,15 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Markdown } from '../components/Markdown'
 import { useConsensusStatus } from '../hooks/useConsensusStatus'
 import { formatEventDetail, formatProgress, formatTime } from '../lib/format'
 import { FRAME_TAB, NAV, labelRunState, labelStage } from '../lib/labels'
-import type { ConsensusTheme, InputReport } from '../types'
+import type {
+  ConsensusTheme,
+  InputReport,
+  RunDoc,
+  SelectCriteria,
+} from '../types'
 import {
   DEFAULT_QUESTION,
   STATE_CLASS,
@@ -18,16 +23,26 @@ function parseTheme(raw: string | null): ConsensusTheme {
   return 'datacenter'
 }
 
+function asCriteria(raw: unknown): SelectCriteria | null {
+  if (!raw || typeof raw !== 'object') return null
+  return raw as SelectCriteria
+}
+
 export function OpsPage() {
   const [params, setParams] = useSearchParams()
   const theme = parseTheme(params.get('theme'))
   const [question, setQuestion] = useState(DEFAULT_QUESTION[theme])
   const [inputs, setInputs] = useState<InputReport[]>([])
   const [selectedCount, setSelectedCount] = useState(0)
+  const [secondaryCount, setSecondaryCount] = useState(0)
+  const [poolQpCount, setPoolQpCount] = useState<number | null>(null)
   const [inputError, setInputError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [previewMd, setPreviewMd] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [packRunId, setPackRunId] = useState<string | null>(null)
+  const [runDocs, setRunDocs] = useState<RunDoc[]>([])
+  const [docsError, setDocsError] = useState<string | null>(null)
 
   const {
     status,
@@ -39,10 +54,39 @@ export function OpsPage() {
     stopRun,
   } = useConsensusStatus(theme)
 
+  const themeHistory = useMemo(
+    () => history.filter((h) => h.theme === theme),
+    [history, theme],
+  )
+
+  const openThemeRun =
+    status.run?.theme === theme ? status.run : null
+
+  const packRun = useMemo(() => {
+    if (openThemeRun) return openThemeRun
+    if (packRunId) {
+      const hit = themeHistory.find((h) => h.id === packRunId)
+      if (hit) return hit
+    }
+    return themeHistory[0] ?? null
+  }, [openThemeRun, packRunId, themeHistory])
+
+  const packCriteria = asCriteria(packRun?.criteria)
+  const coreDocs = runDocs.filter((d) => d.role === 'selected')
+  const biblioDocs = runDocs.filter((d) => d.role === 'fill_extra')
+  const packDocs = [...coreDocs, ...biblioDocs]
+  const hasPackReview =
+    !!packCriteria?.coverage_notes ||
+    (!!packCriteria?.pillar_sketch && packCriteria.pillar_sketch.length > 0)
+
   useEffect(() => {
     setQuestion(DEFAULT_QUESTION[theme])
     setExpandedId(null)
     setPreviewMd(null)
+    setPoolQpCount(null)
+    setPackRunId(null)
+    setRunDocs([])
+    setDocsError(null)
   }, [theme])
 
   useEffect(() => {
@@ -54,12 +98,16 @@ export function OpsPage() {
         if (!cancelled) {
           setInputs(d.items ?? [])
           setSelectedCount(d.selected_count ?? 0)
+          setSecondaryCount(d.secondary_count ?? 0)
+          const qp = d.criteria?.quality_pass_count
+          setPoolQpCount(typeof qp === 'number' ? qp : null)
           setInputError(null)
         }
       })
       .catch((e) => {
         if (!cancelled) {
           setInputError(e instanceof Error ? e.message : String(e))
+          setPoolQpCount(null)
         }
       })
     return () => {
@@ -67,12 +115,47 @@ export function OpsPage() {
     }
   }, [theme])
 
+  useEffect(() => {
+    const runId = packRun?.id
+    if (!runId) {
+      setRunDocs([])
+      setDocsError(null)
+      return
+    }
+    let cancelled = false
+    const load = () => {
+      void fetch(`/api/consensus/runs/${runId}/docs`)
+        .then(async (r) => {
+          const d = await r.json()
+          if (!r.ok || !d.ok) throw new Error(d.message || `HTTP ${r.status}`)
+          if (!cancelled) {
+            setRunDocs((d.items ?? []) as RunDoc[])
+            setDocsError(null)
+          }
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setDocsError(e instanceof Error ? e.message : String(e))
+          }
+        })
+    }
+    load()
+    const busy =
+      packRun.state === 'starting' ||
+      packRun.state === 'active' ||
+      packRun.state === 'stopping'
+    const t = busy ? window.setInterval(load, 3_000) : 0
+    return () => {
+      cancelled = true
+      if (t) window.clearInterval(t)
+    }
+  }, [packRun?.id, packRun?.state])
+
   const busy =
     status.state === 'starting' ||
     status.state === 'active' ||
     status.state === 'stopping'
   const badge = fetchError ? 'offline' : STATE_CLASS[status.state]
-  const themeHistory = history.filter((h) => h.theme === theme)
 
   async function onStart() {
     if (
@@ -193,44 +276,200 @@ export function OpsPage() {
         {!status.can_start && (
           <p className="section-note">이미 실행 중인 작업이 있습니다.</p>
         )}
+        {theme === 'ai' && (
+          <p className="section-note">
+            생성 시작 시 팩 선정(골격≤10 + 참고) 후 골격·채움까지 한 번에 실행합니다.
+            선정 이유·심사평은 아래 「실행 선정」에 이 런 기준으로 표시됩니다.
+          </p>
+        )}
       </section>
 
       <section className="panel">
         <div className="section-head">
-          <h2>입력 리포트</h2>
+          <h2>실행 선정</h2>
           <p className="section-note">
-            선정 예정 {selectedCount} / {inputs.length}
+            {packRun
+              ? `${packRun.asset_id} · ${labelRunState(packRun.state)} · 골격 ${coreDocs.length} · 참고 ${biblioDocs.length}`
+              : '이 섹터 실행 이력이 없습니다. 생성 시작하면 여기에 선정 결과가 남습니다.'}
+          </p>
+        </div>
+        {docsError && <p className="error-line">{docsError}</p>}
+        {hasPackReview && (
+          <div className="select-review">
+            <h3>선정 심사평</h3>
+            {packCriteria?.coverage_notes ? (
+              <p className="select-review-body">
+                {packCriteria.coverage_notes}
+              </p>
+            ) : null}
+            {packCriteria?.pillar_sketch &&
+            packCriteria.pillar_sketch.length > 0 ? (
+              <>
+                <p className="section-note">축 초안</p>
+                <ul className="select-review-list">
+                  {packCriteria.pillar_sketch.map((p, i) => (
+                    <li key={`${i}-${p}`}>{p}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
+        )}
+        {packRun && packDocs.length === 0 && !docsError && (
+          <p className="section-note">
+            아직 선정 단계 전입니다. 선정이 끝나면 골격/참고와 사유가 채워집니다.
+          </p>
+        )}
+        {packDocs.length > 0 && (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>역할</th>
+                <th>제목</th>
+                <th>증권사</th>
+                <th>쪽</th>
+                <th>사유</th>
+              </tr>
+            </thead>
+            <tbody>
+              {packDocs.map((d, i) => {
+                const role = d.role === 'fill_extra' ? 'biblio' : 'core'
+                const prev = i > 0 ? packDocs[i - 1] : null
+                const prevRole =
+                  prev?.role === 'fill_extra'
+                    ? 'biblio'
+                    : prev
+                      ? 'core'
+                      : null
+                const showGroup = role !== prevRole
+                return (
+                  <Fragment key={d.report_id}>
+                    {showGroup && (
+                      <tr className={`input-group-row role-${role}`}>
+                        <td colSpan={5}>
+                          {role === 'core'
+                            ? `골격논지 (frame) · ${coreDocs.length}건`
+                            : `참고문헌 (fill) · ${biblioDocs.length}건`}
+                        </td>
+                      </tr>
+                    )}
+                    <tr className={`input-row role-${role}`}>
+                      <td>
+                        <span className={`role-badge role-${role}`}>
+                          {role === 'core' ? '골격' : '참고'}
+                        </span>
+                      </td>
+                      <td>{d.title}</td>
+                      <td>{d.provider ?? '—'}</td>
+                      <td>{d.page_count ?? '—'}</td>
+                      <td title={d.select_why ?? undefined}>
+                        {d.select_why ?? '—'}
+                      </td>
+                    </tr>
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="section-head">
+          <h2>{theme === 'ai' ? '후보 풀' : '입력 리포트'}</h2>
+          <p className="section-note">
+            {theme === 'ai' ? (
+              <>
+                후보 {inputs.length}
+                {poolQpCount != null ? ` · 품질통과 ${poolQpCount}` : ''}
+                {' · '}선정은 생성 시작 시 (위 「실행 선정」)
+              </>
+            ) : (
+              <>
+                선정 {selectedCount}
+                {secondaryCount > 0 ? ` · 참고 ${secondaryCount}` : ''} /{' '}
+                {inputs.length}
+              </>
+            )}
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}
         <table className="data-table">
           <thead>
             <tr>
-              <th>선정</th>
+              {theme !== 'ai' && <th>역할</th>}
               <th>제목</th>
+              <th>출처</th>
               <th>증권사</th>
               <th>일자</th>
               <th>쪽</th>
               <th>품질</th>
+              {theme !== 'ai' && <th>사유</th>}
             </tr>
           </thead>
           <tbody>
-            {inputs.map((r) => (
-              <tr key={r.id}>
-                <td>{r.will_select ? '✓' : '—'}</td>
-                <td>{r.title}</td>
-                <td>{r.provider ?? '—'}</td>
-                <td>{r.published_at ?? '—'}</td>
-                <td>{r.page_count ?? '—'}</td>
-                <td>
-                  {r.quality_pass === true
-                    ? '통과'
-                    : r.quality_pass === false
-                      ? `미달/${r.quality_scope ?? '?'}`
-                      : '대기'}
-                </td>
-              </tr>
-            ))}
+            {inputs.map((r) => {
+              if (theme === 'ai') {
+                return (
+                  <tr
+                    key={r.id}
+                    className={
+                      r.quality_pass === true
+                        ? 'input-row'
+                        : 'input-row role-omit'
+                    }
+                  >
+                    <td>{r.title}</td>
+                    <td>{r.theme_tag ?? '—'}</td>
+                    <td>{r.provider ?? '—'}</td>
+                    <td>{r.published_at ?? '—'}</td>
+                    <td>{r.page_count ?? '—'}</td>
+                    <td>
+                      {r.quality_pass === true
+                        ? '통과'
+                        : r.quality_pass === false
+                          ? `미달/${r.quality_scope ?? '?'}`
+                          : '대기'}
+                    </td>
+                  </tr>
+                )
+              }
+              const role = r.will_select
+                ? 'core'
+                : r.will_fill_extra
+                  ? 'biblio'
+                  : 'omit'
+              return (
+                <tr key={r.id} className={`input-row role-${role}`}>
+                  <td>
+                    <span className={`role-badge role-${role}`}>
+                      {role === 'core'
+                        ? '골격'
+                        : role === 'biblio'
+                          ? '참고'
+                          : '제외'}
+                    </span>
+                  </td>
+                  <td>{r.title}</td>
+                  <td>{r.theme_tag ?? '—'}</td>
+                  <td>{r.provider ?? '—'}</td>
+                  <td>{r.published_at ?? '—'}</td>
+                  <td>{r.page_count ?? '—'}</td>
+                  <td>
+                    {r.quality_pass === true
+                      ? '통과'
+                      : r.quality_pass === false
+                        ? `미달/${r.quality_scope ?? '?'}`
+                        : '대기'}
+                  </td>
+                  <td title={r.select_why ?? r.exclude_reason ?? undefined}>
+                    {role !== 'omit'
+                      ? (r.select_why ?? '—')
+                      : (r.exclude_reason ?? '—')}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </section>
@@ -280,11 +519,18 @@ export function OpsPage() {
             )}
             {themeHistory.map((h) => (
               <Fragment key={h.id}>
-                <tr>
+                <tr className={packRun?.id === h.id ? 'input-row role-core' : undefined}>
                   <td className="mono">{h.asset_id}</td>
                   <td>{labelRunState(h.state)}</td>
                   <td>{formatTime(h.ended_at)}</td>
                   <td>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => setPackRunId(h.id)}
+                    >
+                      선정
+                    </button>{' '}
                     <button
                       type="button"
                       className="btn ghost"

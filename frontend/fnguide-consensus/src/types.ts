@@ -8,6 +8,18 @@ export type ConsensusState =
   | 'ended'
   | 'error'
 
+/** Pack selection review stored on consensus_runs.criteria. */
+export type SelectCriteria = {
+  select?: string
+  coverage_notes?: string | null
+  pillar_sketch?: string[] | null
+  core_count?: number
+  bibliography_count?: number
+  core_max?: number
+  quality_pass_count?: number
+  pool_count?: number
+}
+
 export type ConsensusRun = {
   id: string
   asset_id: string
@@ -17,11 +29,24 @@ export type ConsensusRun = {
   state: ConsensusState
   label: string
   progress: Record<string, unknown>
+  criteria?: SelectCriteria | null
   message?: string | null
   pid?: number | null
   started_at?: string | null
   ended_at?: string | null
   created_at?: string | null
+}
+
+export type RunDoc = {
+  role: string
+  rank: number | null
+  doc_status: string
+  report_id: string
+  title: string
+  provider?: string | null
+  page_count?: number | null
+  select_why?: string | null
+  exclude_reason?: string | null
 }
 
 export type ConsensusEvent = {
@@ -54,7 +79,12 @@ export type InputReport = {
   published_at?: string | null
   quality_pass?: boolean | null
   quality_scope?: string | null
+  theme_tag?: string | null
   will_select: boolean
+  will_fill_extra?: boolean
+  select_role?: string | null
+  select_why?: string | null
+  exclude_reason?: string | null
 }
 
 export type ChatMessage = {

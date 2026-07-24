@@ -39,6 +39,7 @@ async def _process_doc(
     log_c: ConsensusLogger,
 ) -> dict[str, Any]:
     report_id = str(report["id"])
+    select_role = str(report.get("select_role") or "selected")
     pdf_path = Path(report["file_path"])
     if not pdf_path.is_file():
         raise FileNotFoundError(str(pdf_path))
@@ -61,6 +62,7 @@ async def _process_doc(
             event="cache_hit",
             report_id=report_id,
             source_key=report["source_key"],
+            select_role=select_role,
         )
         runs_store.update_run_doc(
             run_id,
@@ -77,6 +79,7 @@ async def _process_doc(
             "toc_found": existing.get("toc_found"),
             "slice_count": existing.get("slice_count"),
             "from_cache": True,
+            "select_role": select_role,
         }
 
     log_c.emit(
@@ -145,6 +148,7 @@ async def _process_doc(
         "toc_found": bool(toc.get("toc_found")),
         "slice_count": len(slices),
         "from_cache": False,
+        "select_role": select_role,
     }
 
 
@@ -172,29 +176,24 @@ async def run_pipeline(run_id: str) -> None:
 
     try:
         with log_c.stage("select", theme=theme):
-            all_docs = runs_store.list_theme_reports(theme)
-            selected = [r for r in all_docs if r.get("quality_pass") is True]
-            excluded_pairs = [
-                (
-                    r,
-                    f"quality_pass={r.get('quality_pass')} scope={r.get('quality_scope')}",
-                )
-                for r in all_docs
-                if r.get("quality_pass") is not True
-            ]
+            from consensus.select import select_for_theme
+
+            selected, excluded_pairs, criteria = select_for_theme(
+                theme, model=model
+            )
             if not selected:
-                raise RuntimeError(f"no quality_pass reports for theme={theme}")
+                raise RuntimeError(f"no reports selected for theme={theme}")
+
+            core_n = sum(
+                1 for r in selected if r.get("select_role") != "fill_extra"
+            )
+            biblio_n = sum(
+                1 for r in selected if r.get("select_role") == "fill_extra"
+            )
 
             runs_store.insert_run_docs(
                 run_id, selected=selected, excluded=excluded_pairs
             )
-            criteria = {
-                "quality_pass": True,
-                "status": "downloaded",
-                "theme": theme,
-                "selected_count": len(selected),
-                "excluded_count": len(excluded_pairs),
-            }
             runs_store.update_progress(run_id, {"criteria_snapshot": criteria})
             from consensus.db import connect
 
@@ -212,7 +211,14 @@ async def run_pipeline(run_id: str) -> None:
                 stage="select",
                 event="selected",
                 selected=len(selected),
+                core=core_n,
+                bibliography=biblio_n,
                 excluded=len(excluded_pairs),
+                **{
+                    k: criteria[k]
+                    for k in ("select", "pool_themes", "core_max", "pillar_sketch")
+                    if k in criteria
+                },
             )
             log_c.set_progress(
                 docs_total=len(selected), docs_done=0, docs_failed=0, docs_cache_hit=0
@@ -288,9 +294,15 @@ async def run_pipeline(run_id: str) -> None:
         if not cards:
             raise RuntimeError("all documents failed compress")
 
-        with log_c.stage("consensus", reports=len(cards)):
+        frame_cards = [
+            c for c in cards if c.get("select_role") != "fill_extra"
+        ]
+        if not frame_cards:
+            frame_cards = cards
+
+        with log_c.stage("consensus", reports=len(frame_cards)):
             frame = build_consensus(
-                cards, question=question, out_dir=consensus_dir, model=model
+                frame_cards, question=question, out_dir=consensus_dir, model=model
             )
             runs_store.save_output(run_id, kind="consensus_frame", body_md=frame)
             log_c.emit(stage="consensus", event="frame_validated", chars=len(frame))

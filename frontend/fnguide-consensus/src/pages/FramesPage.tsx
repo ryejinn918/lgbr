@@ -19,6 +19,7 @@ type DocRow = {
   compress_md?: string | null
   slice_count?: number | null
   exclude_reason?: string | null
+  select_why?: string | null
 }
 
 const THEMES: ConsensusTheme[] = ['datacenter', 'ai', 'physical_ai']
@@ -80,7 +81,8 @@ export function FramesPage() {
   }, [theme])
 
   const selectedDocs = useMemo(
-    () => docs.filter((d) => d.role === 'selected'),
+    () =>
+      docs.filter((d) => d.role === 'selected' || d.role === 'fill_extra'),
     [docs],
   )
   const selectedDoc =
@@ -192,15 +194,21 @@ export function FramesPage() {
                   >
                     <span className="materials-title">{d.title}</span>
                     <span className="section-note">
+                      {d.role === 'fill_extra' ? '참고 · ' : '골격 · '}
                       {d.provider ?? '—'} · {labelDocStatus(d.doc_status)}
                       {d.has_compress ? '' : ' · 요약 없음'}
                     </span>
+                    {d.select_why ? (
+                      <span className="section-note materials-why">
+                        {d.select_why}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               ))}
             </ul>
             <div className="materials-body">
-              {selectedDoc?.has_compress && selectedDoc.compress_md ? (
+              {selectedDoc ? (
                 <>
                   <p className="section-note">
                     {selectedDoc.title}
@@ -208,16 +216,19 @@ export function FramesPage() {
                       ? ` · 요약 구간 ${selectedDoc.slice_count}개`
                       : ''}
                   </p>
-                  <div className="frame-scroll tall">
-                    <Markdown>{selectedDoc.compress_md}</Markdown>
-                  </div>
+                  {selectedDoc.select_why ? (
+                    <p className="select-review-body">{selectedDoc.select_why}</p>
+                  ) : null}
+                  {selectedDoc.has_compress && selectedDoc.compress_md ? (
+                    <div className="frame-scroll tall">
+                      <Markdown>{selectedDoc.compress_md}</Markdown>
+                    </div>
+                  ) : (
+                    <p className="section-note">이 리포트의 요약이 없습니다.</p>
+                  )}
                 </>
               ) : (
-                <p className="section-note">
-                  {selectedDoc
-                    ? '이 리포트의 요약이 없습니다.'
-                    : '리포트를 선택하세요.'}
-                </p>
+                <p className="section-note">리포트를 선택하세요.</p>
               )}
             </div>
           </div>

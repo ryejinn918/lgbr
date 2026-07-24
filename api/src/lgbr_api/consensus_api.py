@@ -61,16 +61,25 @@ def _make_asset_id(theme: str) -> str:
     return f"cs-{abbrev}-{day}-{secrets.token_hex(3)}"
 
 
+def _parse_jsonb(value: Any) -> Any:
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+    return value
+
+
 def _serialize_run(row: dict[str, Any] | None) -> dict[str, Any] | None:
     if not row:
         return None
     state = str(row.get("state") or "idle")
-    progress = row.get("progress") or {}
-    if isinstance(progress, str):
-        try:
-            progress = json.loads(progress)
-        except json.JSONDecodeError:
-            progress = {}
+    progress = _parse_jsonb(row.get("progress") or {})
+    if not isinstance(progress, dict):
+        progress = {}
+    criteria = _parse_jsonb(row.get("criteria") or {})
+    if not isinstance(criteria, dict):
+        criteria = {}
     return {
         "id": str(row["id"]),
         "asset_id": row.get("asset_id"),
@@ -80,6 +89,7 @@ def _serialize_run(row: dict[str, Any] | None) -> dict[str, Any] | None:
         "state": state,
         "label": STATE_LABELS.get(state, state),
         "progress": progress,
+        "criteria": criteria,
         "message": row.get("message"),
         "pid": row.get("pid"),
         "started_at": row["started_at"].isoformat() if row.get("started_at") else None,
@@ -231,7 +241,7 @@ def list_history(*, limit: int = 30, theme: str | None = None) -> dict[str, Any]
             cur.execute(
                 """
                 SELECT id, asset_id, theme, question, model, state, message,
-                       started_at, ended_at
+                       criteria, progress, started_at, ended_at, created_at
                 FROM consensus_runs
                 WHERE theme = %s
                 ORDER BY COALESCE(ended_at, started_at) DESC NULLS LAST
@@ -243,7 +253,7 @@ def list_history(*, limit: int = 30, theme: str | None = None) -> dict[str, Any]
             cur.execute(
                 """
                 SELECT id, asset_id, theme, question, model, state, message,
-                       started_at, ended_at
+                       criteria, progress, started_at, ended_at, created_at
                 FROM consensus_runs
                 ORDER BY COALESCE(ended_at, started_at) DESC NULLS LAST
                 LIMIT %s
@@ -293,49 +303,116 @@ def get_latest_ended(*, theme: str) -> dict[str, Any]:
     }
 
 
+def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    pub = r.get("published_at")
+    return {
+        "id": str(r["id"]),
+        "source_key": r.get("source_key"),
+        "title": r.get("title"),
+        "provider": r.get("provider"),
+        "page_count": r.get("page_count"),
+        "published_at": pub.isoformat() if pub is not None else None,
+        "quality_pass": r.get("quality_pass"),
+        "quality_scope": r.get("quality_scope"),
+        "theme_tag": r.get("theme"),
+        "will_select": False,
+        "will_fill_extra": False,
+        "select_role": None,
+        "select_why": None,
+        "exclude_reason": None,
+        **extra,
+    }
+
+
 def list_inputs(*, theme: str) -> dict[str, Any]:
+    """List candidate reports for Ops. AI pool only (no LLM); select runs at start."""
     if theme not in THEMES:
         return {"ok": False, "status": 400, "message": "invalid theme", "items": []}
-    with connect() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id::text, source_key, title, page_count, published_at,
-                   quality_pass, quality_scope, status,
-                   attrs->>'provider' AS provider,
-                   (quality_pass IS TRUE) AS will_select
-            FROM reports
-            WHERE status = 'downloaded'
-              AND attrs->>'theme' = %s
-            ORDER BY
-              CASE WHEN quality_pass IS TRUE THEN 0 ELSE 1 END,
-              published_at DESC NULLS LAST
-            """,
-            (theme,),
-        )
-        items = []
-        for r in cur.fetchall():
-            items.append(
-                {
-                    "id": r["id"],
-                    "source_key": r["source_key"],
-                    "title": r["title"],
-                    "provider": r.get("provider"),
-                    "page_count": r.get("page_count"),
-                    "published_at": (
-                        r["published_at"].isoformat() if r.get("published_at") else None
-                    ),
-                    "quality_pass": r.get("quality_pass"),
-                    "quality_scope": r.get("quality_scope"),
-                    "will_select": bool(r.get("will_select")),
-                }
+
+    src = str(ROOT / "consensus" / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+
+    if theme == "ai":
+        from consensus.runs_store import list_pool_reports  # noqa: WPS433
+        from consensus.select import AI_POOL_THEMES  # noqa: WPS433
+
+        pool = list_pool_reports(themes=AI_POOL_THEMES)
+        items = [_input_row(r) for r in pool]
+        qp_count = sum(1 for r in pool if r.get("quality_pass") is True)
+        return {
+            "ok": True,
+            "theme": theme,
+            "items": items,
+            "selected_count": 0,
+            "secondary_count": 0,
+            "total": len(items),
+            "criteria": {
+                "theme": theme,
+                "pool_themes": list(AI_POOL_THEMES),
+                "quality_pass": True,
+                "pool_count": len(items),
+                "quality_pass_count": qp_count,
+                "select": "on_run_start",
+            },
+        }
+
+    from consensus.select import select_for_theme  # noqa: WPS433
+
+    try:
+        selected, excluded, criteria = select_for_theme(theme)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": 500,
+            "message": str(exc),
+            "items": [],
+        }
+
+    role_map = {
+        str(r["id"]): str(r.get("select_role") or "selected") for r in selected
+    }
+    why_map = {str(r["id"]): r.get("select_why") for r in selected}
+    core_ids = {rid for rid, role in role_map.items() if role != "fill_extra"}
+    biblio_ids = {rid for rid, role in role_map.items() if role == "fill_extra"}
+    picked = set(role_map)
+    excl_map = {str(r["id"]): reason for r, reason in excluded}
+
+    seen: dict[str, dict[str, Any]] = {}
+    for r in selected:
+        seen[str(r["id"])] = r
+    for r, _reason in excluded:
+        seen.setdefault(str(r["id"]), r)
+
+    items = []
+    for rid, r in seen.items():
+        will_core = rid in core_ids
+        will_biblio = rid in biblio_ids
+        items.append(
+            _input_row(
+                r,
+                will_select=will_core,
+                will_fill_extra=will_biblio,
+                select_role=role_map.get(rid),
+                select_why=why_map.get(rid) if rid in picked else None,
+                exclude_reason=None if rid in picked else excl_map.get(rid),
             )
-    selected = sum(1 for i in items if i["will_select"])
+        )
+
+    will = [i for i in items if i["will_select"] or i.get("will_fill_extra")]
+    wont = [i for i in items if not i["will_select"] and not i.get("will_fill_extra")]
+    will.sort(key=lambda i: (0 if i["will_select"] else 1, i.get("title") or ""))
+    wont.sort(key=lambda i: i.get("published_at") or "", reverse=True)
+    items = will + wont
+
     return {
         "ok": True,
         "theme": theme,
         "items": items,
-        "selected_count": selected,
+        "selected_count": len(core_ids),
+        "secondary_count": len(biblio_ids),
         "total": len(items),
+        "criteria": criteria,
     }
 
 
@@ -385,7 +462,8 @@ def get_run_docs(run_id: str) -> dict[str, Any]:
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT d.role, d.rank, d.doc_status, d.exclude_reason, d.error,
+            SELECT d.role, d.rank, d.doc_status, d.exclude_reason, d.select_why,
+                   d.error,
                    r.id::text AS report_id, r.source_key, r.title,
                    r.page_count, r.quality_pass, r.quality_scope,
                    r.attrs->>'provider' AS provider,
@@ -398,7 +476,11 @@ def get_run_docs(run_id: str) -> dict[str, Any]:
             LEFT JOIN consensus_doc_artifacts a ON a.id = d.artifact_id
             WHERE d.run_id = %s::uuid
             ORDER BY
-              CASE d.role WHEN 'selected' THEN 0 ELSE 1 END,
+              CASE d.role
+                WHEN 'selected' THEN 0
+                WHEN 'fill_extra' THEN 1
+                ELSE 2
+              END,
               d.rank NULLS LAST
             """,
             (run_id,),
@@ -413,6 +495,7 @@ def get_run_docs(run_id: str) -> dict[str, Any]:
                     "rank": row.get("rank"),
                     "doc_status": row["doc_status"],
                     "exclude_reason": row.get("exclude_reason"),
+                    "select_why": row.get("select_why"),
                     "error": row.get("error"),
                     "report_id": row["report_id"],
                     "source_key": row["source_key"],

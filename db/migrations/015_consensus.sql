@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS consensus_run_docs (
     report_id UUID NOT NULL
         REFERENCES reports (id) ON DELETE RESTRICT,
     role TEXT NOT NULL
-        CHECK (role IN ('selected', 'excluded')),
+        CHECK (role IN ('selected', 'fill_extra', 'excluded')),
     rank INTEGER,
     exclude_reason TEXT,
     doc_status TEXT NOT NULL DEFAULT 'pending'

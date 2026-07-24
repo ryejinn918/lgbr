@@ -34,6 +34,10 @@ In scope / out of scope:
 
 Rules:
 - One roof + 2–4 major pillars (faces of the same roof)
+- Each pillar = one desk-owned axis: a single mechanism or value-chain segment,
+  dense and precise — like one team part would cover it
+- Do NOT merge unrelated fields into one pillar (keep them as separate pillars
+  or move the weaker angle to Outside-the-frame)
 - Each pillar: why it belongs + which body details are slots to fill later
 - State overlap (consensus) vs one-sided angles
 - Leave slots so the frame can grow with detail later
@@ -73,6 +77,8 @@ Output (English headers; Korean body OK for Korean sources):
                 "content": (
                     "Lock a consensus FRAME from compressed multi-report views. "
                     "Structure over detail. No invented facts. "
+                    "Keep each major pillar a single coherent axis — never mash "
+                    "unrelated domains into one pillar. "
                     "English section headers; Korean body when sources are Korean."
                 ),
             },

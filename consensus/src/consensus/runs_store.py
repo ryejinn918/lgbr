@@ -177,22 +177,30 @@ def append_event(
 
 
 def list_theme_reports(theme: str) -> list[dict[str, Any]]:
+    return list_pool_reports(themes=(theme,))
+
+
+def list_pool_reports(*, themes: tuple[str, ...]) -> list[dict[str, Any]]:
+    """Downloaded reports with attrs.theme in themes (qp first)."""
+    if not themes:
+        return []
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT id, source_key, title, file_path, file_name, page_count,
-                   published_at, quality_pass, quality_scope,
-                   attrs->>'provider' AS provider
+                   published_at, quality_pass, quality_scope, quality_json, attrs,
+                   attrs->>'provider' AS provider,
+                   attrs->>'theme' AS theme
             FROM reports
             WHERE status = 'downloaded'
-              AND attrs->>'theme' = %s
+              AND attrs->>'theme' = ANY(%s)
               AND coalesce(file_path, '') <> ''
             ORDER BY
               CASE WHEN quality_pass IS TRUE THEN 0 ELSE 1 END,
               published_at DESC NULLS LAST,
               page_count DESC NULLS LAST
             """,
-            (theme,),
+            (list(themes),),
         )
         return [dict(r) for r in cur.fetchall()]
 
@@ -205,13 +213,20 @@ def insert_run_docs(
 ) -> None:
     with connect() as conn, conn.cursor() as cur:
         for i, r in enumerate(selected, start=1):
+            role = str(r.get("select_role") or "selected")
+            if role not in ("selected", "fill_extra"):
+                role = "selected"
+            why = r.get("select_why")
+            why_s = str(why).strip() if why is not None else None
+            if why_s == "":
+                why_s = None
             cur.execute(
                 """
                 INSERT INTO consensus_run_docs
-                    (run_id, report_id, role, rank, doc_status)
-                VALUES (%s::uuid, %s, 'selected', %s, 'pending')
+                    (run_id, report_id, role, rank, select_why, doc_status)
+                VALUES (%s::uuid, %s, %s, %s, %s, 'pending')
                 """,
-                (run_id, r["id"], i),
+                (run_id, r["id"], role, i, why_s),
             )
         for r, reason in excluded:
             cur.execute(
@@ -362,12 +377,13 @@ def get_output(run_id: str, kind: str, *, ordinal: int = 0) -> dict[str, Any] | 
 
 
 def list_selected_docs_for_refill(run_id: str) -> list[dict[str, Any]]:
-    """Selected run docs with report paths + compress artifact (if linked)."""
+    """Core + bibliography run docs with report paths + compress artifact."""
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT
                 d.report_id::text AS report_id,
+                d.role,
                 d.rank,
                 d.doc_status,
                 d.artifact_id::text AS artifact_id,
@@ -381,8 +397,12 @@ def list_selected_docs_for_refill(run_id: str) -> list[dict[str, Any]]:
             FROM consensus_run_docs d
             JOIN reports r ON r.id = d.report_id
             LEFT JOIN consensus_doc_artifacts a ON a.id = d.artifact_id
-            WHERE d.run_id = %s::uuid AND d.role = 'selected'
-            ORDER BY d.rank NULLS LAST, r.published_at DESC NULLS LAST
+            WHERE d.run_id = %s::uuid
+              AND d.role IN ('selected', 'fill_extra')
+            ORDER BY
+              CASE d.role WHEN 'selected' THEN 0 ELSE 1 END,
+              d.rank NULLS LAST,
+              r.published_at DESC NULLS LAST
             """,
             (run_id,),
         )
