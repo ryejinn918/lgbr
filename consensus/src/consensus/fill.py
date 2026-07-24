@@ -1,4 +1,4 @@
-"""Fill locked consensus frame by reopening report slices."""
+"""Fill locked consensus frame by reopening report slices (slice-addressed)."""
 
 from __future__ import annotations
 
@@ -9,27 +9,65 @@ from typing import Any
 
 from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
 
+SLICE_CHAR_CAP = 12_000
 
-def _keyword_hits(text: str, queries: list[str], window: int = 1600, max_hits: int = 6) -> str:
-    if not queries:
-        return text[: min(len(text), window * 2)]
-    chunks: list[str] = []
-    lowered = text.lower()
-    for q in queries:
-        q = (q or "").strip()
-        if not q:
-            continue
-        idx = lowered.find(q.lower())
-        if idx < 0:
-            continue
-        start = max(0, idx - window // 3)
-        end = min(len(text), idx + len(q) + window * 2 // 3)
-        chunks.append(f"[hit q={q} @char={idx}]\n{text[start:end]}")
-        if len(chunks) >= max_hits:
-            break
-    if not chunks:
-        return f"[no keyword hits] queries={queries}\n" + text[: min(len(text), window)]
-    return "\n\n----\n\n".join(chunks)
+_SLOT_BLOCK_RE = re.compile(
+    r"(?m)^([ \t]*[-*][ \t]+)?\*\*Slots to fill later\*\*[^\n]*\n"
+    r"(?:[ \t]*[-*][ \t]+[^\n]*\n|[ \t]+\S[^\n]*\n)*"
+)
+
+
+def extract_target_slots(frame: str) -> list[str]:
+    """Collect bullet items under per-pillar 'Slots to fill later'."""
+    slots: list[str] = []
+    for m in re.finditer(
+        r"(?ims)\*\*Slots to fill later\*\*[^\n]*\n(.*?)(?=\n### |\n## |\Z)",
+        frame or "",
+    ):
+        block = m.group(1)
+        for line in block.splitlines():
+            s = line.strip()
+            if s.startswith(("-", "*")):
+                item = s.lstrip("-*").strip()
+                if item:
+                    slots.append(item)
+    return slots
+
+
+def strip_slot_sections(frame: str) -> str:
+    """Remove per-pillar Slots-to-fill-later blocks from a frame draft."""
+    if not frame:
+        return frame
+    out = _SLOT_BLOCK_RE.sub("", frame)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    return out.strip() + "\n"
+
+
+def strip_pillar_slots_from_filled(content: str) -> tuple[str, bool]:
+    """Strip illegal per-pillar Slots blocks from filled output.
+
+    Keeps a top-level ``## Still-empty slots`` section if present.
+    Returns (cleaned, did_strip).
+    """
+    if not content:
+        return content, False
+    # Only strip under Major pillars / Pillar enrichment — not Still-empty header text.
+    parts = re.split(r"(?m)^(## Still-empty slots\b.*)$", content, maxsplit=1)
+    head = parts[0]
+    tail = "".join(parts[1:]) if len(parts) > 1 else ""
+    cleaned_head, n = _SLOT_BLOCK_RE.subn("", head)
+    if n == 0:
+        return content, False
+    cleaned_head = re.sub(r"\n{3,}", "\n\n", cleaned_head)
+    return (cleaned_head.rstrip() + "\n\n" + tail.lstrip()).rstrip() + "\n", True
+
+
+def open_slice_body(text: str, *, cap: int = SLICE_CHAR_CAP) -> str:
+    """Return slice text for fill; head-truncate if over cap."""
+    text = text or ""
+    if len(text) <= cap:
+        return text
+    return text[:cap] + f"\n\n...[truncated at {cap} chars; slice longer]...\n"
 
 
 def _slice_inventory(doc_dir: Path) -> list[str]:
@@ -66,7 +104,6 @@ def _extract_reopen_section(compress_md: str) -> str:
         section = text[start:end].strip()
         if len(section) > 40:
             return section[:4000]
-    # Fallback: last ~2k of compress (re-open is usually near the end).
     return text[-2000:] if text else "(no compress)"
 
 
@@ -83,8 +120,6 @@ def _build_reopen_index(
             continue
         doc_dir = slug_to_dir.get(slug) or Path(str(card.get("cache_dir") or ""))
         ids = _slice_inventory(doc_dir) if doc_dir and doc_dir.is_dir() else []
-        if not ids and card.get("slice_count"):
-            ids = []
         slug_slices[slug] = ids
         reopen = _extract_reopen_section(str(card.get("compress") or ""))
         blocks.append(
@@ -110,11 +145,9 @@ def _coerce_slice_id(slice_id: str, valid: list[str]) -> str | None:
     sid = (slice_id or "").strip()
     if sid in valid:
         return sid
-    # Common mistake: plan emits whole when only s01.. exist.
     if sid == "whole" and "whole" not in valid:
         non_fm = [v for v in valid if v != "front_matter"]
         return non_fm[0] if non_fm else valid[0]
-    # Prefix / fuzzy: s1 → s01
     if re.fullmatch(r"s\d+", sid):
         padded = f"s{int(sid[1:]):02d}"
         if padded in valid:
@@ -135,7 +168,6 @@ def fill_frame(
     cards = compress_cards or []
     reopen_index, slug_slices = _build_reopen_index(cards, slug_to_dir)
     if not reopen_index:
-        # Minimal index from dirs only (cache-hit path without cards).
         parts = []
         for slug, doc_dir in sorted(slug_to_dir.items()):
             ids = _slice_inventory(doc_dir)
@@ -148,32 +180,42 @@ def fill_frame(
 
     (out_dir / "05_reopen_index.md").write_text(reopen_index, encoding="utf-8")
 
+    target_slots = extract_target_slots(frame)
+    structure_frame = strip_slot_sections(frame)
+    slots_block = (
+        "\n".join(f"- {s}" for s in target_slots)
+        if target_slots
+        else "- (no explicit slots; thicken pillars from OPEN bodies)"
+    )
+    (out_dir / "05_target_slots.md").write_text(slots_block + "\n", encoding="utf-8")
+
     plan_raw, _ = chat(
         [
             {
                 "role": "system",
                 "content": (
-                    "Output JSON only. Plan body opens to fill frame slots. "
-                    "Use ONLY slugs and slice_ids listed in the reopen index. "
-                    "Prefer short verbatim keywords from the index candidates."
+                    "Output JSON only. Plan which report slices to open to fill "
+                    "TARGET SLOTS. Use ONLY slugs and slice_ids from the reopen index. "
+                    "Do not invent keywords or queries — address slices only."
                 ),
             },
             {
                 "role": "user",
                 "content": (
                     f"Question: {question}\n\n"
-                    f"Consensus frame:\n{frame}\n\n"
-                    "Reopen index (from report compress + real slice inventory).\n"
+                    f"## Frame structure (titles to preserve)\n{structure_frame}\n\n"
+                    f"## TARGET SLOTS to fill\n{slots_block}\n\n"
+                    "Reopen index (compress candidates + valid slice_ids).\n"
                     "Rules:\n"
+                    "- Pick slug + slice_id only (no queries).\n"
                     "- slice_id MUST be one of that slug's valid_slice_ids "
                     "(never invent whole/s05 if absent).\n"
-                    "- queries: 1–4 short tokens that may appear verbatim in the PDF "
-                    "body (proper nouns, tickers, numbers). Prefer keywords already "
-                    "listed in the index candidates. No long phrases.\n"
-                    "- Cover frame slots / body re-open priority.\n"
+                    "- Prefer slice_ids named in the reopen candidates for each slot.\n"
+                    "- Cover TARGET SLOTS / body re-open priority; one open per slot "
+                    "when possible.\n"
                     "JSON:\n"
                     '{"opens":[{"slug":"...","slice_id":"s01",'
-                    '"queries":["H54GV","684MW"],"slot":"pillar/slot","why":"..."}]}\n\n'
+                    '"slot":"pillar/slot","why":"..."}]}\n\n'
                     f"## Reopen index\n{reopen_index}"
                 ),
             },
@@ -216,84 +258,64 @@ def fill_frame(
             coerced = slice_path.stem
             log(f"  open {i}: slice file fallback → {coerced}")
 
-        queries = [str(q).strip() for q in (op.get("queries") or []) if str(q).strip()]
-        # Drop long phrase queries (>40 chars) — they almost never hit verbatim.
-        short_q = [q for q in queries if len(q) <= 40]
-        if not short_q and queries:
-            # Keep first token-ish chunks from long phrases.
-            for q in queries:
-                for part in re.split(r"[\s,/|]+", q):
-                    part = part.strip()
-                    if 2 <= len(part) <= 40:
-                        short_q.append(part)
-                if len(short_q) >= 4:
-                    break
-        queries = short_q[:6] or queries[:3]
-
         text = slice_path.read_text(encoding="utf-8")
-        body = _keyword_hits(text, list(queries))
-        hit_n = 0 if body.startswith("[no keyword hits]") else body.count("[hit ")
-        log(f"  open [{i}] {slug}/{coerced} queries={queries} hits={hit_n}")
+        body = open_slice_body(text)
+        log(f"  open [{i}] {slug}/{coerced} slice_chars={len(text)} used={len(body)}")
         dossiers.append(
             {
                 "slug": slug,
                 "slice_id": coerced,
                 "slot": op.get("slot"),
                 "why": op.get("why"),
-                "queries": queries,
                 "body": body,
-                "hits": hit_n,
+                "slice_chars": len(text),
             }
         )
         (out_dir / f"05_open_{i}.txt").write_text(body, encoding="utf-8")
 
-    usable = [d for d in dossiers if d["hits"] > 0 or d["body"]]
-    if not usable:
+    if not dossiers:
         raise RuntimeError("fill: no body opens succeeded")
-
-    with_hits = [d for d in usable if d["hits"] > 0]
-    chosen = with_hits if with_hits else usable
-    if not with_hits:
-        log("fill: warning — no keyword hits; using slice excerpts")
 
     dossier_txt = "\n\n========\n\n".join(
         f"### OPEN {d['slug']}/{d['slice_id']} | slot={d['slot']} | why={d['why']}\n{d['body']}"
-        for d in chosen
+        for d in dossiers
     )
     prompt = f"""Preserve the locked frame's roof/pillar titles. Thicken pillars using **only**
-sentences/numbers that actually appear in the OPEN excerpts below.
-Never invent numbers, company facts, or prices missing from OPEN; put gaps under empty slots.
-Cite slug in evidence.
+sentences/numbers that actually appear in the OPEN bodies below.
+Never invent numbers, company facts, or prices missing from OPEN.
+Absorb filled TARGET SLOTS into Evidence — do **not** copy "Slots to fill later"
+under pillars. Cite slug in evidence.
 
-The output must be a **standalone, self-contained document** readable without the locked
-frame or any prior draft. Do not point at omitted text. Forbidden shorthand includes:
-(unchanged), same as above, as in locked frame, 중략, 생략, 同上, …(기존과 동일), and similar.
-Rewrite every section in full sentences—even claims that stay the same.
+The output must be a **standalone, self-contained document**. Forbidden shorthand:
+(unchanged), same as above, as in locked frame, 중략, 생략, and similar.
 
 Question: {question}
 
-## Locked frame (structure/titles to preserve; rewrite fully in the output)
-{frame}
+## Frame structure (titles to preserve; rewrite fully)
+{structure_frame}
 
-## Opened body excerpts
+## TARGET SLOTS (fill from OPEN; omit from output if filled)
+{slots_block}
+
+## Opened slice bodies
 {dossier_txt}
 
 Output (English headers; Korean body OK for Korean sources):
 # Filled frame
 
 ## Roof
-(full prose restating the roof; never "(unchanged)" or pointers to the locked frame)
+(full prose)
 
 ## Pillar enrichment
 ### 1. (existing pillar title)
-- **Role of this pillar** (full prose; no shorthand)
+- **Role of this pillar**
 - **Claim**
 - **Evidence (number / date / slug)**
 - **Watch**
-(dense; self-contained)
+(dense; self-contained; NO "Slots to fill later" under pillars)
 
 ## Still-empty slots (defer to web/other sources)
-- Only items not filled from literature. One follow-up query candidate each.
+- Only TARGET SLOTS not supported by OPEN bodies. One follow-up query each.
 
 ## Reference reports
 ...
@@ -303,10 +325,11 @@ Output (English headers; Korean body OK for Korean sources):
             {
                 "role": "system",
                 "content": (
-                    "Enrich a locked consensus frame with opened report bodies. "
+                    "Enrich a locked consensus frame with opened report slice bodies. "
                     "Keep roof/pillar titles. Grow density. No invented facts. "
-                    "Emit a standalone document: never use (unchanged), 중략, or any "
-                    "shorthand that refers to a prior draft or the locked frame. "
+                    "Use Pillar enrichment with Role/Claim/Evidence/Watch. "
+                    "Never emit per-pillar 'Slots to fill later'. "
+                    "Still-empty slots = only targets not filled from OPEN. "
                     "English headers; Korean body when sources are Korean."
                 ),
             },
@@ -317,12 +340,18 @@ Output (English headers; Korean body OK for Korean sources):
         label="fill",
         out_dir=out_dir,
     )
+    content, stripped = strip_pillar_slots_from_filled(content)
+    if stripped:
+        log("fill: warning — stripped per-pillar Slots to fill later from output")
+
     (out_dir / "06_filled_frame.md").write_text(content, encoding="utf-8")
-    log("fill DONE")
+    log(f"fill DONE opens_used={len(dossiers)} slice_chars={sum(d['slice_chars'] for d in dossiers)}")
     return content, {
         "plan": plan,
         "raw": plan_raw,
-        "opens_used": len(chosen),
-        "opens_with_hits": len(with_hits),
+        "opens_used": len(dossiers),
+        "slice_chars": sum(d["slice_chars"] for d in dossiers),
+        "target_slots": target_slots,
+        "stripped_pillar_slots": stripped,
         "slug_slices": slug_slices,
     }

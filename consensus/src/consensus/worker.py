@@ -351,3 +351,96 @@ def start_theme_run(
 
 def main_run(run_id: str) -> None:
     asyncio.run(run_pipeline(run_id))
+
+
+def refill_run(run_id: str, *, model: str | None = None) -> dict[str, Any]:
+    """Re-run fill only for an existing run (reuse frame + doc caches)."""
+    run = runs_store.get_run(run_id)
+    if not run:
+        raise RuntimeError(f"run not found: {run_id}")
+    frame_out = runs_store.get_output(run_id, "consensus_frame")
+    frame = (frame_out or {}).get("body_md") or ""
+    if not frame.strip():
+        raise RuntimeError(f"run {run_id} has no consensus_frame")
+
+    question = str(run.get("question") or "")
+    use_model = model or str(run.get("model") or DEFAULT_MODEL)
+    asset_id = str(run["asset_id"])
+    consensus_dir = run_dir(asset_id) / "_consensus"
+    consensus_dir.mkdir(parents=True, exist_ok=True)
+
+    docs = runs_store.list_selected_docs_for_refill(run_id)
+    if not docs:
+        raise RuntimeError(f"run {run_id} has no selected docs")
+
+    cards: list[dict[str, Any]] = []
+    slug_dirs: dict[str, Path] = {}
+    for d in docs:
+        pdf = Path(str(d.get("file_path") or ""))
+        if not pdf.is_file():
+            log(f"refill: skip missing pdf report_id={d.get('report_id')}")
+            continue
+        content_hash = str(d.get("content_hash") or "") or sha256_file(pdf)
+        cache = doc_cache_dir(str(d["report_id"]), content_hash)
+        if not (cache / "01_slices").is_dir():
+            # Fallback: any hash dir under report
+            parent = cache.parent
+            alts = sorted(
+                p for p in parent.iterdir() if p.is_dir() and (p / "01_slices").is_dir()
+            ) if parent.is_dir() else []
+            if not alts:
+                log(f"refill: skip no slices report_id={d.get('report_id')}")
+                continue
+            cache = alts[0]
+        slug = slug_from_report(
+            source_key=str(d.get("source_key") or ""),
+            title=str(d.get("title") or ""),
+        )
+        compress = str(d.get("compress_md") or "")
+        if not compress:
+            compress_path = cache / "03_report_compress.md"
+            if compress_path.is_file():
+                compress = compress_path.read_text(encoding="utf-8")
+        slug_dirs[slug] = cache
+        cards.append(
+            {
+                "slug": slug,
+                "source_pdf": str(pdf),
+                "compress": compress,
+                "cache_dir": cache,
+                "report_id": d["report_id"],
+                "slice_count": d.get("slice_count"),
+                "toc_found": d.get("toc_found"),
+                "from_cache": True,
+            }
+        )
+
+    if not slug_dirs:
+        raise RuntimeError("refill: no usable doc caches")
+
+    log_c = ConsensusLogger(run_id)
+    log_c.emit(
+        stage="fill",
+        event="refill_start",
+        reports=len(slug_dirs),
+        model=use_model,
+    )
+    with log_c.stage("fill", reports=len(slug_dirs), refill=True):
+        filled, plan_meta = fill_frame(
+            frame,
+            slug_dirs,
+            question=question,
+            out_dir=consensus_dir,
+            model=use_model,
+            compress_cards=cards,
+        )
+        runs_store.save_output(
+            run_id, kind="fill_plan", body_json=plan_meta, body_md=None
+        )
+        runs_store.save_output(run_id, kind="filled_frame", body_md=filled)
+        log_c.emit(stage="fill", event="filled_done", chars=len(filled), refill=True)
+
+    msg = f"refilled opens={plan_meta.get('opens_used')} filled_chars={len(filled)}"
+    runs_store.touch_run_message(run_id, msg)
+    log(f"REFILL DONE run={run_id} {msg}")
+    return {"run_id": run_id, "filled_chars": len(filled), "plan_meta": plan_meta}

@@ -345,3 +345,56 @@ def save_output(
             ),
         )
         conn.commit()
+
+
+def get_output(run_id: str, kind: str, *, ordinal: int = 0) -> dict[str, Any] | None:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT kind, ordinal, body_md, body_json, created_at
+            FROM consensus_outputs
+            WHERE run_id = %s::uuid AND kind = %s AND ordinal = %s
+            """,
+            (run_id, kind, ordinal),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_selected_docs_for_refill(run_id: str) -> list[dict[str, Any]]:
+    """Selected run docs with report paths + compress artifact (if linked)."""
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                d.report_id::text AS report_id,
+                d.rank,
+                d.doc_status,
+                d.artifact_id::text AS artifact_id,
+                r.source_key,
+                r.title,
+                r.file_path,
+                a.compress_md,
+                a.content_hash,
+                a.slice_count,
+                a.toc_found
+            FROM consensus_run_docs d
+            JOIN reports r ON r.id = d.report_id
+            LEFT JOIN consensus_doc_artifacts a ON a.id = d.artifact_id
+            WHERE d.run_id = %s::uuid AND d.role = 'selected'
+            ORDER BY d.rank NULLS LAST, r.published_at DESC NULLS LAST
+            """,
+            (run_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def touch_run_message(run_id: str, message: str) -> None:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs SET message = %s WHERE id = %s::uuid
+            """,
+            (message, run_id),
+        )
+        conn.commit()
