@@ -4,16 +4,25 @@ from __future__ import annotations
 
 from consensus.select import (
     CORE_MAX,
-    SELECT_SYSTEM,
     build_audit_cards,
     parse_pack_selection,
+    pool_themes_for,
+    select_system_prompt,
 )
 
 
 def test_select_system_requires_korean_and_omit_summary():
-    assert "Korean" in SELECT_SYSTEM
-    assert "Omit summary" in SELECT_SYSTEM
-    assert "omitted[]" in SELECT_SYSTEM
+    for theme in ("ai", "datacenter", "physical_ai"):
+        prompt = select_system_prompt(theme)
+        assert "Korean" in prompt
+        assert "Omit summary" in prompt
+        assert "omitted[]" in prompt
+
+
+def test_pool_themes_ai_includes_datacenter():
+    assert pool_themes_for("ai") == ("ai", "datacenter")
+    assert pool_themes_for("datacenter") == ("datacenter",)
+    assert pool_themes_for("physical_ai") == ("physical_ai",)
 
 
 def test_build_audit_cards_clips_quality_json():

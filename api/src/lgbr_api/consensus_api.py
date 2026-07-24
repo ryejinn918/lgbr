@@ -325,7 +325,7 @@ def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
 
 
 def list_inputs(*, theme: str) -> dict[str, Any]:
-    """List candidate reports for Ops. AI pool only (no LLM); select runs at start."""
+    """List candidate reports for Ops. Pool only (no LLM); select runs at start."""
     if theme not in THEMES:
         return {"ok": False, "status": 400, "message": "invalid theme", "items": []}
 
@@ -333,90 +333,32 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
     if src not in sys.path:
         sys.path.insert(0, src)
 
-    if theme == "ai":
-        from consensus.runs_store import (  # noqa: WPS433
-            PERIOD_MONTHS_DEFAULT,
-            list_pool_reports,
-        )
-        from consensus.select import AI_POOL_THEMES  # noqa: WPS433
+    from consensus.runs_store import (  # noqa: WPS433
+        PERIOD_MONTHS_DEFAULT,
+        list_pool_reports,
+    )
+    from consensus.select import pool_themes_for  # noqa: WPS433
 
-        pool = list_pool_reports(themes=AI_POOL_THEMES)
-        items = [_input_row(r) for r in pool]
-        qp_count = sum(1 for r in pool if r.get("quality_pass") is True)
-        return {
-            "ok": True,
-            "theme": theme,
-            "items": items,
-            "selected_count": 0,
-            "secondary_count": 0,
-            "total": len(items),
-            "criteria": {
-                "theme": theme,
-                "pool_themes": list(AI_POOL_THEMES),
-                "period_months": PERIOD_MONTHS_DEFAULT,
-                "quality_pass": True,
-                "pool_count": len(items),
-                "quality_pass_count": qp_count,
-                "select": "on_run_start",
-            },
-        }
-
-    from consensus.select import select_for_theme  # noqa: WPS433
-
-    try:
-        selected, excluded, criteria = select_for_theme(theme)
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "ok": False,
-            "status": 500,
-            "message": str(exc),
-            "items": [],
-        }
-
-    role_map = {
-        str(r["id"]): str(r.get("select_role") or "selected") for r in selected
-    }
-    why_map = {str(r["id"]): r.get("select_why") for r in selected}
-    core_ids = {rid for rid, role in role_map.items() if role != "fill_extra"}
-    biblio_ids = {rid for rid, role in role_map.items() if role == "fill_extra"}
-    picked = set(role_map)
-    excl_map = {str(r["id"]): reason for r, reason in excluded}
-
-    seen: dict[str, dict[str, Any]] = {}
-    for r in selected:
-        seen[str(r["id"])] = r
-    for r, _reason in excluded:
-        seen.setdefault(str(r["id"]), r)
-
-    items = []
-    for rid, r in seen.items():
-        will_core = rid in core_ids
-        will_biblio = rid in biblio_ids
-        items.append(
-            _input_row(
-                r,
-                will_select=will_core,
-                will_fill_extra=will_biblio,
-                select_role=role_map.get(rid),
-                select_why=why_map.get(rid) if rid in picked else None,
-                exclude_reason=None if rid in picked else excl_map.get(rid),
-            )
-        )
-
-    will = [i for i in items if i["will_select"] or i.get("will_fill_extra")]
-    wont = [i for i in items if not i["will_select"] and not i.get("will_fill_extra")]
-    will.sort(key=lambda i: (0 if i["will_select"] else 1, i.get("title") or ""))
-    wont.sort(key=lambda i: i.get("published_at") or "", reverse=True)
-    items = will + wont
-
+    pool_themes = pool_themes_for(theme)
+    pool = list_pool_reports(themes=pool_themes)
+    items = [_input_row(r) for r in pool]
+    qp_count = sum(1 for r in pool if r.get("quality_pass") is True)
     return {
         "ok": True,
         "theme": theme,
         "items": items,
-        "selected_count": len(core_ids),
-        "secondary_count": len(biblio_ids),
+        "selected_count": 0,
+        "secondary_count": 0,
         "total": len(items),
-        "criteria": criteria,
+        "criteria": {
+            "theme": theme,
+            "pool_themes": list(pool_themes),
+            "period_months": PERIOD_MONTHS_DEFAULT,
+            "quality_pass": True,
+            "pool_count": len(items),
+            "quality_pass_count": qp_count,
+            "select": "on_run_start",
+        },
     }
 
 
@@ -463,6 +405,7 @@ def get_outputs(run_id: str) -> dict[str, Any]:
 
 
 def get_run_docs(run_id: str) -> dict[str, Any]:
+    """List run docs with metadata only (no compress_md bodies)."""
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -472,7 +415,10 @@ def get_run_docs(run_id: str) -> dict[str, Any]:
                    r.page_count, r.quality_pass, r.quality_scope,
                    r.attrs->>'provider' AS provider,
                    a.id::text AS artifact_id,
-                   a.compress_md,
+                   (
+                     a.compress_md IS NOT NULL
+                     AND length(a.compress_md) > 0
+                   ) AS has_compress,
                    a.slice_count,
                    a.toc_found
             FROM consensus_run_docs d
@@ -492,7 +438,6 @@ def get_run_docs(run_id: str) -> dict[str, Any]:
         items = []
         for r in cur.fetchall():
             row = dict(r)
-            md = row.get("compress_md")
             items.append(
                 {
                     "role": row["role"],
@@ -509,13 +454,49 @@ def get_run_docs(run_id: str) -> dict[str, Any]:
                     "quality_scope": row.get("quality_scope"),
                     "provider": row.get("provider"),
                     "artifact_id": row.get("artifact_id"),
-                    "has_compress": bool(md),
-                    "compress_md": md,
+                    "has_compress": bool(row.get("has_compress")),
                     "slice_count": row.get("slice_count"),
                     "toc_found": row.get("toc_found"),
                 }
             )
     return {"ok": True, "run_id": run_id, "items": items}
+
+
+def get_run_doc_compress(run_id: str, report_id: str) -> dict[str, Any]:
+    """Fetch one report's compress_md for a run (lazy body load)."""
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT r.id::text AS report_id, r.title,
+                   a.compress_md, a.slice_count
+            FROM consensus_run_docs d
+            JOIN reports r ON r.id = d.report_id
+            LEFT JOIN consensus_doc_artifacts a ON a.id = d.artifact_id
+            WHERE d.run_id = %s::uuid
+              AND d.report_id = %s::uuid
+            LIMIT 1
+            """,
+            (run_id, report_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {
+            "ok": False,
+            "status": 404,
+            "message": "run doc not found",
+            "run_id": run_id,
+            "report_id": report_id,
+        }
+    md = row.get("compress_md")
+    return {
+        "ok": True,
+        "run_id": run_id,
+        "report_id": row["report_id"],
+        "title": row.get("title"),
+        "compress_md": md,
+        "has_compress": bool(md),
+        "slice_count": row.get("slice_count"),
+    }
 
 
 def _ensure_prompt_set(label: str) -> str:

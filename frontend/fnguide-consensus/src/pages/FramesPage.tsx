@@ -17,7 +17,6 @@ type DocRow = {
   title: string
   provider?: string | null
   has_compress: boolean
-  compress_md?: string | null
   slice_count?: number | null
   exclude_reason?: string | null
   select_why?: string | null
@@ -32,6 +31,9 @@ export function FramesPage() {
   const [docs, setDocs] = useState<DocRow[]>([])
   const [tab, setTab] = useState<ViewTab>('filled')
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
+  const [compressMd, setCompressMd] = useState<string | null>(null)
+  const [compressLoading, setCompressLoading] = useState(false)
+  const [compressError, setCompressError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -39,6 +41,8 @@ export function FramesPage() {
     setError(null)
     setDocs([])
     setSelectedDocId(null)
+    setCompressMd(null)
+    setCompressError(null)
     setTab('filled')
     void fetch(`/api/consensus/latest?theme=${theme}`)
       .then(async (r) => {
@@ -100,6 +104,46 @@ export function FramesPage() {
     selectedDocs.find((d) => d.report_id === selectedDocId) ??
     selectedDocs[0] ??
     null
+
+  useEffect(() => {
+    if (!run?.id || !selectedDoc) {
+      setCompressMd(null)
+      setCompressError(null)
+      setCompressLoading(false)
+      return
+    }
+    if (!selectedDoc.has_compress) {
+      setCompressMd(null)
+      setCompressError(null)
+      setCompressLoading(false)
+      return
+    }
+    let cancelled = false
+    setCompressLoading(true)
+    setCompressError(null)
+    setCompressMd(null)
+    void fetch(
+      `/api/consensus/runs/${run.id}/docs/${selectedDoc.report_id}/compress`,
+    )
+      .then(async (r) => {
+        const d = await r.json()
+        if (!r.ok || !d.ok) throw new Error(d.message || `HTTP ${r.status}`)
+        if (!cancelled) {
+          setCompressMd(d.compress_md ?? null)
+          setCompressLoading(false)
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setCompressMd(null)
+          setCompressError(e instanceof Error ? e.message : String(e))
+          setCompressLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [run?.id, selectedDoc?.report_id, selectedDoc?.has_compress])
 
   const frameBody = tab === 'filled' ? filled : tab === 'consensus' ? consensus : null
 
@@ -250,9 +294,13 @@ export function FramesPage() {
                   {selectedDoc.select_why ? (
                     <p className="select-review-body">{selectedDoc.select_why}</p>
                   ) : null}
-                  {selectedDoc.has_compress && selectedDoc.compress_md ? (
+                  {compressLoading ? (
+                    <p className="section-note">요약 불러오는 중…</p>
+                  ) : compressError ? (
+                    <p className="error-line">{compressError}</p>
+                  ) : selectedDoc.has_compress && compressMd ? (
                     <div className="frame-scroll tall">
-                      <Markdown>{selectedDoc.compress_md}</Markdown>
+                      <Markdown>{compressMd}</Markdown>
                     </div>
                   ) : (
                     <p className="section-note">이 리포트의 요약이 없습니다.</p>

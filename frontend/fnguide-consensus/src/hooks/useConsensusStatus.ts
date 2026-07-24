@@ -26,7 +26,7 @@ export function useConsensusStatus(theme?: ConsensusTheme) {
 
   const refresh = useCallback(async () => {
     try {
-      const histQs = new URLSearchParams({ limit: '30' })
+      const histQs = new URLSearchParams({ limit: '2' })
       if (theme) histQs.set('theme', theme)
       const [cur, hist] = await Promise.all([
         fetch('/api/consensus?events=50').then((r) => r.json()),

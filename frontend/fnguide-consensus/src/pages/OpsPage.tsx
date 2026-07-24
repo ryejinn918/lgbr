@@ -31,7 +31,7 @@ export function OpsPage() {
   } = useConsensusStatus(theme)
 
   const themeHistory = useMemo(
-    () => history.filter((h) => h.theme === theme),
+    () => history.filter((h) => h.theme === theme).slice(0, 2),
     [history, theme],
   )
 

@@ -28,7 +28,7 @@ export function SelectPage() {
   const { status, history } = useConsensusStatus(theme)
 
   const themeHistory = useMemo(
-    () => history.filter((h) => h.theme === theme),
+    () => history.filter((h) => h.theme === theme).slice(0, 2),
     [history, theme],
   )
 
@@ -153,7 +153,7 @@ export function SelectPage() {
         </div>
         {themeHistory.length > 1 && (
           <div className="chip-row">
-            {themeHistory.slice(0, 8).map((h, i) => (
+            {themeHistory.map((h, i) => (
               <button
                 key={h.id}
                 type="button"

@@ -19,6 +19,7 @@ from lgbr_api.consensus_api import (
     get_current_run,
     get_latest_ended,
     get_outputs,
+    get_run_doc_compress,
     get_run_docs,
     list_events as list_consensus_events,
     list_history as list_consensus_history,
@@ -323,6 +324,14 @@ async def consensus_docs(request: Request) -> JSONResponse:
     return JSONResponse(get_run_docs(run_id))
 
 
+async def consensus_doc_compress(request: Request) -> JSONResponse:
+    run_id = str(request.path_params.get("run_id") or "")
+    report_id = str(request.path_params.get("report_id") or "")
+    result = get_run_doc_compress(run_id, report_id)
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
 async def consensus_chat(request: Request) -> JSONResponse:
     try:
         body = await request.json()
@@ -416,6 +425,10 @@ def create_app() -> Starlette:
             ),
             Route("/api/consensus/runs/{run_id}/outputs", consensus_outputs),
             Route("/api/consensus/runs/{run_id}/docs", consensus_docs),
+            Route(
+                "/api/consensus/runs/{run_id}/docs/{report_id}/compress",
+                consensus_doc_compress,
+            ),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],
         lifespan=lifespan,
