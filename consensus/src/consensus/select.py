@@ -19,6 +19,9 @@ SELECT_SYSTEM = """You build a research pack for an AI + AIDC industry consensus
 You receive audit cards (title, topic, framework_summary, rationale) for quality-passed
 sell-side notes. Choose which reports belong in the pack.
 
+Language (mandatory):
+- Write coverage_notes, pillar_sketch, and every why field in Korean.
+
 Goals:
 - Cover diverse analytical axes across the pack (power/site, networking, inference infra,
   demand structure, etc.) so the consensus can have several major pillars.
@@ -37,15 +40,22 @@ Limits:
 - core: at most 10 report ids — these drive the consensus frame.
 - bibliography: useful extras for detail-fill later (not in the frame). May be empty.
 - Only use report_id values from the provided cards. No duplicates across core/bibliography.
+- Do NOT list every omitted report_id. No omitted[] array.
+
+coverage_notes (Korean, short paragraphs):
+1) What the pack covers (axes / balance).
+2) Omit summary: main types of quality-passed notes left out and why
+   (e.g. thin macro/asset allocation, duplicate axis, physical-AI overweight, AI as seasoning).
+   Types and representative reasons only — never enumerate all omitted titles.
 
 Return JSON only:
 {
   "core": [{"report_id": "...", "why": "..."}],
   "bibliography": [{"report_id": "...", "why": "..."}],
   "coverage_notes": "...",
-  "pillar_sketch": ["axis 1...", "axis 2..."]
+  "pillar_sketch": ["축 1...", "축 2..."]
 }
-pillar_sketch: short list of non-overlapping axes the core pack can support.
+pillar_sketch: short Korean list of non-overlapping axes the core pack can support.
 """
 
 

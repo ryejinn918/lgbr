@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { Markdown } from '../components/Markdown'
 import { formatTime } from '../lib/format'
 import { FRAME_TAB, NAV, labelDocStatus } from '../lib/labels'
-import type { ConsensusRun, ConsensusTheme } from '../types'
+import { parseTheme, themePath } from '../lib/theme'
+import type { ConsensusRun } from '../types'
 import { THEME_LABEL } from '../types'
 
 type ViewTab = 'filled' | 'consensus' | 'materials'
@@ -22,16 +23,9 @@ type DocRow = {
   select_why?: string | null
 }
 
-const THEMES: ConsensusTheme[] = ['datacenter', 'ai', 'physical_ai']
-
-function parseTheme(raw: string | null): ConsensusTheme {
-  if (raw && THEMES.includes(raw as ConsensusTheme)) return raw as ConsensusTheme
-  return 'datacenter'
-}
-
 export function FramesPage() {
-  const [params, setParams] = useSearchParams()
-  const theme = parseTheme(params.get('theme'))
+  const { theme: raw } = useParams()
+  const theme = parseTheme(raw)
   const [run, setRun] = useState<ConsensusRun | null>(null)
   const [filled, setFilled] = useState<string | null>(null)
   const [consensus, setConsensus] = useState<string | null>(null)
@@ -45,6 +39,7 @@ export function FramesPage() {
     setError(null)
     setDocs([])
     setSelectedDocId(null)
+    setTab('filled')
     void fetch(`/api/consensus/latest?theme=${theme}`)
       .then(async (r) => {
         const d = await r.json()
@@ -95,39 +90,26 @@ export function FramesPage() {
   return (
     <>
       <header className="monitor-header">
-        <h1>{NAV.frames}</h1>
+        <h1>
+          {THEME_LABEL[theme]} · {NAV.frames}
+        </h1>
         <p className="lede">
           섹터별 최신 논지와, 근거로 쓴 리포트 요약을 확인합니다.
         </p>
       </header>
 
       <section className="panel">
-        <div className="chip-row">
-          {THEMES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`chip ${theme === t ? 'active' : ''}`}
-              onClick={() => {
-                setParams({ theme: t }, { replace: true })
-                setTab('filled')
-              }}
-            >
-              {THEME_LABEL[t]}
-            </button>
-          ))}
-        </div>
         {run ? (
           <p className="section-note">
-            {run.asset_id} · {formatTime(run.ended_at)} · {run.question}
+            최근 실행 · {formatTime(run.ended_at)} · {run.question}
           </p>
         ) : (
           <p className="section-note">
             이 섹터에 완료된 실행이 없습니다.{' '}
-            <Link to={`/ops?theme=${theme}`}>{NAV.ops}에서 생성</Link>
+            <Link to={themePath(theme, 'ops')}>{NAV.ops}에서 생성</Link>
           </p>
         )}
-        <Link className="btn" to={`/?theme=${theme}`}>
+        <Link className="btn" to={themePath(theme, 'compare')}>
           이 섹터로 {NAV.compare}
         </Link>
         {error && <p className="error-line">{error}</p>}
@@ -164,7 +146,7 @@ export function FramesPage() {
         )}
         {tab === 'materials' && (
           <p className="section-note">
-            이번 실행에 선정된 증권사 리포트와 문서별 요약입니다.
+            이번 실행에 선별된 증권사 리포트와 문서별 요약입니다.
           </p>
         )}
 
@@ -181,7 +163,7 @@ export function FramesPage() {
           <div className="materials-layout">
             <ul className="materials-list">
               {selectedDocs.length === 0 && (
-                <li className="section-note">선정 리포트 없음</li>
+                <li className="section-note">선별 리포트 없음</li>
               )}
               {selectedDocs.map((d) => (
                 <li key={d.report_id}>

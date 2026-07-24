@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from consensus.select import (
     CORE_MAX,
+    SELECT_SYSTEM,
     build_audit_cards,
     parse_pack_selection,
 )
+
+
+def test_select_system_requires_korean_and_omit_summary():
+    assert "Korean" in SELECT_SYSTEM
+    assert "Omit summary" in SELECT_SYSTEM
+    assert "omitted[]" in SELECT_SYSTEM
 
 
 def test_build_audit_cards_clips_quality_json():

@@ -5,6 +5,7 @@ export const APP_BRAND = '섹터 컨센서스'
 export const NAV = {
   compare: '비교',
   frames: '논지',
+  select: '선별',
   ops: '실행',
 } as const
 
@@ -41,7 +42,7 @@ export const CHAT_PHASE: Record<string, string> = {
 /** Pipeline stages shown in progress / events. */
 export const STAGE_LABEL: Record<string, string> = {
   run: '실행',
-  select: '리포트 선정',
+  select: '리포트 선별',
   doc: '리포트 분석',
   consensus: '골격 논지',
   fill: '상세 논지',
@@ -74,6 +75,23 @@ export function labelChatPhase(phase: string): string {
 
 export function labelRunState(state: string): string {
   return RUN_STATE[state] ?? state
+}
+
+/** Newest-first history index → operator-facing run label (no asset ids). */
+export function labelRunSlot(
+  index: number,
+  state: string | null | undefined,
+): string {
+  if (
+    state === 'starting' ||
+    state === 'active' ||
+    state === 'stopping'
+  ) {
+    return '현재 실행'
+  }
+  if (index <= 0) return '최근 실행'
+  if (index === 1) return '이전 실행'
+  return `이전 실행 (${index})`
 }
 
 export function labelDocStatus(status: string): string {

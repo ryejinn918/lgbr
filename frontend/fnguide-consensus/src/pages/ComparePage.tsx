@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useCompareStore } from '../compare/CompareStore'
 import { prepareSend, type ColumnState, type Mode } from '../compare/compareState'
 import { Markdown } from '../components/Markdown'
@@ -15,15 +15,8 @@ import {
   labelChatPhase,
   labelRole,
 } from '../lib/labels'
-import type { ConsensusTheme } from '../types'
+import { parseTheme, themePath } from '../lib/theme'
 import { THEME_LABEL } from '../types'
-
-const THEMES: ConsensusTheme[] = ['datacenter', 'ai', 'physical_ai']
-
-function parseTheme(raw: string | null): ConsensusTheme {
-  if (raw && THEMES.includes(raw as ConsensusTheme)) return raw as ConsensusTheme
-  return 'datacenter'
-}
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -35,8 +28,8 @@ function exportStamp(): string {
 }
 
 export function ComparePage() {
-  const [params, setParams] = useSearchParams()
-  const theme = parseTheme(params.get('theme'))
+  const { theme: raw } = useParams()
+  const theme = parseTheme(raw)
   const { state, dispatch } = useCompareStore(theme)
   const { plain, grounded, sharedDraft, frameTab, latest } = state
   const { run, filled, consensus, error: frameError } = latest
@@ -70,10 +63,6 @@ export function ComparePage() {
       cancelled = true
     }
   }, [theme, dispatch])
-
-  function setTheme(next: ConsensusTheme) {
-    setParams({ theme: next }, { replace: true })
-  }
 
   async function runStream(
     mode: Mode,
@@ -222,7 +211,9 @@ export function ComparePage() {
   return (
     <>
       <header className="monitor-header">
-        <h1>{NAV.compare}</h1>
+        <h1>
+          {THEME_LABEL[theme]} · {NAV.compare}
+        </h1>
         <p className="lede">
           왼쪽이 {CHAT_MODE.grounded}({CHAT_ROLE.ours}), 오른쪽이{' '}
           {CHAT_MODE.plain}({CHAT_ROLE.control})입니다. 열마다 다른 질문·이어
@@ -231,26 +222,14 @@ export function ComparePage() {
       </header>
 
       <section className="panel">
-        <div className="chip-row">
-          {THEMES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`chip ${theme === t ? 'active' : ''}`}
-              onClick={() => setTheme(t)}
-            >
-              {THEME_LABEL[t]}
-            </button>
-          ))}
-        </div>
         {run ? (
           <p className="section-note">
-            {run.asset_id} · {formatTime(run.ended_at)} · {run.question}
+            최근 실행 · {formatTime(run.ended_at)} · {run.question}
           </p>
         ) : (
           <p className="section-note">
             {CHAT_MODE.grounded}에 쓸 완료된 실행이 없습니다.{' '}
-            <Link to={`/ops?theme=${theme}`}>{NAV.ops}에서 생성</Link>
+            <Link to={themePath(theme, 'ops')}>{NAV.ops}에서 생성</Link>
           </p>
         )}
         {frameError && <p className="error-line">{frameError}</p>}
@@ -341,7 +320,7 @@ export function ComparePage() {
           </p>
           <p className="section-note">
             {run
-              ? `${run.asset_id} · ${formatTime(run.ended_at)} · ${run.question}`
+              ? `최근 실행 · ${formatTime(run.ended_at)} · ${run.question}`
               : '완료된 실행 없음'}
           </p>
         </div>
