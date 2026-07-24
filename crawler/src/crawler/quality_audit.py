@@ -58,6 +58,10 @@ Respond with a single JSON object only (no markdown):
   "rationale": string
 }
 
+Language (mandatory):
+- Write topic, framework_summary, fail_reasons, pass_signals, and rationale in Korean.
+- Do not use Chinese. English is allowed only for proper nouns, tickers, and product names.
+
 Rules:
 - pass MUST be true only if has_coherent_framework AND has_broad_sector_coverage AND scope is "sector".
 - If scope is "company", pass MUST be false.

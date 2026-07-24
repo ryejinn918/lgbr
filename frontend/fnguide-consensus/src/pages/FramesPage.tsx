@@ -279,7 +279,14 @@ export function FramesPage() {
                     >
                       {selectedDoc.role === 'fill_extra' ? '참고' : '골격'}
                     </span>
-                    <span className="materials-title">{selectedDoc.title}</span>
+                    <a
+                      className="text-link materials-title"
+                      href={`/api/reports/${selectedDoc.report_id}/file`}
+                      download
+                      title="보고서 받기"
+                    >
+                      {selectedDoc.title}
+                    </a>
                   </p>
                   <p className="section-note">
                     {selectedDoc.provider ?? '—'}

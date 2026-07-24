@@ -27,6 +27,7 @@ from lgbr_api.news_store import get_cached_search, upsert_search_results
 _SEOUL = ZoneInfo("Asia/Seoul")
 
 MAX_TOOL_ROUNDS = 3
+# Disabled: not passed to OpenRouter while SerpAPI chat tool is off.
 WEB_SEARCH_TOOL = {
     "type": "function",
     "function": {
@@ -234,13 +235,16 @@ def _build_system(
         f"Today is {today} in Asia/Seoul.\n"
         "You are writing for LG Economic Research Institute (LGERI) practitioners. "
         "Be concise and logical. Ground every claim in a source "
-        "(frame report slug, or web title + URL). "
+        "(frame report slug when available). "
         "Avoid speculation and rhetoric; if unknown, say so. "
         "Reply in Korean unless the user asks otherwise. "
-        "Call web_search (Google News) for live/public facts beyond your context; "
-        "set hl to match the query language (en/ko). If the tool returns an error "
-        "or empty results, retry with another hl/gl or a rephrased query. "
-        "Cite title + URL when using web results."
+        # SerpAPI web_search disabled — do not instruct the model to call it.
+        "No web search tool is available. Answer from the given context and your "
+        "knowledge; clearly say when a claim needs live verification you cannot do."
+        # "Call web_search (Google News) for live/public facts beyond your context; "
+        # "set hl to match the query language (en/ko). If the tool returns an error "
+        # "or empty results, retry with another hl/gl or a rephrased query. "
+        # "Cite title + URL when using web results."
     )
     resolved_run_id = run_id
     resolved_theme = theme if theme in THEMES else None
@@ -288,17 +292,20 @@ def _build_system(
             "Primary context is the consensus filled frame below. "
             "It synthesizes broker research reports from roughly the last 3 months. "
             "It may miss same-day or very recent news, prices, and filings. "
-            "For time-sensitive facts, use web_search (news), then answer citing frame "
-            "vs news sources separately. Prefer the frame's structure and consensus "
-            "pillars; if the news is newer and conflicts, state the dates and prefer "
-            "the fresher fact.\n\n"
+            # "For time-sensitive facts, use web_search (news), then answer citing frame "
+            # "vs news sources separately. Prefer the frame's structure and consensus "
+            # "pillars; if the news is newer and conflicts, state the dates and prefer "
+            # "the fresher fact.\n\n"
+            "Prefer the frame's structure and consensus pillars. "
+            "If something looks time-sensitive and is missing from the frame, say so.\n\n"
             f"--- CONSENSUS FRAME ---\n{frame}\n--- END FRAME ---"
         )
     elif mode == "plain":
         sys_content = (
             f"{base}\n\n"
             "No consensus frame is provided. "
-            "Use web_search (Google News) to verify timely facts before answering."
+            # "Use web_search (Google News) to verify timely facts before answering."
+            "Answer carefully from general knowledge and say when you are unsure."
         )
     else:
         return [], "mode must be plain or grounded", None, None
@@ -472,8 +479,10 @@ def iter_compare_chat_sse(
         collected_searches: list[tuple[str, list[dict[str, str]]]] = []
 
         for _round in range(MAX_TOOL_ROUNDS):
+            # SerpAPI web_search tool disabled (tools=None). Re-enable with:
+            # tools=[WEB_SEARCH_TOOL]
             with _or_chat(
-                chain, model=use_model, tools=[WEB_SEARCH_TOOL], stream=False
+                chain, model=use_model, tools=None, stream=False
             ) as resp:
                 data = json.loads(resp.read().decode())
             if data.get("error"):
