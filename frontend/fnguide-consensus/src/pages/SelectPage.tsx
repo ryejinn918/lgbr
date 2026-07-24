@@ -17,8 +17,6 @@ export function SelectPage() {
   const [searchParams] = useSearchParams()
   const runFromUrl = searchParams.get('run')
   const [inputs, setInputs] = useState<InputReport[]>([])
-  const [selectedCount, setSelectedCount] = useState(0)
-  const [secondaryCount, setSecondaryCount] = useState(0)
   const [poolQpCount, setPoolQpCount] = useState<number | null>(null)
   const [inputError, setInputError] = useState<string | null>(null)
   const [packRunId, setPackRunId] = useState<string | null>(runFromUrl)
@@ -54,6 +52,29 @@ export function SelectPage() {
   const coreDocs = runDocs.filter((d) => d.role === 'selected')
   const biblioDocs = runDocs.filter((d) => d.role === 'fill_extra')
   const packDocs = [...coreDocs, ...biblioDocs]
+  const packById = useMemo(() => {
+    const m = new Map<string, RunDoc>()
+    for (const d of runDocs) {
+      if (d.role === 'selected' || d.role === 'fill_extra') {
+        m.set(d.report_id, d)
+      }
+    }
+    return m
+  }, [runDocs])
+  const sortedInputs = useMemo(() => {
+    const rank = (r: InputReport) => {
+      const p = packById.get(r.id)
+      if (p?.role === 'selected') return 0
+      if (p?.role === 'fill_extra') return 1
+      if (r.quality_pass === true) return 2
+      return 3
+    }
+    return [...inputs].sort((a, b) => {
+      const d = rank(a) - rank(b)
+      if (d !== 0) return d
+      return (a.title || '').localeCompare(b.title || '', 'ko')
+    })
+  }, [inputs, packById])
   const hasPackReview =
     !!packCriteria?.coverage_notes ||
     (!!packCriteria?.pillar_sketch && packCriteria.pillar_sketch.length > 0)
@@ -73,8 +94,6 @@ export function SelectPage() {
         if (!r.ok || !d.ok) throw new Error(d.message || `HTTP ${r.status}`)
         if (!cancelled) {
           setInputs(d.items ?? [])
-          setSelectedCount(d.selected_count ?? 0)
-          setSecondaryCount(d.secondary_count ?? 0)
           const qp = d.criteria?.quality_pass_count
           setPoolQpCount(typeof qp === 'number' ? qp : null)
           setInputError(null)
@@ -251,77 +270,59 @@ export function SelectPage() {
         <div className="section-head">
           <h2>후보 보고서</h2>
           <p className="section-note">
-            {theme === 'ai' ? (
-              <>
-                최근 3개월 · 후보 {inputs.length}
-                {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
-                {' · '}선별은 {NAV.ops}에서 컨센서스 시작 시
-              </>
-            ) : (
-              <>
-                최근 3개월 · 쓸 보고서 {selectedCount}
-                {secondaryCount > 0 ? ` · 참고용 ${secondaryCount}` : ''} /{' '}
-                {inputs.length}
-              </>
-            )}
+            최근 3개월 · 후보 {inputs.length}
+            {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
+            {packDocs.length > 0
+              ? ` · 위 선별과 동일: 골격 ${coreDocs.length} · 참고 ${biblioDocs.length}`
+              : ` · 선별은 ${NAV.ops}에서 컨센서스 시작 시`}
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}
         <table className="data-table">
           <thead>
             <tr>
-              {theme !== 'ai' && <th>역할</th>}
+              <th>구분</th>
               <th>제목</th>
               <th>출처</th>
               <th>증권사</th>
               <th>일자</th>
               <th>쪽</th>
               <th>품질</th>
-              {theme !== 'ai' && <th>사유</th>}
+              <th>이유</th>
             </tr>
           </thead>
           <tbody>
-            {inputs.map((r) => {
-              if (theme === 'ai') {
-                return (
-                  <tr
-                    key={r.id}
-                    className={
-                      r.quality_pass === true
-                        ? 'input-row'
-                        : 'input-row role-omit'
-                    }
-                  >
-                    <td>{r.title}</td>
-                    <td>{r.theme_tag ?? '—'}</td>
-                    <td>{r.provider ?? '—'}</td>
-                    <td>{r.published_at ?? '—'}</td>
-                    <td>{r.page_count ?? '—'}</td>
-                    <td>
-                      {r.quality_pass === true
-                        ? '통과'
-                        : r.quality_pass === false
-                          ? `미달/${r.quality_scope ?? '?'}`
-                          : '대기'}
-                    </td>
-                  </tr>
-                )
-              }
-              const role = r.will_select
-                ? 'core'
-                : r.will_fill_extra
-                  ? 'biblio'
-                  : 'omit'
+            {sortedInputs.map((r) => {
+              const packed = packById.get(r.id)
+              const kind =
+                packed?.role === 'selected'
+                  ? 'core'
+                  : packed?.role === 'fill_extra'
+                    ? 'biblio'
+                    : r.quality_pass === true
+                      ? 'pool'
+                      : 'omit'
+              const badge =
+                kind === 'core'
+                  ? '골격'
+                  : kind === 'biblio'
+                    ? '참고'
+                    : kind === 'pool'
+                      ? '후보'
+                      : '미달'
+              const why = packed?.select_why ?? null
+              const rowClass =
+                kind === 'core'
+                  ? 'input-row role-core'
+                  : kind === 'biblio'
+                    ? 'input-row role-biblio'
+                    : kind === 'pool'
+                      ? 'input-row'
+                      : 'input-row role-omit'
               return (
-                <tr key={r.id} className={`input-row role-${role}`}>
+                <tr key={r.id} className={rowClass}>
                   <td>
-                    <span className={`role-badge role-${role}`}>
-                      {role === 'core'
-                        ? '골격'
-                        : role === 'biblio'
-                          ? '참고'
-                          : '제외'}
-                    </span>
+                    <span className={`role-badge role-${kind}`}>{badge}</span>
                   </td>
                   <td>{r.title}</td>
                   <td>{r.theme_tag ?? '—'}</td>
@@ -335,11 +336,7 @@ export function SelectPage() {
                         ? `미달/${r.quality_scope ?? '?'}`
                         : '대기'}
                   </td>
-                  <td title={r.select_why ?? r.exclude_reason ?? undefined}>
-                    {role !== 'omit'
-                      ? (r.select_why ?? '—')
-                      : (r.exclude_reason ?? '—')}
-                  </td>
+                  <td title={why ?? undefined}>{why ?? '—'}</td>
                 </tr>
               )
             })}

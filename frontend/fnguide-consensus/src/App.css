@@ -300,6 +300,12 @@ input {
   font-weight: 400;
 }
 
+.role-badge.role-pool {
+  color: var(--ink);
+  font-weight: 500;
+  opacity: 0.85;
+}
+
 .event-list {
   list-style: none;
   margin: 0;
