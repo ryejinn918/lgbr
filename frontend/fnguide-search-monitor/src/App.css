@@ -36,6 +36,74 @@
   border-bottom: 2px solid color-mix(in srgb, var(--active) 70%, var(--line));
 }
 
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.subnav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+
+.subnav a:hover {
+  color: var(--ink);
+}
+
+.subnav a.active {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.subnav a.nav-muted {
+  opacity: 0.65;
+}
+
+.subnav-secondary,
+.subnav-tertiary,
+.subnav-action {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.subnav-action {
+  margin-bottom: 0.25rem;
+}
+
+.collect-shell,
+.docs-shell {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.job-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+
+.job-card {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 70%, #fff);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.job-card .badge-label {
+  margin: 0;
+}
+
+.job-card .badge-value {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
 .monitor-header {
   display: grid;
   gap: 0.35rem;

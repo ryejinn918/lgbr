@@ -45,7 +45,7 @@ function stringList(value: unknown): string[] {
   return value.map((x) => String(x)).filter(Boolean)
 }
 
-export function ReportsPage() {
+export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
   const [params, setParams] = useSearchParams()
   const searchKey = params.toString()
   const filters = useMemo(
@@ -180,13 +180,23 @@ export function ReportsPage() {
 
   return (
     <>
-      <header className="monitor-header">
-        <h1>보고서</h1>
-        <p className="lede">
-          증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가
-          함께 표시됩니다.
-        </p>
-      </header>
+      {embedded ? (
+        <div className="section-head" style={{ marginBottom: '0.75rem' }}>
+          <h2>FnGuide 보고서</h2>
+          <span className="section-note">
+            목록·다운로드·품질 감사 ·{' '}
+            <Link to="/collect/fnguide/list/search">검색 실행</Link>
+          </span>
+        </div>
+      ) : (
+        <header className="monitor-header">
+          <h1>FnGuide 보고서</h1>
+          <p className="lede">
+            증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가
+            함께 표시됩니다.
+          </p>
+        </header>
+      )}
 
       {crawlBusy && crawl.crawl ? (
         <p className="panel live-banner">

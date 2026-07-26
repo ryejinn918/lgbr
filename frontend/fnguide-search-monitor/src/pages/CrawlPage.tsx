@@ -88,13 +88,8 @@ export function CrawlPage() {
 
   return (
     <>
-      <header className="monitor-header">
-        <h1>크롤</h1>
-        <p className="lede">수동 크롤 실행과 Fnguide 계정 사용 여부입니다.</p>
-      </header>
-
       <section className={`panel badge-panel state-${badgeState}`}>
-        <p className="badge-label">크롤</p>
+        <p className="badge-label">리스트 발굴 · 검색 · 실행</p>
         <p className="badge-value">
           {fetchError ? 'API Offline' : stale ? '응답 없음' : crawl.label}
         </p>
@@ -170,7 +165,7 @@ export function CrawlPage() {
                 return `${label} 「${p.keyword}」 ${p.period_months}개월 · ${p.page_min_label}${sectors}`
               })
               .join(' / ')}{' '}
-            <Link to="/types">수정</Link>
+            <Link to="/collect/fnguide/list/search/types">리스트 발굴 타입</Link>
           </p>
         ) : null}
 

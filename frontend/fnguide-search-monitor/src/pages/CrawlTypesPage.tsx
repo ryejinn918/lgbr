@@ -192,7 +192,7 @@ function ProfileEditor({
   )
 }
 
-export function CrawlTypesPage() {
+export function CrawlTypesPage({ embedded = false }: { embedded?: boolean }) {
   const { items, loading, error, saving, refresh, saveProfile } =
     useCrawlProfiles()
 
@@ -206,13 +206,22 @@ export function CrawlTypesPage() {
 
   return (
     <>
-      <header className="monitor-header">
-        <h1>크롤 타입</h1>
-        <p className="lede">
-          데이터센터·AI·Physical AI 검색 필터 프로파일입니다. 타입 생성/삭제는
-          없고 필터만 수정합니다.
-        </p>
-      </header>
+      {embedded ? (
+        <div className="section-head" style={{ marginBottom: '0.75rem' }}>
+          <h2>리스트 발굴 타입 · 검색</h2>
+          <span className="section-note">
+            FnGuide · 리스트 발굴 · 검색 · 프로필만 수정 (생성/삭제 없음)
+          </span>
+        </div>
+      ) : (
+        <header className="monitor-header">
+          <h1>리스트 발굴 타입 · 검색</h1>
+          <p className="lede">
+            데이터센터·AI·Physical AI 검색 필터 프로파일입니다. 타입 생성/삭제는
+            없고 필터만 수정합니다.
+          </p>
+        </header>
+      )}
 
       {error ? (
         <section className="panel">

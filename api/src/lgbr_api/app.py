@@ -14,6 +14,11 @@ from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 from lgbr_api.auth import ApiKeyMiddleware
+from lgbr_api.collection import (
+    get_current_job,
+    request_stop as collection_request_stop,
+    start_feed,
+)
 from lgbr_api.consensus_api import (
     compare_chat,
     get_current_run,
@@ -37,6 +42,7 @@ from lgbr_api.crawls import (
     start_crawl,
 )
 from lgbr_api.db import load_database_env
+from lgbr_api.news_articles import list_articles
 from lgbr_api.profiles import list_profiles, update_profile
 from lgbr_api.audits import get_audit_status, start_audit
 from lgbr_api.reports import get_report, get_report_file, list_reports
@@ -164,6 +170,80 @@ async def crawl_stop(_: Request) -> JSONResponse:
 
 async def cdp_status(_: Request) -> JSONResponse:
     result = get_cdp_status()
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def collection_status(request: Request) -> JSONResponse:
+    source = request.query_params.get("source")
+    capability = request.query_params.get("capability") or "feed"
+    return JSONResponse(
+        get_current_job(
+            source=str(source) if source else None,
+            capability=str(capability),
+        )
+    )
+
+
+async def collection_start(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    source = str(body.get("source") or "arg")
+    max_pages = body.get("max_pages")
+    try:
+        pages = int(max_pages) if max_pages is not None else None
+    except (TypeError, ValueError):
+        return JSONResponse(
+            {
+                "ok": False,
+                "label": "오류",
+                "message": "max_pages must be an integer",
+                "job": None,
+                "can_start": False,
+            },
+            status_code=400,
+        )
+    result = start_feed(source=source, max_pages=pages)
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def collection_stop(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    source = body.get("source")
+    capability = body.get("capability") or "feed"
+    return JSONResponse(
+        collection_request_stop(
+            source=str(source) if source else None,
+            capability=str(capability) if capability else "feed",
+        )
+    )
+
+
+async def news_articles(request: Request) -> JSONResponse:
+    try:
+        limit = int(request.query_params.get("limit", "30"))
+    except ValueError:
+        limit = 30
+    try:
+        offset = int(request.query_params.get("offset", "0"))
+    except ValueError:
+        offset = 0
+    result = list_articles(
+        source=request.query_params.get("source") or "all",
+        q=request.query_params.get("q"),
+        limit=limit,
+        offset=offset,
+    )
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 
@@ -405,6 +485,10 @@ def create_app() -> Starlette:
                 methods=["PATCH"],
             ),
             Route("/api/cdp", cdp_status),
+            Route("/api/collection", collection_status),
+            Route("/api/collection/start", collection_start, methods=["POST"]),
+            Route("/api/collection/stop", collection_stop, methods=["POST"]),
+            Route("/api/news-articles", news_articles),
             Route("/api/reports", reports),
             Route("/api/reports/{report_id}", report_detail),
             Route("/api/reports/{report_id}/file", report_file),

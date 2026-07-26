@@ -13,6 +13,7 @@ from crawler import cdp as cdp_ops
 from crawler.browser import open_login
 from crawler.crawl import run_crawl
 from crawler.db import load_database_env
+from crawler.feed_job import DEFAULT_MAX_PAGES, run_feed_job
 from crawler.fnguide_session import (
     DEFAULT_IDLE_SECONDS,
     DEFAULT_TTL_SECONDS,
@@ -23,7 +24,7 @@ from crawler.session import (
     session_summary,
     verify_session,
 )
-from crawler import crawls_store, sessions_store
+from crawler import collection_jobs_store, crawls_store, sessions_store
 from crawler.status import DEFAULT_STATUS_PATH, clear_status, get_status, set_status
 
 
@@ -103,6 +104,32 @@ def main() -> None:
         help="Crawl row id created by POST /api/crawl/start",
     )
     crawl_sub.add_parser("current", help="Show current crawl")
+
+    feed_parser = sub.add_parser(
+        "feed",
+        help="List-expansion feed worker (started by API with --job-id)",
+    )
+    feed_sub = feed_parser.add_subparsers(dest="feed_command")
+    feed_run = feed_sub.add_parser(
+        "run",
+        help="Claim collection_jobs row and run source feed adapter",
+    )
+    feed_run.add_argument(
+        "--job-id",
+        required=True,
+        help="collection_jobs id created by POST /api/collection/start",
+    )
+    feed_run.add_argument(
+        "--max-pages",
+        type=int,
+        default=DEFAULT_MAX_PAGES,
+        help=f"Max list pages to scan (default {DEFAULT_MAX_PAGES})",
+    )
+    feed_current = feed_sub.add_parser(
+        "current",
+        help="Show latest/open feed collection job",
+    )
+    feed_current.add_argument("--source", default=None)
 
     session_parser = sub.add_parser(
         "session",
@@ -226,6 +253,46 @@ def main() -> None:
                 raise SystemExit(1)
             return
         parser.error(f"Unknown crawl command: {crawl_command}")
+
+    if command == "feed":
+        feed_command = args.feed_command or "current"
+        if feed_command == "current":
+            source = getattr(args, "source", None)
+            open_job = collection_jobs_store.get_open_job(
+                source=source, capability="feed"
+            )
+            latest = open_job or collection_jobs_store.get_latest_job(
+                source=source, capability="feed"
+            )
+            print(
+                json.dumps(
+                    latest
+                    or {
+                        "state": "ended",
+                        "label": "종료",
+                        "job": None,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if feed_command == "run":
+            try:
+                result = run_feed_job(args.job_id, max_pages=args.max_pages)
+            except Exception as exc:
+                print(
+                    json.dumps(
+                        {"state": "error", "message": str(exc)},
+                        ensure_ascii=False,
+                    )
+                )
+                raise SystemExit(1) from exc
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            if result.get("state") == "error":
+                raise SystemExit(1)
+            return
+        parser.error(f"Unknown feed command: {feed_command}")
 
     if command == "session":
         session_command = args.session_command or "current"

@@ -275,3 +275,65 @@ export type ReportsResponse = {
   offset: number
   message?: string
 }
+
+export type CollectionCapability =
+  | 'feed'
+  | 'search'
+  | 'fetch_body'
+  | 'download'
+
+export type CollectionJobState =
+  | 'starting'
+  | 'active'
+  | 'stopping'
+  | 'ended'
+  | 'error'
+
+export type CollectionJobRecord = {
+  id: string
+  source: string
+  capability: CollectionCapability | string
+  started_at: string | null
+  ended_at: string | null
+  stop_requested_at: string | null
+  pid: number | null
+  state: CollectionJobState
+  progress?: Record<string, unknown> | null
+  message: string | null
+  label: string
+}
+
+export type CollectionJobResponse = {
+  state: CollectionJobState
+  label: string
+  job: CollectionJobRecord | null
+  progress?: Record<string, unknown>
+  can_start?: boolean
+  ok?: boolean
+  message?: string
+}
+
+export type NewsArticleRecord = {
+  id: string
+  source: string
+  source_key: string
+  title: string
+  snippet?: string | null
+  url: string
+  published_at: string | null
+  publisher: string | null
+  section?: string | null
+  first_seen_at: string | null
+  last_seen_at: string | null
+  attrs?: Record<string, unknown>
+}
+
+export type NewsArticlesResponse = {
+  ok?: boolean
+  source?: string
+  items: NewsArticleRecord[]
+  total: number
+  limit: number
+  offset: number
+  message?: string
+}
