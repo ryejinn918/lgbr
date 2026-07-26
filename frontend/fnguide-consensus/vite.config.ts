@@ -79,14 +79,20 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       port: 8001,
       strictPort: true,
-      allowedHosts: ['lgbrwsl.tail700203.ts.net'],
+      allowedHosts: [
+        'lgbrwsl.tail700203.ts.net',
+        'chamber1.magpielabs.co.kr',
+      ],
       proxy: apiProxy,
     },
     preview: {
       host: '127.0.0.1',
       port: 8001,
       strictPort: true,
-      allowedHosts: ['lgbrwsl.tail700203.ts.net'],
+      allowedHosts: [
+        'lgbrwsl.tail700203.ts.net',
+        'chamber1.magpielabs.co.kr',
+      ],
       proxy: apiProxy,
     },
   }
