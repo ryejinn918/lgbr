@@ -11,16 +11,15 @@ export function labelThemeSector(theme: ConsensusTheme | string): string {
   return `${name} 섹터`
 }
 
-/** Nav labels; display order: axes → select → frames. */
+/** Nav labels; display order: axes → frames (select lives under axes). */
 export const NAV = {
-  axes: '축',
-  select: '선별',
-  frames: '논지',
+  axes: '분석 축',
+  frames: '컨센서스',
 } as const
 
 /** Frame product views (API kinds stay filled_frame / consensus_frame). */
 export const FRAME_TAB = {
-  filled: '살 붙인 논지',
+  filled: '보고서',
   consensus: '골격',
   materials: '근거 보고서',
 } as const
@@ -32,7 +31,7 @@ export const STAGE_LABEL: Record<string, string> = {
   select: '보고서 선별',
   doc: '보고서 요약',
   consensus: '골격',
-  fill: '살 붙이기',
+  fill: '보고서',
 }
 
 export const EVENT_LABEL: Record<string, string> = {
@@ -47,7 +46,7 @@ export const EVENT_LABEL: Record<string, string> = {
   compress_done: '요약 완료',
   doc_failed: '요약 실패',
   frame_validated: '골격 완료',
-  filled_done: '살 붙이기 완료',
+  filled_done: '보고서 완료',
   ended: '완료',
   error: '오류',
 }

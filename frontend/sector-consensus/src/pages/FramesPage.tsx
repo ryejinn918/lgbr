@@ -257,7 +257,7 @@ export function FramesPage() {
     if (!packRun?.id || !status.can_start) return
     if (
       !window.confirm(
-        '이 선별 팩을 유지한 채 요약·골격·살 붙인 논지를 이어서 만들까요?',
+        '이 선별 팩을 유지한 채 요약·골격·보고서를 이어서 만들까요?',
       )
     ) {
       return
@@ -280,7 +280,7 @@ export function FramesPage() {
           {THEME_LABEL[theme]} · {NAV.frames}
         </h1>
         <p className="lede">
-          요약·골격·살 붙인 논지와, 근거로 쓴 보고서 요약을 봅니다.
+          요약·골격·보고서와, 근거로 쓴 보고서 요약을 봅니다.
         </p>
         {packRun && packLabel ? (
           <p className="section-note">
@@ -306,7 +306,7 @@ export function FramesPage() {
             disabled={!status.can_start || continuingFull}
             onClick={() => void onContinueToFrames()}
           >
-            {continuingFull ? '진행 중…' : '이 선별로 논지까지 계속'}
+            {continuingFull ? '진행 중…' : '이 선별로 컨센서스까지 계속'}
           </button>
           {!status.can_start ? (
             <p className="section-note">{BLOCKED_BY_OPEN_RUN}</p>
@@ -350,7 +350,7 @@ export function FramesPage() {
         {tab === 'filled' && (
           <div className="section-note-row">
             <p className="section-note">
-              골격에 근거와 수치를 채워 넣은 본문입니다.
+              골격에 근거와 수치를 채운 보고서입니다.
             </p>
             {frameBody && (
               <button type="button" className="btn-copy" onClick={() => void onCopyFrame()}>
@@ -388,7 +388,7 @@ export function FramesPage() {
             </div>
           ) : (
             <p className="section-note">
-              {'표시할 논지가 없습니다.'}
+              {'표시할 보고서가 없습니다.'}
             </p>
           ))}
 

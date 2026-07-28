@@ -12,7 +12,7 @@ export const THEMES: ConsensusTheme[] = [
 
 export const DEFAULT_THEME: ConsensusTheme = 'ai'
 
-export type AppTab = 'axes' | 'select' | 'frames'
+export type AppTab = 'axes' | 'frames'
 
 export function parseTheme(raw: string | null | undefined): ConsensusTheme {
   if (raw && THEMES.includes(raw as ConsensusTheme)) return raw as ConsensusTheme
@@ -23,11 +23,9 @@ export function themePath(theme: ConsensusTheme, tab: AppTab): string {
   return `/${theme}/${tab}`
 }
 
-/** Path segment after /:theme/ — axes | select | frames */
+/** Path segment after /:theme/ — axes | frames (legacy select → axes) */
 export function parseTab(pathname: string): AppTab {
   const part = pathname.split('/').filter(Boolean)[1]
-  if (part === 'axes' || part === 'select' || part === 'frames') {
-    return part
-  }
+  if (part === 'frames') return 'frames'
   return 'axes'
 }

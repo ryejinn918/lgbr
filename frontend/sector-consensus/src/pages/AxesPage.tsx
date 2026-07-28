@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { SelectPanels } from '../components/SelectPanels'
 import { useConsensusStatusContext } from '../hooks/ConsensusStatusContext'
 import {
   BLOCKED_BY_OPEN_RUN,
@@ -143,7 +144,8 @@ export function AxesPage() {
           {THEME_LABEL[theme]} · {NAV.axes}
         </h1>
         <p className="lede">
-          산업 긴장을 분석 축으로 정리한 뒤, 확인한 다음 보고서 선별로 이어갑니다.
+          산업 긴장을 분석 축으로 정리한 뒤, 확인하면 보고서 선별까지 이
+          화면에서 이어집니다.
         </p>
       </header>
 
@@ -166,7 +168,7 @@ export function AxesPage() {
       {showWorkForm && (
         <section className="panel">
           <div className="section-head">
-            <h2>긴장 · 축</h2>
+            <h2>긴장 · 분석 축</h2>
           </div>
           {cuttingAxes && (
             <p className="section-note">분석 축 잡는 중…</p>
@@ -204,7 +206,7 @@ export function AxesPage() {
             style={{ width: '100%', marginBottom: '0.75rem' }}
           />
           <label className="section-note" htmlFor="pillars">
-            축 (줄마다 하나, 2–4개)
+            분석 축 (줄마다 하나, 2–4개)
           </label>
           <textarea
             id="pillars"
@@ -245,7 +247,7 @@ export function AxesPage() {
       {showLastAxes && lastCriteria && (
         <section className="panel">
           <div className="section-head">
-            <h2>최근 축</h2>
+            <h2>최근 분석 축</h2>
           </div>
           <p className="section-note">긴장</p>
           <p className="select-review-body">{lastCriteria.thesis}</p>
@@ -255,23 +257,21 @@ export function AxesPage() {
               <p className="select-review-body">{lastCriteria.cut_logic}</p>
             </>
           ) : null}
-          <p className="section-note">축</p>
+          <p className="section-note">분석 축</p>
           <ul className="select-review-list">
             {(lastCriteria.pillar_sketch || []).map((p, i) => (
               <li key={`${i}-${p}`}>{p}</li>
             ))}
           </ul>
           <p className="section-note">
-            <Link className="text-link" to={themePath(theme, 'select')}>
-              {NAV.select}
-            </Link>
-            ·
             <Link className="text-link" to={themePath(theme, 'frames')}>
               {NAV.frames}
             </Link>
           </p>
         </section>
       )}
+
+      <SelectPanels />
     </>
   )
 }

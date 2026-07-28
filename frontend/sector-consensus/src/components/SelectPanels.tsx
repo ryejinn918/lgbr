@@ -1,23 +1,18 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useConsensusStatusContext } from '../hooks/ConsensusStatusContext'
+import { BLOCKED_BY_OPEN_RUN, labelRunSlot, labelRunState } from '../lib/labels'
 import { isLiveState, openRunForTheme } from '../lib/runState'
-import { parseTheme, themePath } from '../lib/theme'
-import {
-  BLOCKED_BY_OPEN_RUN,
-  NAV,
-  labelRunSlot,
-  labelRunState,
-} from '../lib/labels'
+import { parseTheme } from '../lib/theme'
 import type { InputReport, RunDoc, SelectCriteria } from '../types'
-import { THEME_LABEL } from '../types'
 
 function asCriteria(raw: unknown): SelectCriteria | null {
   if (!raw || typeof raw !== 'object') return null
   return raw as SelectCriteria
 }
 
-export function SelectPage() {
+/** Report selection review + candidate pool (embedded under axes). */
+export function SelectPanels() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
   const [searchParams] = useSearchParams()
@@ -154,19 +149,6 @@ export function SelectPage() {
 
   return (
     <>
-      <header className="monitor-header">
-        <h1>
-          {THEME_LABEL[theme]} · 보고서 선별
-        </h1>
-        <p className="lede">
-          컨센서스에 쓸 보고서를 어떻게 골랐는지 봅니다. 분석 축 잡기·시작은{' '}
-          <Link className="text-link" to={themePath(theme, 'axes')}>
-            {NAV.axes}
-          </Link>{' '}
-          메뉴에서 합니다.
-        </p>
-      </header>
-
       {selectOnly && packRun && packDocs.length > 0 && (
         <section className="panel">
           <button
@@ -177,7 +159,7 @@ export function SelectPage() {
               if (!packRun.id || !status.can_start) return
               if (
                 !window.confirm(
-                  '이 선별 팩을 유지한 채 요약·골격·살 붙인 논지를 이어서 만들까요?',
+                  '이 선별 팩을 유지한 채 요약·골격·보고서를 이어서 만들까요?',
                 )
               ) {
                 return
@@ -191,7 +173,7 @@ export function SelectPage() {
                 .finally(() => setContinuingFull(() => false))
             }}
           >
-            {continuingFull ? '진행 중…' : '이 선별로 논지까지 계속'}
+            {continuingFull ? '진행 중…' : '이 선별로 컨센서스까지 계속'}
           </button>
           {!status.can_start ? (
             <p className="section-note">{BLOCKED_BY_OPEN_RUN}</p>
@@ -201,7 +183,7 @@ export function SelectPage() {
 
       <section className="panel">
         <div className="section-head">
-          <h2>이번 선별 결과</h2>
+          <h2>보고서 선별</h2>
           <p className="section-note">
             {packRun && packLabel
               ? `${packLabel} · ${labelRunState(packRun.state)}${
@@ -323,7 +305,7 @@ export function SelectPage() {
             {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
             {packDocs.length > 0
               ? ` · 위 선별과 동일: 주요 ${coreDocs.length} · 보조 ${biblioDocs.length}`
-              : ` · 선별은 ${NAV.axes}에서 분석 축 확정 후`}
+              : ' · 분석 축 확정 후 선별됩니다'}
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}

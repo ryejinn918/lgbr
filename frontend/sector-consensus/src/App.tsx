@@ -22,14 +22,16 @@ import {
 } from './lib/theme'
 import { AxesPage } from './pages/AxesPage'
 import { FramesPage } from './pages/FramesPage'
-import { SelectPage } from './pages/SelectPage'
 import { THEME_LABEL, type ConsensusTheme } from './types'
 import './App.css'
 
 function LegacyThemeRedirect({ tab }: { tab: AppTab }) {
   const [params] = useSearchParams()
   const theme = parseTheme(params.get('theme'))
-  return <Navigate to={themePath(theme, tab)} replace />
+  const run = params.get('run')
+  const base = themePath(theme, tab)
+  const to = run ? `${base}?run=${encodeURIComponent(run)}` : base
+  return <Navigate to={to} replace />
 }
 
 function LegacyFramesRunRedirect() {
@@ -38,6 +40,14 @@ function LegacyFramesRunRedirect() {
   const theme = parseTheme(params.get('theme'))
   const base = themePath(theme, 'frames')
   const to = runId ? `${base}?run=${encodeURIComponent(runId)}` : base
+  return <Navigate to={to} replace />
+}
+
+/** Preserve ?run= when folding former select routes into axes. */
+function RedirectToAxesKeepSearch() {
+  const [params] = useSearchParams()
+  const run = params.get('run')
+  const to = run ? `../axes?run=${encodeURIComponent(run)}` : '../axes'
   return <Navigate to={to} replace />
 }
 
@@ -75,7 +85,6 @@ function AppShell() {
           </div>
           <nav className="app-nav" aria-label="주요 메뉴">
             <NavLink to={themePath(theme, 'axes')}>{NAV.axes}</NavLink>
-            <NavLink to={themePath(theme, 'select')}>{NAV.select}</NavLink>
             <NavLink to={themePath(theme, 'frames')}>{NAV.frames}</NavLink>
           </nav>
         </header>
@@ -98,14 +107,14 @@ function App() {
       <Route path="/frames/:runId" element={<LegacyFramesRunRedirect />} />
       <Route path="/ops" element={<LegacyThemeRedirect tab="axes" />} />
       <Route path="/axes" element={<LegacyThemeRedirect tab="axes" />} />
-      <Route path="/select" element={<LegacyThemeRedirect tab="select" />} />
-      <Route path="/inputs" element={<LegacyThemeRedirect tab="select" />} />
+      <Route path="/select" element={<LegacyThemeRedirect tab="axes" />} />
+      <Route path="/inputs" element={<LegacyThemeRedirect tab="axes" />} />
       <Route path="/run" element={<LegacyThemeRedirect tab="axes" />} />
       <Route path="/monitor" element={<LegacyThemeRedirect tab="axes" />} />
       <Route path="/:theme" element={<AppShell />}>
         <Route index element={<Navigate to="axes" replace />} />
         <Route path="axes" element={<AxesPage />} />
-        <Route path="select" element={<SelectPage />} />
+        <Route path="select" element={<RedirectToAxesKeepSearch />} />
         <Route path="frames" element={<FramesPage />} />
         <Route path="ops" element={<Navigate to="../axes" replace />} />
         <Route path="compare" element={<Navigate to="../axes" replace />} />
