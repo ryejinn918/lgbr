@@ -314,7 +314,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
         <form className="search-row" onSubmit={onSearch}>
           <input
             type="search"
-            placeholder="제목, 증권사, rpt_id"
+            placeholder="제목, 인용 제목, 증권사, rpt_id"
             value={qDraft}
             onChange={(e) => setQDraft(e.target.value)}
           />

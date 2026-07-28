@@ -267,9 +267,10 @@ def list_reports(
         params.append(crawl_uuid)
     if q_pat:
         where.append(
-            "(title ILIKE %s OR source_key ILIKE %s OR attrs->>'provider' ILIKE %s)"
+            "(title ILIKE %s OR source_key ILIKE %s OR attrs->>'provider' ILIKE %s "
+            "OR coalesce(quality_json->>'short_title', '') ILIKE %s)"
         )
-        params.extend([q_pat, q_pat, q_pat])
+        params.extend([q_pat, q_pat, q_pat, q_pat])
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
 
