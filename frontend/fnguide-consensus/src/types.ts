@@ -20,6 +20,7 @@ export type ConsensusState =
 export type SelectCriteria = {
   select?: string
   until?: string | null
+  resume_from?: 'select' | 'doc' | null
   thesis?: string | null
   cut_logic?: string | null
   coverage_notes?: string | null

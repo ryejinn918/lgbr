@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useConsensusStatus } from '../hooks/useConsensusStatus'
-import { NAV, labelRunState } from '../lib/labels'
+import { NAV, labelRunState, labelStage } from '../lib/labels'
 import { parseTheme, themePath } from '../lib/theme'
 import type { ConsensusTheme, SelectCriteria } from '../types'
 import { STATE_CLASS, THEME_LABEL } from '../types'
@@ -107,6 +107,11 @@ export function AxesPage() {
 
   const canEdit = Boolean(awaiting && openRun?.id)
   const hasCut = Boolean(thesis.trim() && parsePillars(pillars).length >= 2)
+  const stage = String(status.progress?.stage || '')
+  const resumeFrom = openCriteria?.resume_from
+  const axesLocked = hasCut
+  const cuttingAxes = Boolean(busy && !axesLocked)
+  const downstreamBusy = Boolean(busy && axesLocked)
   const showWorkForm = Boolean(openRun)
   const showLastAxes = Boolean(
     !openRun &&
@@ -157,19 +162,73 @@ export function AxesPage() {
       ? (status.run.theme as ConsensusTheme)
       : null
 
-  const note = useMemo(() => {
-    if (busy) return '축 가르기 진행 중… 새 긴장이 채워질 때까지 기다립니다.'
+  const note = useMemo((): ReactNode => {
+    if (cuttingAxes) {
+      return '축 가르기 진행 중… 새 긴장이 채워질 때까지 기다립니다.'
+    }
+    if (downstreamBusy) {
+      const isFrames =
+        resumeFrom === 'doc' ||
+        stage === 'doc' ||
+        stage === 'consensus' ||
+        stage === 'fill'
+      const isSelect = resumeFrom === 'select' || stage === 'select'
+      if (isFrames) {
+        return (
+          <>
+            논지 생성 진행 중… 축은 확정된 상태입니다.{' '}
+            <Link className="text-link" to={themePath(theme, 'frames')}>
+              {NAV.frames}
+            </Link>
+            에서 확인하세요.
+          </>
+        )
+      }
+      if (isSelect) {
+        return (
+          <>
+            보고서 선별 진행 중… 축은 확정된 상태입니다.{' '}
+            <Link className="text-link" to={themePath(theme, 'select')}>
+              {NAV.select}
+            </Link>
+            에서 확인하세요.
+          </>
+        )
+      }
+      return (
+        <>
+          후속 단계 진행 중… (축은 확정됨){' '}
+          <Link className="text-link" to={themePath(theme, 'select')}>
+            {NAV.select}
+          </Link>
+          ·
+          <Link className="text-link" to={themePath(theme, 'frames')}>
+            {NAV.frames}
+          </Link>
+        </>
+      )
+    }
     if (awaiting) return '축을 확인·수정한 뒤 선별 또는 전체를 이어가세요.'
     if (otherBusyTheme)
       return `${THEME_LABEL[otherBusyTheme]} 섹터에서 작업 중입니다.`
     return '축 가르기를 실행하면 아래에 이번 긴장이 채워집니다.'
-  }, [busy, awaiting, otherBusyTheme])
+  }, [
+    cuttingAxes,
+    downstreamBusy,
+    stage,
+    resumeFrom,
+    awaiting,
+    otherBusyTheme,
+    theme,
+  ])
 
   const statusLabel = fetchError
     ? 'API 연결 끊김'
-    : openRun
-      ? labelRunState(openRun.state)
-      : '대기'
+    : downstreamBusy && stage
+      ? labelStage(stage)
+      : openRun
+        ? labelRunState(openRun.state)
+        : '대기'
 
   return (
     <>
@@ -231,8 +290,21 @@ export function AxesPage() {
           <div className="section-head">
             <h2>긴장 · 축</h2>
           </div>
-          {busy && !hasCut && (
+          {cuttingAxes && (
             <p className="section-note">가르는 중… 결과가 나오면 여기에 채워집니다.</p>
+          )}
+          {downstreamBusy && (
+            <p className="section-note">
+              축은 확정된 상태입니다. 진행은{' '}
+              <Link className="text-link" to={themePath(theme, 'select')}>
+                {NAV.select}
+              </Link>
+              ·
+              <Link className="text-link" to={themePath(theme, 'frames')}>
+                {NAV.frames}
+              </Link>
+              탭에서 보세요.
+            </p>
           )}
           <label className="section-note" htmlFor="thesis">
             긴장 (한 줄)
@@ -243,7 +315,7 @@ export function AxesPage() {
             rows={2}
             value={thesis}
             readOnly={!canEdit}
-            placeholder={busy ? '생성 중…' : ''}
+            placeholder={cuttingAxes ? '생성 중…' : ''}
             onChange={(e) => {
               const v = e.target.value
               setThesis(() => v)
@@ -259,7 +331,7 @@ export function AxesPage() {
             rows={4}
             value={cutLogic}
             readOnly={!canEdit}
-            placeholder={busy ? '생성 중…' : ''}
+            placeholder={cuttingAxes ? '생성 중…' : ''}
             onChange={(e) => {
               const v = e.target.value
               setCutLogic(() => v)
@@ -275,7 +347,7 @@ export function AxesPage() {
             rows={5}
             value={pillars}
             readOnly={!canEdit}
-            placeholder={busy ? '생성 중…' : ''}
+            placeholder={cuttingAxes ? '생성 중…' : ''}
             onChange={(e) => {
               const v = e.target.value
               setPillars(() => v)

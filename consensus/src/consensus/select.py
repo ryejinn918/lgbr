@@ -88,26 +88,34 @@ Your job is placement: which reports fill which axis holes.
 
 Language (mandatory):
 - Write coverage_notes and every why field in Korean.
-- Those fields are read by humans (analysts). Report naming in prose:
-  - Allowed card fields only: provider, short_title, published_at.
-  - Prefer the broker as the sentence subject when natural; put the source
-    tag in square brackets at the end of the claim (use () only for ordinary
-    parentheticals in the prose).
-  - Always lead with provider inside []. If unambiguous, [provider] alone is
-    fine e.g. [IBK]. Otherwise [provider, short_title]
-    e.g. [IBK, 자동차/2차전지 Monthly].
-  - If still ambiguous (same series), add published_at:
-    [provider, short_title, published_at].
-  - Do not cite short_title alone. Never use report_id, title, UUID, or hex
-    in prose. report_id belongs only in core[].report_id and
-    bibliography[].report_id.
+- Never use report_id, full title, UUID, or hex in prose. report_id belongs
+  only in core[].report_id and bibliography[].report_id.
+
+why (per report; shown next to title/provider columns — no self-citation):
+- Say which locked axis this report serves (or why bibliography) in 1–2 Korean
+  sentences. Focus on contribution, not bibliography.
+- Do NOT put [provider], [provider, short_title], or any square-bracket source
+  tags in why. Do not end why with a citation.
+- If you must refer to the report itself, say "이 보고서" (this report).
+
+coverage_notes (pack summary — naming other reports is OK):
+- Allowed name fields: provider, short_title, published_at.
+- Prefer the broker as the sentence subject when natural; put the source tag
+  in square brackets (use () only for ordinary parentheticals).
+- Always lead with provider inside []. If unambiguous, [provider] alone
+  e.g. [IBK]. Otherwise [provider, short_title]
+  e.g. [IBK, 자동차/2차전지 Monthly].
+- If still ambiguous (same series), add published_at:
+  [provider, short_title, published_at].
+- Do not cite short_title alone.
 
 Sector focus ({sector}):
 - {hint}
 
 Placement goals:
 - For each locked pillar, prefer the scarcest mechanism-dense notes that support it.
-- why must say which locked axis the report serves (or why bibliography).
+- why must say which locked axis the report serves (or why bibliography);
+  never append [provider…] tags in why.
 - Do NOT invent new pillar names.
 
 Limits:
@@ -261,9 +269,11 @@ async def llm_select_pack(
     user = (
         f"Place reports into the locked pack for {sector}. core_max={core_max}.\n"
         "Axes are fixed — do not rename them.\n"
-        "In coverage_notes / why name reports with provider first in square brackets: "
-        "`[provider]` if unambiguous, else `[provider, short_title]` or "
-        "`[provider, short_title, published_at]`.\n\n"
+        "In coverage_notes only, name other reports with provider-first square "
+        "brackets: `[provider]` if unambiguous, else `[provider, short_title]` or "
+        "`[provider, short_title, published_at]`. "
+        "In why: no square-bracket tags; refer as 이 보고서 if needed; "
+        "state which locked axis this report fills.\n\n"
         f"Locked axes JSON:\n{json.dumps(locked, ensure_ascii=False)}\n\n"
         f"Cards JSON:\n{json.dumps(llm_cards, ensure_ascii=False)}"
     )
