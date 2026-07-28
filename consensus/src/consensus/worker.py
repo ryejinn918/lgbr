@@ -151,14 +151,17 @@ async def _process_doc(
         raise RuntimeError("empty or unreadable PDF text")
 
     toc = await probe_toc(page_corpus, window=8, model=model, out_dir=cache)
-    slices = slices_from_toc(page_corpus, toc)
+    slices, split_count = slices_from_toc(page_corpus, toc)
     write_corpus_artifacts(cache, page_corpus, slices)
+    max_slice_chars = max((s.get("char_len") or 0) for s in slices) if slices else 0
     log_c.emit(
         stage="doc",
         event="toc_done",
         report_id=report_id,
         toc_found=bool(toc.get("toc_found")),
         slice_count=len(slices),
+        max_slice_chars=max_slice_chars,
+        split_count=split_count,
     )
 
     cards = await local_compress_all(

@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from consensus.cite import human_doc_header
-from consensus.corpus import sha256_text
+from consensus.corpus import SLICE_MAX_CHARS, sha256_text
 from consensus.llm import DEFAULT_MODEL, chat, log
 
 
-def _truncate(text: str, max_chars: int = 48_000) -> str:
+def _truncate(text: str, max_chars: int = SLICE_MAX_CHARS) -> str:
     if len(text) <= max_chars:
         return text
     head = max_chars * 2 // 3
