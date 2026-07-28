@@ -9,6 +9,7 @@ from consensus.cite import (
     footnote_label,
     format_published_at,
     human_doc_header,
+    resolve_short_title,
     short_provider,
     short_report_title,
 )
@@ -70,4 +71,31 @@ def test_footnote_label_square_brackets():
             published_at="2026-06-12",
         )
         == "[IBK, 자동차/2차전지 Monthly, 2026-06-12]"
+    )
+
+
+def test_resolve_short_title_prefers_audit_then_fallback():
+    assert (
+        resolve_short_title(
+            "Chemicals Monthly Data-6 ~7월, 나프타 역래깅에 노출되다!",
+            quality_json={"short_title": "6월 석화 마진"},
+        )
+        == "6월 석화 마진"
+    )
+    assert (
+        resolve_short_title(
+            "Chemicals Monthly Data-6 ~7월, 나프타 역래깅에 노출되다!",
+            short_title="역래깅 점검",
+            quality_json={"short_title": "ignored"},
+        )
+        == "역래깅 점검"
+    )
+    clipped = resolve_short_title(
+        "Chemicals Monthly Data-6 ~7월, 나프타 역래깅에 노출되다!"
+    )
+    assert clipped == short_report_title(
+        "Chemicals Monthly Data-6 ~7월, 나프타 역래깅에 노출되다!"
+    )
+    assert (
+        resolve_short_title("원제목", quality_json={"short_title": ""}) == "원제목"
     )

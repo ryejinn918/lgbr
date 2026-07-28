@@ -182,6 +182,8 @@ export type QualityJson = {
   has_broad_sector_coverage?: boolean
   scope?: string
   topic?: string
+  /** Citation nickname from quality audit; pairs with provider. */
+  short_title?: string
   framework_summary?: string | null
   fail_reasons?: string[]
   pass_signals?: string[]

@@ -531,6 +531,10 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
                   <dd>{String(qj.topic || '—')}</dd>
                 </div>
                 <div>
+                  <dt>인용 제목</dt>
+                  <dd>{String(qj.short_title || '—')}</dd>
+                </div>
+                <div>
                   <dt>분석 틀 요약</dt>
                   <dd>{String(qj.framework_summary || '—')}</dd>
                 </div>

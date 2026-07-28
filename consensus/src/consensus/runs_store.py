@@ -525,6 +525,7 @@ def list_selected_docs_for_refill(run_id: str) -> list[dict[str, Any]]:
                 r.attrs->>'provider' AS provider,
                 r.published_at,
                 r.file_path,
+                r.quality_json,
                 a.compress_md,
                 a.content_hash,
                 a.slice_count,

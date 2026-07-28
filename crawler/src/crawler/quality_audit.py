@@ -52,6 +52,7 @@ Respond with a single JSON object only (no markdown):
   "has_broad_sector_coverage": boolean,
   "scope": "sector" | "company" | "unclear",
   "topic": string,
+  "short_title": string,
   "framework_summary": string | null,
   "fail_reasons": string[],
   "pass_signals": string[],
@@ -59,9 +60,15 @@ Respond with a single JSON object only (no markdown):
 }
 
 Language (mandatory):
-- Write topic, framework_summary, fail_reasons, pass_signals, and rationale in Korean.
+- Write topic, short_title, framework_summary, fail_reasons, pass_signals, and rationale in Korean.
 - Do not use Chinese. English is allowed only for proper nouns, tickers, and product names.
 - Those Korean fields are read by humans. Never put rpt_id, UUID, file paths, or hashes in them.
+
+short_title (citation label — always fill, pass or fail):
+- Short nickname for footnotes next to the broker name, e.g. "6월 석화 마진".
+- About 8–22 characters. Not a sentence. No broker/provider name inside
+  (provider is attached separately as [KB, short_title]).
+- Prefer series / period / core theme; do not paste the full original title.
 
 Rules:
 - pass MUST be true only if has_coherent_framework AND has_broad_sector_coverage AND scope is "sector".
@@ -156,6 +163,10 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
     if summary is not None:
         summary = str(summary)
 
+    short_title = " ".join(str(raw.get("short_title") or "").split())
+    if len(short_title) > 28:
+        short_title = short_title[:27].rstrip() + "…"
+
     return {
         "pass": passed,
         "confidence": confidence,
@@ -163,6 +174,7 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
         "has_broad_sector_coverage": has_broad,
         "scope": scope,
         "topic": str(raw.get("topic") or "")[:500],
+        "short_title": short_title,
         "framework_summary": summary,
         "fail_reasons": [str(x)[:200] for x in fail_reasons][:20],
         "pass_signals": [str(x)[:200] for x in pass_signals][:20],
@@ -292,6 +304,7 @@ def save_unclear(report_id: UUID, *, model: str, error: str) -> None:
             "has_broad_sector_coverage": False,
             "scope": "unclear",
             "topic": "",
+            "short_title": "",
             "framework_summary": None,
             "fail_reasons": ["extract_or_api_error"],
             "pass_signals": [],

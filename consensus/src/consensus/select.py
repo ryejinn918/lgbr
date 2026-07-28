@@ -8,8 +8,8 @@ from typing import Any
 from consensus import runs_store
 from consensus.cite import (
     format_published_at,
+    resolve_short_title,
     short_provider,
-    short_report_title,
 )
 from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
 from consensus.runs_store import PERIOD_MONTHS_DEFAULT
@@ -170,7 +170,7 @@ def build_audit_cards(pool: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "report_id": str(r["id"]),
                 "provider": short_provider(str(r.get("provider") or "")),
-                "short_title": short_report_title(title),
+                "short_title": resolve_short_title(title, quality_json=qj),
                 "title": title,
                 "theme": str(r.get("theme") or ""),
                 "page_count": r.get("page_count"),

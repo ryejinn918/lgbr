@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 # Multi-doc human prose only: frame / fill / coverage_notes.
@@ -51,6 +52,35 @@ def short_report_title(title: str | None, *, max_len: int = 28) -> str:
     if len(t) <= max_len:
         return t
     return t[: max_len - 1].rstrip() + "…"
+
+
+def resolve_short_title(
+    title: str | None,
+    *,
+    short_title: str | None = None,
+    quality_json: object | None = None,
+    max_len: int = 28,
+) -> str:
+    """Prefer audit/explicit cite nickname; else truncate full title."""
+    candidates: list[str] = []
+    if short_title is not None:
+        candidates.append(str(short_title))
+    qj = quality_json
+    if isinstance(qj, str):
+        try:
+            qj = json.loads(qj)
+        except json.JSONDecodeError:
+            qj = None
+    if isinstance(qj, dict):
+        candidates.append(str(qj.get("short_title") or ""))
+    for raw in candidates:
+        t = " ".join(raw.split())
+        if not t:
+            continue
+        if len(t) > max_len:
+            return t[: max_len - 1].rstrip() + "…"
+        return t
+    return short_report_title(title, max_len=max_len)
 
 
 def format_published_at(published_at: object | None) -> str:
@@ -106,10 +136,13 @@ def footnote_label(
     title: str | None,
     short_title: str | None = None,
     published_at: object | None = None,
+    quality_json: object | None = None,
 ) -> str:
     """Provider-first square-bracket footnote; include published_at when provided."""
     house = short_provider(provider) or ""
-    short = (short_title or "").strip() or short_report_title(title)
+    short = resolve_short_title(
+        title, short_title=short_title, quality_json=quality_json
+    )
     pub = format_published_at(published_at)
     parts = [p for p in (house, short, pub) if p]
     if not parts:

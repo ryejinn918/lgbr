@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from consensus import runs_store
-from consensus.cite import format_published_at, short_provider, short_report_title
+from consensus.cite import (
+    format_published_at,
+    resolve_short_title,
+    short_provider,
+)
 from consensus.compress import local_compress_all, report_compress
 from consensus.corpus import (
     build_page_corpus,
@@ -62,6 +66,7 @@ def _selected_reports_from_run_docs(run_id: str) -> list[dict[str, Any]]:
                 "provider": str(d.get("provider") or ""),
                 "published_at": d.get("published_at"),
                 "file_path": fp,
+                "quality_json": d.get("quality_json"),
                 "select_role": str(d.get("role") or "selected"),
             }
         )
@@ -91,7 +96,11 @@ async def _process_doc(
         source_key=str(report["source_key"]), title=title
     )
     cite_provider = short_provider(provider)
-    cite_title = short_report_title(title)
+    cite_title = resolve_short_title(
+        title,
+        short_title=report.get("short_title"),
+        quality_json=report.get("quality_json"),
+    )
     cite_published = format_published_at(report.get("published_at"))
 
     existing = runs_store.find_artifact(
@@ -640,7 +649,9 @@ async def _refill_run_async(run_id: str, *, model: str | None = None) -> dict[st
             {
                 "slug": slug,
                 "provider": short_provider(str(d.get("provider") or "")),
-                "short_title": short_report_title(title),
+                "short_title": resolve_short_title(
+                    title, quality_json=d.get("quality_json")
+                ),
                 "published_at": format_published_at(d.get("published_at")),
                 "title": title,
                 "source_pdf": str(pdf),

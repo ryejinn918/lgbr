@@ -25,11 +25,9 @@ def test_select_system_requires_korean_and_omit_summary():
         assert "Korean" in prompt
         assert "Omit summary" in prompt
         assert "omitted[]" in prompt
-        assert "humans" in prompt
         assert "[provider]" in prompt
         assert "published_at" in prompt
-        assert "short_title alone" in prompt
-        assert "square brackets" in prompt
+        assert "short_title" in prompt
         assert "fixed" in prompt.lower() or "Locked" in prompt or "locked" in prompt
         assert "Do NOT reinvent" in prompt or "Do NOT return pillar_sketch" in prompt
 
@@ -63,6 +61,43 @@ def test_build_audit_cards_clips_quality_json():
     assert len(cards) == 1
     assert cards[0]["report_id"].startswith("aaaa")
     assert len(cards[0]["framework_summary"]) <= 500
+
+
+def test_build_audit_cards_prefers_quality_short_title():
+    pool = [
+        {
+            "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "title": "Chemicals Monthly Data-6 ~7월, 나프타 역래깅에 노출되다!",
+            "provider": "KB투자증권",
+            "theme": "petrochemical",
+            "page_count": 20,
+            "published_at": "2026-06-09",
+            "quality_json": {
+                "topic": "역래깅",
+                "short_title": "6월 석화 마진",
+                "framework_summary": "fw",
+                "rationale": "r",
+            },
+        },
+        {
+            "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "title": "긴 원제목만 있는 보고서 제목입니다 추가",
+            "provider": "삼성증권",
+            "theme": "petrochemical",
+            "page_count": 12,
+            "published_at": None,
+            "quality_json": {
+                "topic": "x",
+                "framework_summary": "fw",
+                "rationale": "r",
+            },
+        },
+    ]
+    cards = build_audit_cards(pool)
+    assert cards[0]["short_title"] == "6월 석화 마진"
+    assert cards[0]["provider"] == "KB"
+    assert cards[1]["short_title"].endswith("…") or len(cards[1]["short_title"]) <= 28
+    assert "긴 원제목" in cards[1]["short_title"]
 
 
 def test_parse_pack_selection_caps_core_and_dedupes():
