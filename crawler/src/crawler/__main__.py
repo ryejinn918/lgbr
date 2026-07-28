@@ -13,7 +13,13 @@ from crawler import cdp as cdp_ops
 from crawler.browser import open_login
 from crawler.crawl import run_crawl
 from crawler.db import load_database_env
-from crawler.feed_job import DEFAULT_MAX_PAGES, run_feed_job
+from crawler.feed_job import (
+    DEFAULT_MAX_PAGES,
+    DEFAULT_PERIOD_MONTHS,
+    MAX_PERIOD_MONTHS,
+    MIN_PERIOD_MONTHS,
+    run_feed_job,
+)
 from crawler.fnguide_session import (
     DEFAULT_IDLE_SECONDS,
     DEFAULT_TTL_SECONDS,
@@ -124,6 +130,15 @@ def main() -> None:
         type=int,
         default=DEFAULT_MAX_PAGES,
         help=f"Max list pages to scan (default {DEFAULT_MAX_PAGES})",
+    )
+    feed_run.add_argument(
+        "--period-months",
+        type=int,
+        default=DEFAULT_PERIOD_MONTHS,
+        help=(
+            f"Look back this many calendar months (default {DEFAULT_PERIOD_MONTHS}, "
+            f"{MIN_PERIOD_MONTHS}–{MAX_PERIOD_MONTHS})"
+        ),
     )
     feed_current = feed_sub.add_parser(
         "current",
@@ -279,7 +294,11 @@ def main() -> None:
             return
         if feed_command == "run":
             try:
-                result = run_feed_job(args.job_id, max_pages=args.max_pages)
+                result = run_feed_job(
+                    args.job_id,
+                    max_pages=args.max_pages,
+                    period_months=args.period_months,
+                )
             except Exception as exc:
                 print(
                     json.dumps(

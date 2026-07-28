@@ -4,11 +4,14 @@ import { useCollectionJob } from '../../hooks/useCollectionJob'
 import { CRAWL_CLASS, formatTime } from '../../lib/format'
 
 const SOURCE = 'arg'
+const PERIOD_OPTIONS = [3, 6, 12] as const
 
 function formatFeedProgress(progress: Record<string, unknown> | undefined) {
   if (!progress) return null
   const bits: string[] = []
   if (progress.page != null) bits.push(`page ${String(progress.page)}`)
+  if (progress.period_months != null)
+    bits.push(`최근 ${String(progress.period_months)}개월`)
   if (progress.inserted != null) bits.push(`신규 ${String(progress.inserted)}`)
   if (progress.updated != null) bits.push(`갱신 ${String(progress.updated)}`)
   if (progress.message) bits.push(String(progress.message))
@@ -18,6 +21,7 @@ function formatFeedProgress(progress: Record<string, unknown> | undefined) {
 
 export function ArgFeedRunPage() {
   const [maxPages, setMaxPages] = useState(50)
+  const [periodMonths, setPeriodMonths] = useState(3)
   const collection = useCollectionJob({ source: SOURCE })
   const job = collection.status
   const busy =
@@ -36,15 +40,20 @@ export function ArgFeedRunPage() {
 
   async function onStart() {
     const pages = Math.min(200, Math.max(1, Number(maxPages) || 50))
+    const months = PERIOD_OPTIONS.includes(
+      periodMonths as (typeof PERIOD_OPTIONS)[number],
+    )
+      ? periodMonths
+      : 3
     if (
       !window.confirm(
-        `ARG 리스트 발굴 타입「전체」로 리스트를 가져올까요? (최대 ${pages}페이지, 본문 없음)`,
+        `ARG 리스트 발굴 타입「전체」로 최근 ${months}개월 치를 가져올까요? (최대 ${pages}페이지, 본문 없음)`,
       )
     ) {
       return
     }
     try {
-      await collection.startFeed(pages)
+      await collection.startFeed({ maxPages: pages, periodMonths: months })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '시작 실패')
     }
@@ -88,6 +97,20 @@ export function ArgFeedRunPage() {
       </p>
 
       <div className="actions">
+        <label className="limit-field">
+          기간
+          <select
+            value={periodMonths}
+            disabled={busy || collection.requestingStart}
+            onChange={(e) => setPeriodMonths(Number(e.target.value))}
+          >
+            {PERIOD_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                최근 {m}개월
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="limit-field">
           최대 페이지
           <input

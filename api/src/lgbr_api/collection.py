@@ -131,10 +131,16 @@ def get_current_job(
     }
 
 
+DEFAULT_PERIOD_MONTHS = 3
+MIN_PERIOD_MONTHS = 1
+MAX_PERIOD_MONTHS = 24
+
+
 def start_feed(
     *,
     source: str = "arg",
     max_pages: int | None = None,
+    period_months: int | None = None,
 ) -> dict[str, Any]:
     source_s = (source or "").strip().lower()
     if source_s not in FEED_ALLOWLIST:
@@ -154,6 +160,22 @@ def start_feed(
             "status": 400,
             "label": "오류",
             "message": "max_pages must be between 1 and 200",
+            "job": None,
+            "can_start": False,
+        }
+
+    months = (
+        DEFAULT_PERIOD_MONTHS if period_months is None else int(period_months)
+    )
+    if months < MIN_PERIOD_MONTHS or months > MAX_PERIOD_MONTHS:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                f"period_months must be between "
+                f"{MIN_PERIOD_MONTHS} and {MAX_PERIOD_MONTHS}"
+            ),
             "job": None,
             "can_start": False,
         }
@@ -192,7 +214,8 @@ def start_feed(
     try:
         log_f.write(
             f"\n--- feed start {_now().isoformat()} "
-            f"id={job['id']} source={source_s} ---\n"
+            f"id={job['id']} source={source_s} "
+            f"period_months={months} max_pages={pages} ---\n"
         )
         log_f.flush()
         subprocess.Popen(
@@ -206,6 +229,8 @@ def start_feed(
                 job["id"],
                 "--max-pages",
                 str(pages),
+                "--period-months",
+                str(months),
             ],
             cwd=str(ROOT),
             stdout=log_f,

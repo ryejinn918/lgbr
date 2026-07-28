@@ -195,6 +195,7 @@ async def collection_start(request: Request) -> JSONResponse:
         body = {}
     source = str(body.get("source") or "arg")
     max_pages = body.get("max_pages")
+    period_months = body.get("period_months")
     try:
         pages = int(max_pages) if max_pages is not None else None
     except (TypeError, ValueError):
@@ -208,7 +209,20 @@ async def collection_start(request: Request) -> JSONResponse:
             },
             status_code=400,
         )
-    result = start_feed(source=source, max_pages=pages)
+    try:
+        months = int(period_months) if period_months is not None else None
+    except (TypeError, ValueError):
+        return JSONResponse(
+            {
+                "ok": False,
+                "label": "오류",
+                "message": "period_months must be an integer",
+                "job": None,
+                "can_start": False,
+            },
+            status_code=400,
+        )
+    result = start_feed(source=source, max_pages=pages, period_months=months)
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 
