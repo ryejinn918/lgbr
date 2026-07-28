@@ -58,6 +58,7 @@ export function FramesPage() {
   const [compressLoading, setCompressLoading] = useState(false)
   const [compressError, setCompressError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const { status, history, continueRun, refresh } = useConsensusStatus(theme)
   const [continuingFull, setContinuingFull] = useState(false)
@@ -99,7 +100,12 @@ export function FramesPage() {
     setCompressMd(null)
     setCompressError(null)
     setError(null)
+    setCopied(false)
   }, [theme, runFromUrl])
+
+  useEffect(() => {
+    setCopied(false)
+  }, [tab])
 
   const packCriteria = asCriteria(packRun?.criteria)
 
@@ -248,6 +254,17 @@ export function FramesPage() {
       : formatTime(packRun.ended_at)
     : null
 
+  async function onCopyFrame() {
+    if (!frameBody) return
+    try {
+      await navigator.clipboard.writeText(frameBody)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      window.alert('복사에 실패했습니다.')
+    }
+  }
+
   async function onContinueToFrames() {
     if (!packRun?.id || !status.can_start) return
     if (
@@ -363,14 +380,28 @@ export function FramesPage() {
           ))}
         </div>
         {tab === 'filled' && (
-          <p className="section-note">
-            골격에 근거와 수치를 채워 넣은 본문입니다.
-          </p>
+          <div className="section-note-row">
+            <p className="section-note">
+              골격에 근거와 수치를 채워 넣은 본문입니다.
+            </p>
+            {frameBody && (
+              <button type="button" className="btn-copy" onClick={() => void onCopyFrame()}>
+                {copied ? '복사됨' : '복사'}
+              </button>
+            )}
+          </div>
         )}
         {tab === 'consensus' && (
-          <p className="section-note">
-            여러 보고서가 모인 총론·핵심 주제 수준의 골격입니다.
-          </p>
+          <div className="section-note-row">
+            <p className="section-note">
+              여러 보고서가 모인 총론·핵심 주제 수준의 골격입니다.
+            </p>
+            {frameBody && (
+              <button type="button" className="btn-copy" onClick={() => void onCopyFrame()}>
+                {copied ? '복사됨' : '복사'}
+              </button>
+            )}
+          </div>
         )}
         {tab === 'materials' && (
           <p className="section-note">

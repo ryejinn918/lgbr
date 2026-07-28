@@ -99,6 +99,13 @@
   color: var(--muted);
 }
 
+.section-note-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .badge-panel .badge-label {
   margin: 0;
   font-size: 0.8rem;
