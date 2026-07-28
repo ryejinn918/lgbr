@@ -80,6 +80,8 @@ def fetch_missing_short_title(
 
 def prepare_targets(
     rows: list[dict[str, Any]],
+    *,
+    title_only: bool = False,
 ) -> tuple[list[tuple[AuditTarget, dict[str, Any]]], list[tuple[UUID, str]]]:
     ready: list[tuple[AuditTarget, dict[str, Any]]] = []
     failures: list[tuple[UUID, str]] = []
@@ -87,26 +89,33 @@ def prepare_targets(
         rid = row["id"]
         if not isinstance(rid, UUID):
             rid = UUID(str(rid))
+        title = str(row.get("title") or "").strip()
         raw_path = row.get("file_path")
-        if not raw_path:
-            failures.append((rid, "missing file_path"))
-            continue
-        path = Path(str(raw_path))
-        try:
-            text = extract_pdf_text(path)
-        except Exception as exc:  # noqa: BLE001
-            failures.append((rid, f"extract: {exc}"))
-            continue
-        if len(text.strip()) < 80:
-            failures.append((rid, "extract: text too short"))
-            continue
+        path = Path(str(raw_path)) if raw_path else Path(".")
         qj = row.get("quality_json")
         if not isinstance(qj, dict):
             qj = {}
+        if title_only:
+            if len(title) < 2:
+                failures.append((rid, "title too short"))
+                continue
+            text = ""
+        else:
+            if not raw_path:
+                failures.append((rid, "missing file_path"))
+                continue
+            try:
+                text = extract_pdf_text(path)
+            except Exception as exc:  # noqa: BLE001
+                failures.append((rid, f"extract: {exc}"))
+                continue
+            if len(text.strip()) < 80:
+                failures.append((rid, "extract: text too short"))
+                continue
         target = AuditTarget(
             id=rid,
             source_key=str(row.get("source_key") or ""),
-            title=str(row.get("title") or ""),
+            title=title,
             file_path=path,
             text=text,
         )
@@ -149,8 +158,12 @@ async def _one(
             {
                 "role": "user",
                 "content": (
-                    f"Title: {target.title}\n\n"
-                    f"Report text (early pages):\n{target.text}"
+                    f"Title: {target.title}"
+                    if not target.text.strip()
+                    else (
+                        f"Title: {target.title}\n\n"
+                        f"Report text (early pages):\n{target.text}"
+                    )
                 ),
             },
         ],
@@ -189,10 +202,14 @@ async def run_backfill(
     concurrency: int = DEFAULT_CONCURRENCY,
     model: str = DEFAULT_MODEL,
     theme: str | None = None,
+    title_only: bool = False,
 ) -> dict[str, int]:
     rows = fetch_missing_short_title(limit=limit, theme=theme)
-    print(f"candidates={len(rows)} theme={theme} concurrency={concurrency}")
-    ready, extract_failures = prepare_targets(rows)
+    print(
+        f"candidates={len(rows)} theme={theme} concurrency={concurrency} "
+        f"title_only={title_only}"
+    )
+    ready, extract_failures = prepare_targets(rows, title_only=title_only)
     print(f"ready={len(ready)} extract_fail={len(extract_failures)}")
     for rid, err in extract_failures:
         print(f"extract-fail {rid}: {err}")
@@ -238,6 +255,11 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--theme", default=None)
+    parser.add_argument(
+        "--title-only",
+        action="store_true",
+        help="Skip PDF extract; invent short_title from title alone",
+    )
     args = parser.parse_args()
     stats = asyncio.run(
         run_backfill(
@@ -245,6 +267,7 @@ def main() -> None:
             concurrency=args.concurrency,
             model=args.model,
             theme=args.theme,
+            title_only=args.title_only,
         )
     )
     print("DONE", stats)
