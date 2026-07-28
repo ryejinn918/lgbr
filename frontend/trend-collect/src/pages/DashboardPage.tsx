@@ -13,6 +13,7 @@ import {
   latestReportTitle,
 } from '../lib/format'
 import { crawlModeTypeLabel } from '../lib/collectNav'
+import type { CollectionJobRecord, CollectionJobResponse } from '../types'
 
 const COUNT_KEYS = [
   'downloaded',
@@ -26,12 +27,70 @@ function isBusy(state: string) {
   return state === 'starting' || state === 'active' || state === 'stopping'
 }
 
+function pickArgView(
+  feed: CollectionJobResponse,
+  body: CollectionJobResponse,
+): {
+  kind: 'feed' | 'fetch_body'
+  status: CollectionJobResponse
+} {
+  const feedBusy = isBusy(feed.state)
+  const bodyBusy = isBusy(body.state)
+  if (bodyBusy) return { kind: 'fetch_body', status: body }
+  if (feedBusy) return { kind: 'feed', status: feed }
+
+  const feedJob = feed.job
+  const bodyJob = body.job
+  const feedAt = feedJob?.started_at ? Date.parse(feedJob.started_at) : 0
+  const bodyAt = bodyJob?.started_at ? Date.parse(bodyJob.started_at) : 0
+  if (bodyAt > feedAt) return { kind: 'fetch_body', status: body }
+  return { kind: 'feed', status: feed }
+}
+
+function argBadgeLabel(kind: 'feed' | 'fetch_body') {
+  return kind === 'fetch_body'
+    ? 'ARG · 본문 채우기/본문읽기'
+    : 'ARG · 리스트 발굴/피드 · 전체'
+}
+
+function formatArgProgress(
+  kind: 'feed' | 'fetch_body',
+  job: CollectionJobRecord | null | undefined,
+  progress: Record<string, unknown>,
+) {
+  if (kind === 'fetch_body') {
+    return [
+      progress.done != null && progress.total != null
+        ? `${String(progress.done)}/${String(progress.total)}`
+        : null,
+      progress.fetched != null ? `성공 ${String(progress.fetched)}` : null,
+      progress.failed != null ? `실패 ${String(progress.failed)}` : null,
+      job?.message,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return [
+    progress.inserted != null ? `신규 ${String(progress.inserted)}` : null,
+    progress.page != null ? `page ${String(progress.page)}` : null,
+    job?.message,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 export function DashboardPage() {
   const { crawl, status, stale, fetchError, requestingStop, requestLogout } =
     useSessionStatus()
-  const argFeed = useCollectionJob({ source: 'arg' })
+  const argFeed = useCollectionJob({ source: 'arg', capability: 'feed' })
+  const argBody = useCollectionJob({
+    source: 'arg',
+    capability: 'fetch_body',
+  })
+  const argView = pickArgView(argFeed.status, argBody.status)
+  const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
   const crawlBusy = isBusy(crawl.state)
-  const argBusy = isBusy(argFeed.status.state)
+  const argBusy = isBusy(argView.status.state)
   const openId =
     crawlBusy && crawl.crawl?.id && !crawl.crawl.ended_at
       ? crawl.crawl.id
@@ -63,9 +122,10 @@ export function DashboardPage() {
     : stale
       ? 'stale'
       : CRAWL_CLASS[crawl.state]
-  const argBadge = argFeed.fetchError
+  const argOffline = argFeed.fetchError || argBody.fetchError
+  const argBadge = argOffline
     ? 'offline'
-    : CRAWL_CLASS[argFeed.status.state] ?? 'ended'
+    : CRAWL_CLASS[argView.status.state] ?? 'ended'
 
   async function onStopCrawl() {
     if (!window.confirm('FnGuide 크롤을 종료하고 로그아웃할까요?')) return
@@ -77,17 +137,24 @@ export function DashboardPage() {
   }
 
   async function onStopArg() {
-    if (!window.confirm('ARG 피드 잡을 중단할까요?')) return
+    const label =
+      argView.kind === 'fetch_body' ? 'ARG 본문 채우기' : 'ARG 피드'
+    if (!window.confirm(`${label} 잡을 중단할까요?`)) return
     try {
-      await argFeed.stopFeed()
+      await argActive.stopFeed()
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '중단 실패')
     }
   }
 
-  const argProgress = (argFeed.status.progress ??
-    argFeed.status.job?.progress ??
+  const argProgress = (argView.status.progress ??
+    argView.status.job?.progress ??
     {}) as Record<string, unknown>
+  const argProgressLine = formatArgProgress(
+    argView.kind,
+    argView.status.job,
+    argProgress,
+  )
 
   return (
     <>
@@ -101,7 +168,7 @@ export function DashboardPage() {
       <section className="panel">
         <div className="section-head">
           <h2>수집 작업</h2>
-          <span className="section-note">매체 · 단계 · 수단 · 리스트 발굴 타입</span>
+          <span className="section-note">매체 · 현재 수집</span>
         </div>
         <div className="job-board">
           <article className={`job-card state-${crawlBadge}`}>
@@ -167,43 +234,31 @@ export function DashboardPage() {
           </article>
 
           <article className={`job-card state-${argBadge}`}>
-            <p className="badge-label">ARG · 리스트 발굴/피드 · 전체</p>
+            <p className="badge-label">{argBadgeLabel(argView.kind)}</p>
             <p className="badge-value">
-              {argFeed.fetchError
+              {argOffline
                 ? 'API Offline'
                 : argBusy
-                  ? argFeed.status.label
-                  : argFeed.status.job
-                    ? argFeed.status.label
+                  ? argView.status.label
+                  : argView.status.job
+                    ? argView.status.label
                     : '유휴'}
             </p>
-            {argFeed.status.job?.started_at ? (
+            {argView.status.job?.started_at ? (
               <p className="account-line">
-                {formatTime(argFeed.status.job.started_at)}
-                {argFeed.status.job.ended_at
-                  ? ` · ${formatTime(argFeed.status.job.ended_at)}`
+                {formatTime(argView.status.job.started_at)}
+                {argView.status.job.ended_at
+                  ? ` · ${formatTime(argView.status.job.ended_at)}`
                   : ''}
               </p>
             ) : null}
-            {argBusy || argFeed.status.job?.message ? (
-              <p className="account-line">
-                {[
-                  argProgress.inserted != null
-                    ? `신규 ${String(argProgress.inserted)}`
-                    : null,
-                  argProgress.page != null
-                    ? `page ${String(argProgress.page)}`
-                    : null,
-                  argFeed.status.job?.message,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
+            {argBusy || argView.status.job?.message ? (
+              <p className="account-line">{argProgressLine}</p>
             ) : null}
             <p className="account-line">
               <Link to="/collect/arg/list/feed">피드 실행</Link>
               {' · '}
-              <Link to="/collect/arg/list/feed/types">리스트 발굴 타입</Link>
+              <Link to="/collect/arg/body/fetch">본문 채우기</Link>
               {' · '}
               <Link to="/docs/articles">기사</Link>
             </p>
@@ -211,10 +266,10 @@ export function DashboardPage() {
               <div className="actions">
                 <button
                   type="button"
-                  disabled={argFeed.requestingStop}
+                  disabled={argActive.requestingStop}
                   onClick={() => void onStopArg()}
                 >
-                  {argFeed.requestingStop ? '요청 중…' : '중단'}
+                  {argActive.requestingStop ? '요청 중…' : '중단'}
                 </button>
               </div>
             ) : null}

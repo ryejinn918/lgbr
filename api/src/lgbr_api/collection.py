@@ -30,10 +30,26 @@ JOB_STATE_LABELS = {
 
 FEED_ALLOWLIST = frozenset({"arg"})
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
+CAPABILITY_LABELS = {
+    "feed": "리스트 발굴",
+    "search": "검색",
+    "fetch_body": "본문 채우기",
+    "download": "다운로드",
+}
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _capability_label(capability: str | None) -> str:
+    key = (capability or "").strip().lower()
+    return CAPABILITY_LABELS.get(key, key or "수집")
+
+
+def _conflict_open_job(source: str) -> dict[str, Any] | None:
+    """Any open job for this source (capability-agnostic exclusivity)."""
+    return _get_open(source=source, capability=None)
 
 
 def _pid_alive(pid: int | None) -> bool:
@@ -113,6 +129,10 @@ def get_current_job(
             "progress": job.get("progress") or {},
             "can_start": False,
         }
+    # Source-level exclusivity: another capability running blocks start.
+    other_open = (
+        _conflict_open_job(source) if source else None
+    )
     last = _get_latest(source=source, capability=capability)
     if last:
         job = _serialize(last)
@@ -121,14 +141,14 @@ def get_current_job(
             "label": job["label"],
             "job": job,
             "progress": job.get("progress") or {},
-            "can_start": job["state"] != "error",
+            "can_start": other_open is None and job["state"] != "error",
         }
     return {
         "state": "ended",
         "label": "종료",
         "job": None,
         "progress": {},
-        "can_start": True,
+        "can_start": other_open is None,
     }
 
 
@@ -182,14 +202,15 @@ def start_feed(
         }
 
     reconcile_stale_jobs()
-    open_job = _get_open(source=source_s, capability="feed")
+    open_job = _conflict_open_job(source_s)
     if open_job:
         job = _serialize(open_job)
+        kind = _capability_label(str(open_job.get("capability") or ""))
         return {
             "ok": False,
             "status": 409,
             "label": job["label"],
-            "message": "이미 해당 소스 feed 잡이 실행 중입니다.",
+            "message": f"이미 {source_s.upper()} 수집 작업이 실행 중입니다 ({kind}).",
             "job": job,
             "can_start": False,
         }
@@ -334,14 +355,15 @@ def start_fetch_body(
         }
 
     reconcile_stale_jobs()
-    open_job = _get_open(source=source_s, capability="fetch_body")
+    open_job = _conflict_open_job(source_s)
     if open_job:
         job = _serialize(open_job)
+        kind = _capability_label(str(open_job.get("capability") or ""))
         return {
             "ok": False,
             "status": 409,
             "label": job["label"],
-            "message": "이미 해당 소스 본문 채우기 잡이 실행 중입니다.",
+            "message": f"이미 {source_s.upper()} 수집 작업이 실행 중입니다 ({kind}).",
             "job": job,
             "can_start": False,
         }
