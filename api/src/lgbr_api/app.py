@@ -35,6 +35,10 @@ from lgbr_api.consensus_api import (
     start_run,
 )
 from lgbr_api.consensus_chat import iter_compare_chat_sse
+from lgbr_api.consensus_eval import get_eval as consensus_get_eval
+from lgbr_api.consensus_eval import iter_eval_sse
+from lgbr_api.consensus_eval import mark_all_open_evals_interrupted
+from lgbr_api.consensus_eval import start_eval as consensus_start_eval
 from lgbr_api.crawls import (
     get_cdp_status,
     get_current_crawl,
@@ -56,6 +60,8 @@ SHUTDOWN_WAIT_SECONDS = 60.0
 
 @asynccontextmanager
 async def lifespan(_app: Starlette) -> AsyncIterator[None]:
+    # Eval runs inside the request SSE; anything left open cannot resume.
+    await asyncio.to_thread(mark_all_open_evals_interrupted)
     yield
     # PM2/uvicorn stop: ask crawl worker to logout before this process exits.
     await asyncio.to_thread(
@@ -508,6 +514,37 @@ async def consensus_doc_compress(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
+async def consensus_eval_get(request: Request) -> JSONResponse:
+    run_id = str(request.path_params.get("run_id") or "")
+    result = consensus_get_eval(run_id)
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_eval_start(request: Request) -> JSONResponse:
+    run_id = str(request.path_params.get("run_id") or "")
+    result = consensus_start_eval(run_id)
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_eval_stream(request: Request) -> StreamingResponse:
+    run_id = str(request.path_params.get("run_id") or "")
+
+    def gen() -> Iterator[str]:
+        yield from iter_eval_sse(run_id)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 async def consensus_chat(request: Request) -> JSONResponse:
     try:
         body = await request.json()
@@ -613,6 +650,17 @@ def create_app() -> Starlette:
             Route(
                 "/api/consensus/runs/{run_id}/docs/{report_id}/compress",
                 consensus_doc_compress,
+            ),
+            Route("/api/consensus/runs/{run_id}/eval", consensus_eval_get),
+            Route(
+                "/api/consensus/runs/{run_id}/eval",
+                consensus_eval_start,
+                methods=["POST"],
+            ),
+            Route(
+                "/api/consensus/runs/{run_id}/eval/stream",
+                consensus_eval_stream,
+                methods=["POST"],
             ),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],

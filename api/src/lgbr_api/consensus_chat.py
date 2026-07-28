@@ -33,33 +33,37 @@ WEB_SEARCH_TOOL = {
     "function": {
         "name": "web_search",
         "description": (
-            "Search Google News via SerpAPI for recent headlines. "
-            "Use for latest news and time-sensitive public facts beyond the "
-            "~3-month broker-report consensus frame. "
-            "Match hl to the query language (en for English, ko for Korean). "
-            "If the tool returns an error or empty results, retry with a different "
-            "hl/gl or a rephrased query."
+            "Search the web via SerpAPI (Google News, with organic fallback). "
+            "Use for latest news and time-sensitive public facts. "
+            "CRITICAL: match hl/gl to the query script — Korean query → hl=ko gl=kr; "
+            "English query → hl=en gl=us. Never search Korean text with hl=en. "
+            "Prefer shorter queries (3–8 keywords). If empty, rephrase simpler."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "News search query (Korean or English)",
+                    "description": (
+                        "Search query. Keep language consistent (all Korean or all "
+                        "English); avoid mixing long bilingual phrases."
+                    ),
                 },
                 "gl": {
                     "type": "string",
-                    "description": "Country code for Google News (e.g. us, kr). Default us.",
+                    "description": "Country code (kr for Korean queries, us for English).",
                 },
                 "hl": {
                     "type": "string",
-                    "description": "UI/result language code (e.g. en, ko). Default en.",
+                    "description": "Language code (ko for Korean queries, en for English).",
                 },
             },
             "required": ["query"],
         },
     },
 }
+
+_HANGUL = re.compile(r"[\uac00-\ud7a3]")
 
 
 def _sse(event: str, data: dict[str, Any]) -> str:
@@ -89,6 +93,28 @@ def _normalize_locale(value: Any, *, default: str) -> str:
     if re.fullmatch(r"[a-z]{2}", text):
         return text
     return default
+
+
+def _query_has_hangul(query: str) -> bool:
+    return bool(_HANGUL.search(query or ""))
+
+
+def _align_locale(query: str, gl: str, hl: str) -> tuple[str, str]:
+    """Force hl/gl to match query script — Korean News+en locale often returns 0."""
+    if _query_has_hangul(query):
+        return "kr", "ko"
+    if hl == "ko":
+        return "us", "en"
+    return gl, hl
+
+
+def resolve_search_locale(
+    query: str, gl: Any = None, hl: Any = None
+) -> tuple[str, str]:
+    has_ko = _query_has_hangul(query or "")
+    gl_n = _normalize_locale(gl, default="kr" if has_ko else "us")
+    hl_n = _normalize_locale(hl, default="ko" if has_ko else "en")
+    return _align_locale(query or "", gl_n, hl_n)
 
 
 def _cache_query(query: str, *, gl: str, hl: str) -> str:
@@ -130,6 +156,55 @@ def _flatten_news_items(raw: list[Any], *, limit: int) -> list[dict[str, Any]]:
     return out
 
 
+def _flatten_organic_items(raw: list[Any], *, limit: int) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        link = str(item.get("link") or "").strip()
+        if not link:
+            continue
+        out.append(
+            {
+                "title": str(item.get("title") or ""),
+                "link": link,
+                "snippet": str(item.get("snippet") or ""),
+                "date": item.get("date"),
+                "publisher": _publisher_name(
+                    item.get("source") or item.get("displayed_link")
+                ),
+                "position": item.get("position"),
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _serpapi_json(engine: str, query: str, *, gl: str, hl: str) -> dict[str, Any]:
+    params = urllib.parse.urlencode(
+        {
+            "engine": engine,
+            "q": query,
+            "api_key": _serpapi_key(),
+            "gl": gl,
+            "hl": hl,
+        }
+    )
+    url = f"https://serpapi.com/search.json?{params}"
+    req = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(req, timeout=45) as resp:
+        data = json.loads(resp.read().decode())
+    err = data.get("error")
+    if err:
+        msg = str(err)
+        # Empty Google News is common for long/mismatched locales — not fatal.
+        if "hasn't returned any results" in msg.lower():
+            return {}
+        raise RuntimeError(msg)
+    return data if isinstance(data, dict) else {}
+
+
 def web_search(
     query: str,
     *,
@@ -140,28 +215,19 @@ def web_search(
     q = (query or "").strip()
     if not q:
         return []
-    gl_n = _normalize_locale(gl, default="us")
-    hl_n = _normalize_locale(hl, default="en")
+    gl_n, hl_n = resolve_search_locale(q, gl, hl)
     cache_q = _cache_query(q, gl=gl_n, hl=hl_n)
     cached = get_cached_search(cache_q)
     if cached is not None:
         return cached[:num]
-    params = urllib.parse.urlencode(
-        {
-            "engine": "google_news",
-            "q": q,
-            "api_key": _serpapi_key(),
-            "gl": gl_n,
-            "hl": hl_n,
-        }
-    )
-    url = f"https://serpapi.com/search.json?{params}"
-    req = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(req, timeout=45) as resp:
-        data = json.loads(resp.read().decode())
-    if data.get("error"):
-        raise RuntimeError(str(data["error"]))
+
+    data = _serpapi_json("google_news", q, gl=gl_n, hl=hl_n)
     items = _flatten_news_items(list(data.get("news_results") or []), limit=num)
+    if not items:
+        data = _serpapi_json("google", q, gl=gl_n, hl=hl_n)
+        items = _flatten_organic_items(
+            list(data.get("organic_results") or []), limit=num
+        )
     if not items:
         return []
     return upsert_search_results(cache_q, items)[:num]
@@ -183,6 +249,7 @@ def _or_chat(
     tools: list[dict[str, Any]] | None = None,
     stream: bool = False,
     temperature: float = 0.3,
+    max_tokens: int | None = None,
 ) -> Any:
     payload: dict[str, Any] = {
         "model": model,
@@ -191,6 +258,8 @@ def _or_chat(
         "stream": stream,
         "reasoning": {"effort": "none"},
     }
+    if max_tokens is not None:
+        payload["max_tokens"] = int(max_tokens)
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
@@ -544,8 +613,9 @@ def iter_compare_chat_sse(
                     tool_payload: dict[str, Any] = {"error": f"unknown tool {name}"}
                 else:
                     query = str(args.get("query") or "").strip()
-                    gl = _normalize_locale(args.get("gl"), default="us")
-                    hl = _normalize_locale(args.get("hl"), default="en")
+                    gl, hl = resolve_search_locale(
+                        query, args.get("gl"), args.get("hl")
+                    )
                     try:
                         results = web_search(query, gl=gl, hl=hl)
                         tool_payload = {

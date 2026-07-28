@@ -11,10 +11,11 @@ export function labelThemeSector(theme: ConsensusTheme | string): string {
   return `${name} 섹터`
 }
 
-/** Nav labels; display order: axes → frames (select lives under axes). */
+/** Nav labels; display order: axes → frames → eval. */
 export const NAV = {
   axes: '분석 축',
   frames: '컨센서스',
+  eval: '평가',
 } as const
 
 /** Frame product views (API kinds stay filled_frame / consensus_frame). */

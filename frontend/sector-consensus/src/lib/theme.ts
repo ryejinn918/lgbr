@@ -11,7 +11,7 @@ export const THEMES: ConsensusTheme[] = [
 
 export const DEFAULT_THEME: ConsensusTheme = 'ai'
 
-export type AppTab = 'axes' | 'frames'
+export type AppTab = 'axes' | 'frames' | 'eval'
 
 export function parseTheme(raw: string | null | undefined): ConsensusTheme {
   // Legacy slug: datacenter merged into ai (AI/AIDC).
@@ -24,9 +24,10 @@ export function themePath(theme: ConsensusTheme, tab: AppTab): string {
   return `/${theme}/${tab}`
 }
 
-/** Path segment after /:theme/ — axes | frames (legacy select → axes) */
+/** Path segment after /:theme/ — axes | frames | eval */
 export function parseTab(pathname: string): AppTab {
   const part = pathname.split('/').filter(Boolean)[1]
   if (part === 'frames') return 'frames'
+  if (part === 'eval') return 'eval'
   return 'axes'
 }

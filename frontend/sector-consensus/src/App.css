@@ -804,3 +804,64 @@ input {
   color: var(--danger);
   margin: 0;
 }
+
+.eval-live-tools {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.eval-live-tools li + li {
+  margin-top: 0.35rem;
+}
+
+.eval-graph-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.eval-graph-panel h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.eval-graph-canvas {
+  width: 100%;
+  min-height: 400px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.eval-graph-panel {
+  min-width: 0;
+}
+
+.eval-only-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.eval-report-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.eval-report-row h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+@media (max-width: 800px) {
+  .eval-only-cols,
+  .eval-report-row {
+    grid-template-columns: 1fr;
+  }
+}
