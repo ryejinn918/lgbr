@@ -61,14 +61,22 @@ export function AxesPage() {
       ? status.run
       : null
 
-  const sourceRun = openRun ?? themeHistory[0] ?? null
-  const criteria = asCriteria(sourceRun?.criteria)
-  const pillarsKey = JSON.stringify(criteria?.pillar_sketch || [])
+  const lastEnded = useMemo(() => {
+    if (openRun) return null
+    return (
+      themeHistory.find((h) => h.state === 'ended' || h.state === 'error') ?? null
+    )
+  }, [openRun, themeHistory])
+
+  const lastCriteria = asCriteria(lastEnded?.criteria)
+  const openCriteria = asCriteria(openRun?.criteria)
+  const pillarsKey = JSON.stringify(openCriteria?.pillar_sketch || [])
 
   const busy =
     openRun?.state === 'starting' ||
     openRun?.state === 'active' ||
     openRun?.state === 'stopping'
+  const awaiting = openRun?.state === 'awaiting'
   const badge = fetchError
     ? 'offline'
     : openRun
@@ -76,22 +84,35 @@ export function AxesPage() {
       : 'idle'
 
   useEffect(() => {
-    const c = asCriteria(sourceRun?.criteria)
+    if (!openRun) {
+      setThesis(() => '')
+      setCutLogic(() => '')
+      setPillars(() => '')
+      setContinuing(() => false)
+      return
+    }
+    const c = asCriteria(openRun.criteria)
     setThesis(() => String(c?.thesis || ''))
     setCutLogic(() => String(c?.cut_logic || ''))
     setPillars(() => pillarsText(c?.pillar_sketch))
     setContinuing(() => false)
   }, [
     theme,
-    sourceRun?.id,
-    sourceRun?.state,
-    criteria?.thesis,
-    criteria?.cut_logic,
+    openRun?.id,
+    openRun?.state,
+    openCriteria?.thesis,
+    openCriteria?.cut_logic,
     pillarsKey,
   ])
 
-  const canEdit = Boolean(openRun?.state === 'awaiting' && openRun?.id)
+  const canEdit = Boolean(awaiting && openRun?.id)
   const hasCut = Boolean(thesis.trim() && parsePillars(pillars).length >= 2)
+  const showWorkForm = Boolean(openRun)
+  const showLastAxes = Boolean(
+    !openRun &&
+      lastCriteria?.thesis &&
+      (lastCriteria.pillar_sketch?.length ?? 0) >= 2,
+  )
 
   async function onCut() {
     if (
@@ -101,6 +122,10 @@ export function AxesPage() {
     ) {
       return
     }
+    setThesis(() => '')
+    setCutLogic(() => '')
+    setPillars(() => '')
+    setContinuing(() => false)
     try {
       await startRun(theme)
       await refresh()
@@ -133,14 +158,12 @@ export function AxesPage() {
       : null
 
   const note = useMemo(() => {
-    if (busy) return '축 가르기 진행 중…'
-    if (openRun?.state === 'awaiting')
-      return '축을 확인·수정한 뒤 선별 또는 전체를 이어가세요.'
+    if (busy) return '축 가르기 진행 중… 새 긴장이 채워질 때까지 기다립니다.'
+    if (awaiting) return '축을 확인·수정한 뒤 선별 또는 전체를 이어가세요.'
     if (otherBusyTheme)
       return `${THEME_LABEL[otherBusyTheme]} 섹터에서 작업 중입니다.`
-    if (hasCut) return '저장된 축입니다. 필요하면 수정 후 이어서 진행하세요.'
-    return '축 가르기를 실행하면 긴장 한 줄과 2–4개 축이 나옵니다.'
-  }, [busy, openRun?.state, otherBusyTheme, hasCut])
+    return '축 가르기를 실행하면 아래에 이번 긴장이 채워집니다.'
+  }, [busy, awaiting, otherBusyTheme])
 
   const statusLabel = fetchError
     ? 'API 연결 끊김'
@@ -160,10 +183,10 @@ export function AxesPage() {
       </header>
 
       <section className={`panel badge-panel state-${badge}`}>
-        <p className="badge-label">상태</p>
+        <p className="badge-label">이번 작업</p>
         <p className="badge-value">{statusLabel}</p>
         <p className="section-note">{note}</p>
-        {(busy || openRun?.state === 'awaiting') && (
+        {(busy || awaiting) && (
           <button
             type="button"
             className="btn ghost"
@@ -203,79 +226,116 @@ export function AxesPage() {
         )}
       </section>
 
-      <section className="panel">
-        <div className="section-head">
-          <h2>긴장 · 축</h2>
-        </div>
-        <label className="section-note" htmlFor="thesis">
-          긴장 (한 줄)
-        </label>
-        <textarea
-          id="thesis"
-          className="mono"
-          rows={2}
-          value={thesis}
-          readOnly={!canEdit}
-          onChange={(e) => {
-            const v = e.target.value
-            setThesis(() => v)
-          }}
-          style={{ width: '100%', marginBottom: '0.75rem' }}
-        />
-        <label className="section-note" htmlFor="cut_logic">
-          분리 이유
-        </label>
-        <textarea
-          id="cut_logic"
-          className="mono"
-          rows={4}
-          value={cutLogic}
-          readOnly={!canEdit}
-          onChange={(e) => {
-            const v = e.target.value
-            setCutLogic(() => v)
-          }}
-          style={{ width: '100%', marginBottom: '0.75rem' }}
-        />
-        <label className="section-note" htmlFor="pillars">
-          축 (줄마다 하나, 2–4개)
-        </label>
-        <textarea
-          id="pillars"
-          className="mono"
-          rows={5}
-          value={pillars}
-          readOnly={!canEdit}
-          onChange={(e) => {
-            const v = e.target.value
-            setPillars(() => v)
-          }}
-          style={{ width: '100%', marginBottom: '0.75rem' }}
-        />
-        {openRun?.state === 'awaiting' && (
-          <div className="chip-row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn"
-              disabled={!hasCut || continuing}
-              onClick={() => void onContinue(true)}
-            >
-              {continuing ? '진행 중…' : '이 축으로 선별만'}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              disabled={!hasCut || continuing}
-              onClick={() => void onContinue(false)}
-            >
-              {continuing ? '진행 중…' : '이 축으로 전체 계속'}
-            </button>
-            <Link className="btn ghost" to={themePath(theme, 'select')}>
-              {NAV.select} 보기
-            </Link>
+      {showWorkForm && (
+        <section className="panel">
+          <div className="section-head">
+            <h2>긴장 · 축</h2>
           </div>
-        )}
-        {sourceRun?.state === 'ended' && hasCut && (
+          {busy && !hasCut && (
+            <p className="section-note">가르는 중… 결과가 나오면 여기에 채워집니다.</p>
+          )}
+          <label className="section-note" htmlFor="thesis">
+            긴장 (한 줄)
+          </label>
+          <textarea
+            id="thesis"
+            className="mono"
+            rows={2}
+            value={thesis}
+            readOnly={!canEdit}
+            placeholder={busy ? '생성 중…' : ''}
+            onChange={(e) => {
+              const v = e.target.value
+              setThesis(() => v)
+            }}
+            style={{ width: '100%', marginBottom: '0.75rem' }}
+          />
+          <label className="section-note" htmlFor="cut_logic">
+            분리 이유
+          </label>
+          <textarea
+            id="cut_logic"
+            className="mono"
+            rows={4}
+            value={cutLogic}
+            readOnly={!canEdit}
+            placeholder={busy ? '생성 중…' : ''}
+            onChange={(e) => {
+              const v = e.target.value
+              setCutLogic(() => v)
+            }}
+            style={{ width: '100%', marginBottom: '0.75rem' }}
+          />
+          <label className="section-note" htmlFor="pillars">
+            축 (줄마다 하나, 2–4개)
+          </label>
+          <textarea
+            id="pillars"
+            className="mono"
+            rows={5}
+            value={pillars}
+            readOnly={!canEdit}
+            placeholder={busy ? '생성 중…' : ''}
+            onChange={(e) => {
+              const v = e.target.value
+              setPillars(() => v)
+            }}
+            style={{ width: '100%', marginBottom: '0.75rem' }}
+          />
+          {awaiting && (
+            <div className="chip-row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn"
+                disabled={!hasCut || continuing}
+                onClick={() => void onContinue(true)}
+              >
+                {continuing ? '진행 중…' : '이 축으로 선별만'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!hasCut || continuing}
+                onClick={() => void onContinue(false)}
+              >
+                {continuing ? '진행 중…' : '이 축으로 전체 계속'}
+              </button>
+              <Link className="btn ghost" to={themePath(theme, 'select')}>
+                {NAV.select} 보기
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!openRun && !showLastAxes && (
+        <section className="panel">
+          <p className="section-note">
+            축 가르기를 실행하면 이번 긴장·축이 여기에 나타납니다.
+          </p>
+        </section>
+      )}
+
+      {showLastAxes && lastCriteria && (
+        <section className="panel">
+          <div className="section-head">
+            <h2>최근 축</h2>
+            <p className="section-note">이전 실행 결과 (읽기 전용)</p>
+          </div>
+          <p className="section-note">긴장</p>
+          <p className="select-review-body">{lastCriteria.thesis}</p>
+          {lastCriteria.cut_logic ? (
+            <>
+              <p className="section-note">분리 이유</p>
+              <p className="select-review-body">{lastCriteria.cut_logic}</p>
+            </>
+          ) : null}
+          <p className="section-note">축</p>
+          <ul className="select-review-list">
+            {(lastCriteria.pillar_sketch || []).map((p, i) => (
+              <li key={`${i}-${p}`}>{p}</li>
+            ))}
+          </ul>
           <p className="section-note">
             선별·논지 결과는{' '}
             <Link className="text-link" to={themePath(theme, 'select')}>
@@ -287,8 +347,8 @@ export function AxesPage() {
             </Link>
             에서 확인합니다.
           </p>
-        )}
-      </section>
+        </section>
+      )}
     </>
   )
 }

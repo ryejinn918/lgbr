@@ -22,6 +22,7 @@ export type ContinuePayload = {
   cut_logic?: string
   pillar_sketch?: string[]
   until?: 'select'
+  resume_from?: 'select' | 'doc'
 }
 
 export function useConsensusStatus(theme?: ConsensusTheme) {

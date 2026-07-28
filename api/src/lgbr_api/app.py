@@ -398,12 +398,15 @@ async def consensus_continue(request: Request) -> JSONResponse:
         pillars = None
     until_raw = body.get("until")
     until = str(until_raw).strip() if until_raw is not None else None
+    resume_raw = body.get("resume_from")
+    resume_from = str(resume_raw).strip() if resume_raw is not None else None
     result = continue_run(
         run_id,
         thesis=str(body["thesis"]) if body.get("thesis") is not None else None,
         cut_logic=str(body["cut_logic"]) if body.get("cut_logic") is not None else None,
         pillar_sketch=[str(p) for p in pillars] if pillars is not None else None,
         until=until,
+        resume_from=resume_from,
     )
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)

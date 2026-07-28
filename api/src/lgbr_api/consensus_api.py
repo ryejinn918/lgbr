@@ -241,20 +241,34 @@ def get_current_run(
 ) -> dict[str, Any]:
     reconcile_stale_runs()
     open_row = _get_open_row()
-    row = _get_run_row(run_id) if run_id else (open_row or _get_run_row(None))
+    if run_id:
+        row = _get_run_row(run_id)
+    else:
+        # Idle must not surface a previous ended run as "current".
+        row = open_row
     run = _serialize_run(row)
-    events = list_events(run["id"] if run else None, limit=event_limit)
     can_start = open_row is None
-    state = run["state"] if run else "idle"
+    if open_row is None and run_id is None:
+        state = "idle"
+        events: list[Any] = []
+        message = None
+        progress: dict[str, Any] = {}
+    else:
+        state = run["state"] if run else "idle"
+        events = list_events(run["id"] if run else None, limit=event_limit).get(
+            "items"
+        ) or []
+        message = (run or {}).get("message")
+        progress = (run or {}).get("progress") or {}
     return {
         "ok": True,
         "label": STATE_LABELS.get(state, state),
         "state": state,
         "run": run,
-        "progress": (run or {}).get("progress") or {},
-        "events": events.get("items") or [],
+        "progress": progress,
+        "events": events,
         "can_start": can_start,
-        "message": (run or {}).get("message"),
+        "message": message,
     }
 
 
@@ -695,6 +709,21 @@ def start_run(
     }
 
 
+def _count_selected_docs(run_id: str) -> int:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT count(*)::int AS n
+            FROM consensus_run_docs
+            WHERE run_id = %s::uuid
+              AND role IN ('selected', 'fill_extra')
+            """,
+            (run_id,),
+        )
+        row = cur.fetchone()
+    return int((row or {}).get("n") or 0)
+
+
 def continue_run(
     run_id: str,
     *,
@@ -702,13 +731,23 @@ def continue_run(
     cut_logic: str | None = None,
     pillar_sketch: list[str] | None = None,
     until: str | None = None,
+    resume_from: str | None = None,
 ) -> dict[str, Any]:
-    """Resume from awaiting after optional axis edits."""
+    """Resume awaiting→select, or ended select-only→doc/frame/fill."""
     if until is not None and until not in ("select",):
         return {
             "ok": False,
             "status": 400,
             "message": "until must be 'select' (stop after pack) or omitted (full)",
+            "can_start": False,
+            "run": None,
+        }
+    resume = (resume_from or "").strip() or None
+    if resume is not None and resume not in ("select", "doc"):
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "resume_from must be 'select', 'doc', or omitted",
             "can_start": False,
             "run": None,
         }
@@ -722,18 +761,31 @@ def continue_run(
             "can_start": False,
             "run": None,
         }
-    if str(row.get("state") or "") != "awaiting":
+
+    state = str(row.get("state") or "")
+    criteria = _parse_jsonb(row.get("criteria") or {})
+    if not isinstance(criteria, dict):
+        criteria = {}
+
+    # Ended select-only (or error mid-doc with pack) → keep pack, run doc/frame/fill.
+    if resume == "doc":
+        return _continue_from_select_only(run_id, row=row, criteria=criteria)
+    if (
+        resume is None
+        and state == "ended"
+        and str(criteria.get("until") or "") == "select"
+    ):
+        return _continue_from_select_only(run_id, row=row, criteria=criteria)
+
+    if state != "awaiting":
         return {
             "ok": False,
             "status": 409,
-            "message": f"축 확인 대기 상태가 아닙니다 (state={row.get('state')}).",
+            "message": f"축 확인 대기 상태가 아닙니다 (state={state}).",
             "can_start": False,
             "run": _serialize_run(row),
         }
 
-    criteria = _parse_jsonb(row.get("criteria") or {})
-    if not isinstance(criteria, dict):
-        criteria = {}
     if thesis is not None:
         criteria["thesis"] = str(thesis).strip()
     if cut_logic is not None:
@@ -762,6 +814,7 @@ def continue_run(
             UPDATE consensus_runs
             SET state = 'starting',
                 pid = NULL,
+                started_at = now(),
                 ended_at = NULL,
                 stop_requested_at = NULL,
                 message = NULL,
@@ -811,6 +864,135 @@ def continue_run(
     }
 
 
+def _continue_from_select_only(
+    run_id: str,
+    *,
+    row: dict[str, Any],
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Reopen ended/error select pack and resume from doc stage."""
+    state = str(row.get("state") or "")
+    if state not in ("ended", "error"):
+        return {
+            "ok": False,
+            "status": 409,
+            "message": f"선별만 종료된 런이 아닙니다 (state={state}).",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+    until = str(criteria.get("until") or "")
+    # ended: require until=select. error mid-doc: until may already be cleared.
+    if state == "ended" and until != "select":
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "선별까지만 진행한 런만 논지까지 이을 수 있습니다.",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+    outputs = get_outputs(run_id)
+    if outputs.get("filled_frame") or outputs.get("consensus_frame"):
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "이미 논지가 있는 런입니다.",
+            "can_start": _get_open_row() is None,
+            "run": _serialize_run(row),
+        }
+    if _count_selected_docs(run_id) < 1:
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "선별된 보고서가 없어 논지를 이어갈 수 없습니다.",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+    if _get_open_row() is not None:
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "이미 컨센서스 런이 실행 중이거나 축 확인 대기 중입니다.",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+    if not criteria.get("thesis") or len(criteria.get("pillar_sketch") or []) < 2:
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "thesis와 pillar_sketch(2개 이상)가 필요합니다.",
+            "can_start": True,
+            "run": _serialize_run(row),
+        }
+
+    next_criteria = dict(criteria)
+    next_criteria["resume_from"] = "doc"
+    next_criteria.pop("until", None)
+
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET state = 'starting',
+                pid = NULL,
+                started_at = now(),
+                ended_at = NULL,
+                stop_requested_at = NULL,
+                message = NULL,
+                criteria = %s::jsonb
+            WHERE id = %s::uuid
+              AND state IN ('ended', 'error')
+              AND ended_at IS NOT NULL
+            RETURNING id
+            """,
+            (json.dumps(next_criteria, ensure_ascii=False), run_id),
+        )
+        ok = cur.fetchone() is not None
+        conn.commit()
+    if not ok:
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "런을 재개할 수 없습니다.",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+    try:
+        _spawn_worker(run_id)
+    except Exception as exc:
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE consensus_runs
+                SET state='ended',
+                    ended_at=now(),
+                    message=%s,
+                    criteria = (criteria - 'resume_from') || %s::jsonb
+                WHERE id=%s::uuid
+                """,
+                (
+                    f"spawn failed: {exc}",
+                    json.dumps({"until": "select"}, ensure_ascii=False),
+                    run_id,
+                ),
+            )
+            conn.commit()
+        return {
+            "ok": False,
+            "status": 500,
+            "message": f"워커 기동 실패: {exc}",
+            "can_start": True,
+            "run": _serialize_run(_get_run_row(run_id)),
+        }
+    return {
+        "ok": True,
+        "status": 202,
+        "message": "선별을 유지한 채 논지(요약·골격·살붙임)를 이어서 시작합니다.",
+        "label": "시작 중",
+        "can_start": False,
+        "run": _serialize_run(_get_run_row(run_id)),
+    }
+
+
 def request_stop() -> dict[str, Any]:
     with connect() as conn, conn.cursor() as cur:
         # Cancel human-review pause immediately.
@@ -839,7 +1021,10 @@ def request_stop() -> dict[str, Any]:
             """
             UPDATE consensus_runs
             SET stop_requested_at = now(),
-                state = CASE WHEN state = 'active' THEN 'stopping' ELSE state END
+                state = CASE
+                    WHEN state IN ('active', 'starting') THEN 'stopping'
+                    ELSE state
+                END
             WHERE ended_at IS NULL
             RETURNING *
             """

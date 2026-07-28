@@ -30,11 +30,42 @@ DOC_CONCURRENCY = 4
 SLICE_CONCURRENCY = 4
 
 
+class StopRequested(Exception):
+    """Cooperative cancel when the operator requests stop."""
+
+
 def _clip_msg(s: Any, n: int) -> str:
     t = " ".join(str(s or "").split())
     if len(t) <= n:
         return t
     return t[: n - 1] + "…"
+
+
+def _ensure_not_stopped(run_id: str) -> None:
+    if runs_store.is_stop_requested(run_id):
+        raise StopRequested("stop requested")
+
+
+def _selected_reports_from_run_docs(run_id: str) -> list[dict[str, Any]]:
+    """Map persisted pack rows into the shape expected by _process_doc."""
+    out: list[dict[str, Any]] = []
+    for d in runs_store.list_selected_docs_for_refill(run_id):
+        rid = str(d.get("report_id") or "").strip()
+        fp = str(d.get("file_path") or "").strip()
+        if not rid or not fp:
+            continue
+        out.append(
+            {
+                "id": rid,
+                "source_key": str(d.get("source_key") or rid),
+                "title": str(d.get("title") or ""),
+                "provider": str(d.get("provider") or ""),
+                "published_at": d.get("published_at"),
+                "file_path": fp,
+                "select_role": str(d.get("role") or "selected"),
+            }
+        )
+    return out
 
 
 async def _process_doc(
@@ -178,8 +209,20 @@ async def _process_doc(
 
 async def run_pipeline(run_id: str) -> None:
     pid = os.getpid()
+    if runs_store.is_stop_requested(run_id):
+        runs_store.end_run(
+            run_id, state="ended", message="종료 요청으로 시작 전 종료됨"
+        )
+        log(f"STOPPED pre-claim run={run_id}")
+        return
     row = runs_store.claim_run(run_id, pid=pid)
     if row is None:
+        if runs_store.is_stop_requested(run_id):
+            runs_store.end_run(
+                run_id, state="ended", message="종료 요청으로 시작 전 종료됨"
+            )
+            log(f"STOPPED claim-blocked run={run_id}")
+            return
         raise RuntimeError(f"cannot claim run {run_id}")
 
     log_c = ConsensusLogger(run_id)
@@ -197,15 +240,149 @@ async def run_pipeline(run_id: str) -> None:
     criteria0 = dict(row.get("criteria") or {})
     until = str(criteria0.get("until") or "").strip()
     resume_from = str(criteria0.get("resume_from") or "").strip()
+    if resume_from == "doc":
+        start_stage = "doc"
+    elif resume_from == "select":
+        start_stage = "select"
+    else:
+        start_stage = "thesis"
     log_c.set_progress(
-        stage="thesis" if resume_from != "select" else "select",
+        stage=start_stage,
         theme=theme,
         artifact_dir=str(out),
         model=model,
     )
 
     try:
-        if resume_from != "select":
+        selected: list[dict[str, Any]]
+        criteria: dict[str, Any]
+
+        if resume_from == "doc":
+            # Keep locked pack; skip select LLM; continue doc → frame → fill.
+            _ensure_not_stopped(run_id)
+            selected = _selected_reports_from_run_docs(run_id)
+            if not selected:
+                raise RuntimeError("resume_from=doc but no selected run_docs")
+            criteria = dict(criteria0)
+            criteria.pop("resume_from", None)
+            criteria.pop("until", None)
+            runs_store.set_run_criteria(run_id, criteria)
+            core_n = sum(
+                1 for r in selected if r.get("select_role") != "fill_extra"
+            )
+            biblio_n = sum(
+                1 for r in selected if r.get("select_role") == "fill_extra"
+            )
+            log_c.emit(
+                stage="doc",
+                event="resume_pack",
+                selected=len(selected),
+                core=core_n,
+                bibliography=biblio_n,
+            )
+            log_c.set_progress(
+                docs_total=len(selected),
+                docs_done=0,
+                docs_failed=0,
+                docs_cache_hit=0,
+            )
+
+        elif resume_from == "select":
+            # Place reports on locked axes, then optional early end.
+            _ensure_not_stopped(run_id)
+            thesis = str(criteria0.get("thesis") or "").strip()
+            cut_logic = str(criteria0.get("cut_logic") or "").strip()
+            pillars = criteria0.get("pillar_sketch") or []
+            if not isinstance(pillars, list):
+                pillars = []
+
+            with log_c.stage("select", theme=theme):
+                from consensus.select import select_for_theme
+
+                _ensure_not_stopped(run_id)
+                selected, excluded_pairs, criteria = select_for_theme(
+                    theme,
+                    thesis=thesis,
+                    cut_logic=cut_logic,
+                    pillar_sketch=[str(p) for p in pillars],
+                    model=model,
+                )
+                if not selected:
+                    raise RuntimeError(f"no reports selected for theme={theme}")
+
+                core_n = sum(
+                    1 for r in selected if r.get("select_role") != "fill_extra"
+                )
+                biblio_n = sum(
+                    1 for r in selected if r.get("select_role") == "fill_extra"
+                )
+                for k in (
+                    "thesis",
+                    "cut_logic",
+                    "pillar_sketch",
+                    "cut",
+                    "pool_qp_count",
+                    "until",
+                ):
+                    if k in criteria0 and k not in criteria:
+                        criteria[k] = criteria0[k]
+                criteria["thesis"] = thesis
+                criteria["cut_logic"] = cut_logic
+                criteria["pillar_sketch"] = (
+                    list(pillars) or criteria.get("pillar_sketch")
+                )
+                criteria.pop("resume_from", None)
+                if until:
+                    criteria["until"] = until
+
+                runs_store.insert_run_docs(
+                    run_id, selected=selected, excluded=excluded_pairs
+                )
+                runs_store.set_run_criteria(run_id, criteria)
+                runs_store.update_progress(
+                    run_id, {"criteria_snapshot": criteria}
+                )
+                log_c.emit(
+                    stage="select",
+                    event="selected",
+                    selected=len(selected),
+                    core=core_n,
+                    bibliography=biblio_n,
+                    excluded=len(excluded_pairs),
+                    **{
+                        k: criteria[k]
+                        for k in (
+                            "select",
+                            "pool_themes",
+                            "core_max",
+                            "pillar_sketch",
+                        )
+                        if k in criteria
+                    },
+                )
+                log_c.set_progress(
+                    docs_total=len(selected),
+                    docs_done=0,
+                    docs_failed=0,
+                    docs_cache_hit=0,
+                )
+
+            if until == "select":
+                _ensure_not_stopped(run_id)
+                msg = f"ok until=select core={core_n} biblio={biblio_n}"
+                runs_store.end_run(run_id, state="ended", message=msg)
+                log_c.emit(
+                    stage="run",
+                    event="ended",
+                    until="select",
+                    core=core_n,
+                    bibliography=biblio_n,
+                )
+                log(f"DONE run={run_id} {msg}")
+                return
+
+        else:
+            _ensure_not_stopped(run_id)
             with log_c.stage("thesis", theme=theme):
                 from consensus.thesis import thesis_for_theme
 
@@ -235,90 +412,16 @@ async def run_pipeline(run_id: str) -> None:
                     thesis=_clip_msg(criteria.get("thesis"), 120),
                 )
             msg = "awaiting axis review"
-            runs_store.pause_awaiting(run_id, message=msg)
+            paused = runs_store.pause_awaiting(run_id, message=msg)
+            if paused == "ended":
+                log_c.emit(stage="run", event="ended", reason="stop_before_awaiting")
+                log(f"STOPPED before awaiting run={run_id}")
+                return
             log_c.emit(stage="run", event="awaiting", until="thesis")
             log(f"AWAITING run={run_id} {msg}")
             return
 
-        # resume_from=select: place reports on locked axes, then optional early end.
-        thesis = str(criteria0.get("thesis") or "").strip()
-        cut_logic = str(criteria0.get("cut_logic") or "").strip()
-        pillars = criteria0.get("pillar_sketch") or []
-        if not isinstance(pillars, list):
-            pillars = []
-
-        with log_c.stage("select", theme=theme):
-            from consensus.select import select_for_theme
-
-            selected, excluded_pairs, criteria = select_for_theme(
-                theme,
-                thesis=thesis,
-                cut_logic=cut_logic,
-                pillar_sketch=[str(p) for p in pillars],
-                model=model,
-            )
-            if not selected:
-                raise RuntimeError(f"no reports selected for theme={theme}")
-
-            core_n = sum(
-                1 for r in selected if r.get("select_role") != "fill_extra"
-            )
-            biblio_n = sum(
-                1 for r in selected if r.get("select_role") == "fill_extra"
-            )
-            # Preserve cut + continue flags from criteria0.
-            for k in (
-                "thesis",
-                "cut_logic",
-                "pillar_sketch",
-                "cut",
-                "pool_qp_count",
-                "until",
-            ):
-                if k in criteria0 and k not in criteria:
-                    criteria[k] = criteria0[k]
-            criteria["thesis"] = thesis
-            criteria["cut_logic"] = cut_logic
-            criteria["pillar_sketch"] = list(pillars) or criteria.get("pillar_sketch")
-            criteria.pop("resume_from", None)
-            if until:
-                criteria["until"] = until
-
-            runs_store.insert_run_docs(
-                run_id, selected=selected, excluded=excluded_pairs
-            )
-            runs_store.set_run_criteria(run_id, criteria)
-            runs_store.update_progress(run_id, {"criteria_snapshot": criteria})
-            log_c.emit(
-                stage="select",
-                event="selected",
-                selected=len(selected),
-                core=core_n,
-                bibliography=biblio_n,
-                excluded=len(excluded_pairs),
-                **{
-                    k: criteria[k]
-                    for k in ("select", "pool_themes", "core_max", "pillar_sketch")
-                    if k in criteria
-                },
-            )
-            log_c.set_progress(
-                docs_total=len(selected), docs_done=0, docs_failed=0, docs_cache_hit=0
-            )
-
-        if until == "select":
-            msg = f"ok until=select core={core_n} biblio={biblio_n}"
-            runs_store.end_run(run_id, state="ended", message=msg)
-            log_c.emit(
-                stage="run",
-                event="ended",
-                until="select",
-                core=core_n,
-                bibliography=biblio_n,
-            )
-            log(f"DONE run={run_id} {msg}")
-            return
-
+        _ensure_not_stopped(run_id)
         cards: list[dict[str, Any]] = []
         slug_dirs: dict[str, Path] = {}
         docs_done = docs_failed = docs_cache_hit = 0
@@ -331,6 +434,7 @@ async def run_pipeline(run_id: str) -> None:
             nonlocal docs_done, docs_failed, docs_cache_hit
             rid = str(report["id"])
             async with doc_sem:
+                _ensure_not_stopped(run_id)
                 log_c.set_progress(current_report_id=rid, stage="doc")
                 try:
                     card = await _process_doc(
@@ -389,6 +493,7 @@ async def run_pipeline(run_id: str) -> None:
         if not cards:
             raise RuntimeError("all documents failed compress")
 
+        _ensure_not_stopped(run_id)
         frame_cards = [
             c for c in cards if c.get("select_role") != "fill_extra"
         ]
@@ -408,6 +513,7 @@ async def run_pipeline(run_id: str) -> None:
             runs_store.save_output(run_id, kind="consensus_frame", body_md=frame)
             log_c.emit(stage="consensus", event="frame_validated", chars=len(frame))
 
+        _ensure_not_stopped(run_id)
         with log_c.stage("fill", reports=len(slug_dirs)):
             filled, plan_meta = fill_frame(
                 frame,
@@ -430,6 +536,11 @@ async def run_pipeline(run_id: str) -> None:
         )
         log_c.emit(stage="run", event="ended", docs_done=docs_done, docs_failed=docs_failed)
         log(f"DONE run={run_id} filled={len(filled)} chars")
+    except StopRequested:
+        msg = "종료 요청으로 중단됨"
+        log_c.emit(stage="run", event="ended", reason="stop")
+        runs_store.end_run(run_id, state="ended", message=msg)
+        log(f"STOPPED run={run_id}")
     except Exception as exc:
         tb = traceback.format_exc()
         log_c.emit(level="error", stage="run", event="error", error=str(exc), traceback=tb)

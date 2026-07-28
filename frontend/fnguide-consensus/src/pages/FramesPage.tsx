@@ -11,9 +11,15 @@ import {
   labelRunState,
 } from '../lib/labels'
 import { parseTheme, themePath } from '../lib/theme'
+import type { SelectCriteria } from '../types'
 import { THEME_LABEL } from '../types'
 
 type ViewTab = 'filled' | 'consensus' | 'materials'
+
+function asCriteria(raw: unknown): SelectCriteria | null {
+  if (!raw || typeof raw !== 'object') return null
+  return raw as SelectCriteria
+}
 
 type DocRow = {
   role: string
@@ -29,7 +35,12 @@ type DocRow = {
 }
 
 function isBusyState(state: string | null | undefined): boolean {
-  return state === 'starting' || state === 'active' || state === 'stopping'
+  return (
+    state === 'starting' ||
+    state === 'active' ||
+    state === 'stopping' ||
+    state === 'awaiting'
+  )
 }
 
 export function FramesPage() {
@@ -48,7 +59,8 @@ export function FramesPage() {
   const [compressError, setCompressError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const { status, history } = useConsensusStatus(theme)
+  const { status, history, continueRun, refresh } = useConsensusStatus(theme)
+  const [continuingFull, setContinuingFull] = useState(false)
 
   const themeHistory = useMemo(
     () => history.filter((h) => h.theme === theme).slice(0, 2),
@@ -87,8 +99,19 @@ export function FramesPage() {
     setCompressMd(null)
     setCompressError(null)
     setError(null)
-    setTab('filled')
   }, [theme, runFromUrl])
+
+  const packCriteria = asCriteria(packRun?.criteria)
+
+  useEffect(() => {
+    if (!packRun?.id) {
+      setTab('filled')
+      return
+    }
+    const landMaterials =
+      packCriteria?.until === 'select' || packRun.state === 'error'
+    setTab(landMaterials ? 'materials' : 'filled')
+  }, [packRun?.id, packRun?.state, packCriteria?.until])
 
   useEffect(() => {
     const runId = packRun?.id
@@ -150,6 +173,13 @@ export function FramesPage() {
       docs.filter((d) => d.role === 'selected' || d.role === 'fill_extra'),
     [docs],
   )
+
+  const selectOnly =
+    (packRun?.state === 'ended' && packCriteria?.until === 'select') ||
+    (packRun?.state === 'error' &&
+      selectedDocs.length > 0 &&
+      !filled &&
+      !consensus)
   const coreDocs = useMemo(
     () => selectedDocs.filter((d) => d.role === 'selected'),
     [selectedDocs],
@@ -218,6 +248,41 @@ export function FramesPage() {
       : formatTime(packRun.ended_at)
     : null
 
+  async function onContinueToFrames() {
+    if (!packRun?.id || !status.can_start) return
+    if (
+      !window.confirm(
+        '이 선별 팩을 유지한 채 요약·골격·살 붙인 논지를 이어서 만들까요?',
+      )
+    ) {
+      return
+    }
+    setContinuingFull(() => true)
+    try {
+      await continueRun(packRun.id, { resume_from: 'doc' })
+      await refresh()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : '계속 실패')
+    } finally {
+      setContinuingFull(() => false)
+    }
+  }
+
+  const selectOnlyNote = (
+    <>
+      이 실행은 선별까지만 진행했습니다. 골격·살 붙인 논지는 아직 없습니다. 아래
+      버튼으로 같은 선별을 유지한 채 논지까지 이을 수 있습니다.{' '}
+      <Link className="text-link" to={themePath(theme, 'select')}>
+        {NAV.select}
+      </Link>
+      에서 선별을 확인하거나,{' '}
+      <Link className="text-link" to={themePath(theme, 'axes')}>
+        {NAV.axes}
+      </Link>
+      에서 축부터 다시 시작할 수도 있습니다.
+    </>
+  )
+
   return (
     <>
       <header className="monitor-header">
@@ -230,6 +295,7 @@ export function FramesPage() {
         {packRun && packLabel ? (
           <p className="section-note">
             {packLabel} · {runTimeNote} · {packRun.question}
+            {selectOnly ? ' · 선별까지만' : ''}
           </p>
         ) : (
           <p className="section-note">
@@ -241,6 +307,27 @@ export function FramesPage() {
         )}
         {error && <p className="error-line">{error}</p>}
       </header>
+
+      {selectOnly && packRun && (
+        <section className="panel">
+          <p className="section-note">{selectOnlyNote}</p>
+          <div className="chip-row" style={{ gap: '0.5rem', marginTop: '0.75rem' }}>
+            <button
+              type="button"
+              className="btn"
+              disabled={!status.can_start || continuingFull}
+              onClick={() => void onContinueToFrames()}
+            >
+              {continuingFull ? '진행 중…' : '이 선별로 논지까지 계속'}
+            </button>
+            {!status.can_start && (
+              <span className="section-note">
+                다른 작업이 열려 있어 지금은 이을 수 없습니다.
+              </span>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="panel">
         {themeHistory.length > 1 && (
@@ -277,8 +364,7 @@ export function FramesPage() {
         </div>
         {tab === 'filled' && (
           <p className="section-note">
-            골격에 근거와 수치를 채워 넣은 본문입니다. 채팅 답변의 기본
-            참고입니다.
+            골격에 근거와 수치를 채워 넣은 본문입니다.
           </p>
         )}
         {tab === 'consensus' && (
@@ -292,6 +378,7 @@ export function FramesPage() {
             {selectedDocs.length > 0
               ? ` · 골격용 ${coreDocs.length} · 참고용 ${biblioDocs.length}`
               : ''}
+            {selectOnly ? ' · 문서 요약은 전체 실행 후에 생깁니다.' : ''}
           </p>
         )}
 
@@ -301,7 +388,9 @@ export function FramesPage() {
               <Markdown>{frameBody}</Markdown>
             </div>
           ) : (
-            <p className="section-note">표시할 논지가 없습니다.</p>
+            <p className="section-note">
+              {selectOnly ? selectOnlyNote : '표시할 논지가 없습니다.'}
+            </p>
           ))}
 
         {tab === 'materials' && (

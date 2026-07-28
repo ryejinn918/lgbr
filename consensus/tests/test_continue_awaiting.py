@@ -59,3 +59,18 @@ def test_continue_full_clears_until():
     )
     assert out["resume_from"] == "select"
     assert "until" not in out
+
+
+def test_resume_doc_clears_until():
+    base = {
+        "until": "select",
+        "thesis": "t",
+        "pillar_sketch": ["a", "b"],
+        "core_count": 10,
+    }
+    out = dict(base)
+    out["resume_from"] = "doc"
+    out.pop("until", None)
+    assert out["resume_from"] == "doc"
+    assert "until" not in out
+    assert out["thesis"] == "t"

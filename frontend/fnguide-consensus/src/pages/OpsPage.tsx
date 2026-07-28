@@ -13,6 +13,15 @@ import { parseTheme, themePath } from '../lib/theme'
 import type { ConsensusTheme } from '../types'
 import { STATE_CLASS, THEME_LABEL } from '../types'
 
+function isOpenState(state: string | undefined): boolean {
+  return (
+    state === 'starting' ||
+    state === 'active' ||
+    state === 'stopping' ||
+    state === 'awaiting'
+  )
+}
+
 export function OpsPage() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
@@ -38,12 +47,27 @@ export function OpsPage() {
     setPreviewMd(null)
   }, [theme])
 
-  const busy =
-    status.state === 'starting' ||
-    status.state === 'active' ||
-    status.state === 'stopping' ||
-    status.state === 'awaiting'
-  const badge = fetchError ? 'offline' : STATE_CLASS[status.state]
+  const openRun = status.run && isOpenState(status.run.state) ? status.run : null
+  const busy = Boolean(openRun)
+  const badge = fetchError
+    ? 'offline'
+    : openRun
+      ? STATE_CLASS[openRun.state] || 'idle'
+      : 'idle'
+
+  const statusLabel = fetchError
+    ? 'API 연결 끊김'
+    : openRun
+      ? labelRunState(openRun.state)
+      : '대기'
+
+  const statusNote = !openRun
+    ? '실행 중인 작업 없음'
+    : openRun.theme === theme
+      ? '이 섹터에서 진행 중'
+      : `${THEME_LABEL[openRun.theme as ConsensusTheme] ?? openRun.theme} 섹터에서 진행 중`
+
+  const liveEvents = openRun ? status.events : []
 
   async function togglePreview(runId: string) {
     if (expandedId === runId) {
@@ -81,20 +105,16 @@ export function OpsPage() {
 
       <section className={`panel badge-panel state-${badge}`}>
         <p className="badge-label">현재 실행</p>
-        <p className="badge-value">
-          {fetchError ? 'API 연결 끊김' : status.label}
-        </p>
-        <p className="section-note">
-          {status.run
-            ? status.run.theme === theme
-              ? '이 섹터에서 진행 중'
-              : `${THEME_LABEL[status.run.theme as ConsensusTheme] ?? status.run.theme} 섹터에서 진행 중`
-            : '실행 중인 작업 없음'}
-        </p>
-        <p className="section-note">
-          진행: {formatProgress(status.progress)}
-        </p>
-        {status.message && <p className="section-note">{status.message}</p>}
+        <p className="badge-value">{statusLabel}</p>
+        <p className="section-note">{statusNote}</p>
+        {openRun && (
+          <p className="section-note">
+            진행: {formatProgress(status.progress)}
+          </p>
+        )}
+        {openRun?.message && (
+          <p className="section-note">{openRun.message}</p>
+        )}
         {busy && (
           <button
             type="button"
@@ -123,7 +143,7 @@ export function OpsPage() {
           </Link>{' '}
           탭에서 시작합니다. 여기서는 진행·중지·이력만 봅니다.
         </p>
-        {status.state === 'awaiting' && (
+        {openRun?.state === 'awaiting' && (
           <p className="section-note">
             축 확인 대기 중입니다.{' '}
             <Link className="text-link" to={themePath(theme, 'axes')}>
@@ -139,10 +159,10 @@ export function OpsPage() {
           <h2>진행 로그</h2>
         </div>
         <ul className="event-list">
-          {status.events.length === 0 && (
+          {liveEvents.length === 0 && (
             <li className="section-note">로그 없음</li>
           )}
-          {status.events.map((ev) => (
+          {liveEvents.map((ev) => (
             <li key={ev.id}>
               <span className="mono">{formatTime(ev.at)}</span>{' '}
               <strong>{formatEventLine(ev.stage, ev.event)}</strong>{' '}

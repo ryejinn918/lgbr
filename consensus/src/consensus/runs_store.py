@@ -114,13 +114,34 @@ def create_run(
     return run_id
 
 
+def is_stop_requested(run_id: str) -> bool:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT stop_requested_at, state
+            FROM consensus_runs
+            WHERE id = %s::uuid
+            """,
+            (run_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return True
+    if row.get("stop_requested_at") is not None:
+        return True
+    return str(row.get("state") or "") == "stopping"
+
+
 def claim_run(run_id: str, *, pid: int) -> dict[str, Any] | None:
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
             UPDATE consensus_runs
             SET state = 'active', pid = %s
-            WHERE id = %s::uuid AND state IN ('starting', 'active') AND ended_at IS NULL
+            WHERE id = %s::uuid
+              AND state IN ('starting', 'active')
+              AND ended_at IS NULL
+              AND stop_requested_at IS NULL
             RETURNING id::text, asset_id, prompt_set_id::text, theme, question,
                       criteria, model, state, progress
             """,
@@ -136,7 +157,8 @@ def get_run(run_id: str) -> dict[str, Any] | None:
         cur.execute(
             """
             SELECT id::text, asset_id, prompt_set_id::text, theme, question,
-                   criteria, model, state, progress, message, ended_at
+                   criteria, model, state, progress, message, ended_at,
+                   stop_requested_at
             FROM consensus_runs WHERE id = %s::uuid
             """,
             (run_id,),
@@ -152,7 +174,11 @@ def end_run(run_id: str, *, state: str, message: str | None = None) -> None:
         cur.execute(
             """
             UPDATE consensus_runs
-            SET state = %s, ended_at = now(), message = COALESCE(%s, message), pid = NULL
+            SET state = %s,
+                ended_at = now(),
+                message = COALESCE(%s, message),
+                pid = NULL,
+                stop_requested_at = NULL
             WHERE id = %s::uuid
             """,
             (state, message, run_id),
@@ -160,21 +186,44 @@ def end_run(run_id: str, *, state: str, message: str | None = None) -> None:
         conn.commit()
 
 
-def pause_awaiting(run_id: str, *, message: str | None = None) -> None:
-    """Stop after thesis for human review (ended_at stays null)."""
+def pause_awaiting(run_id: str, *, message: str | None = None) -> str:
+    """Pause after thesis, or end if stop was requested. Returns awaiting|ended."""
     with connect() as conn, conn.cursor() as cur:
+        # Outstanding stop wins — do not clear stop_requested_at into awaiting.
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET state = 'ended',
+                ended_at = now(),
+                pid = NULL,
+                message = COALESCE(%s, message, '종료 요청으로 축 확인 전 종료됨'),
+                stop_requested_at = NULL
+            WHERE id = %s::uuid
+              AND ended_at IS NULL
+              AND (stop_requested_at IS NOT NULL OR state = 'stopping')
+            RETURNING id
+            """,
+            (message, run_id),
+        )
+        if cur.fetchone() is not None:
+            conn.commit()
+            return "ended"
         cur.execute(
             """
             UPDATE consensus_runs
             SET state = 'awaiting',
                 pid = NULL,
-                message = COALESCE(%s, message),
-                stop_requested_at = NULL
-            WHERE id = %s::uuid AND ended_at IS NULL
+                message = COALESCE(%s, message)
+            WHERE id = %s::uuid
+              AND ended_at IS NULL
+              AND stop_requested_at IS NULL
+            RETURNING id
             """,
             (message, run_id),
         )
+        ok = cur.fetchone() is not None
         conn.commit()
+    return "awaiting" if ok else "ended"
 
 
 def set_run_criteria(run_id: str, criteria: dict[str, Any]) -> None:
@@ -198,6 +247,7 @@ def reopen_for_continue(run_id: str, *, criteria: dict[str, Any]) -> bool:
             UPDATE consensus_runs
             SET state = 'starting',
                 pid = NULL,
+                started_at = now(),
                 ended_at = NULL,
                 stop_requested_at = NULL,
                 message = NULL,
