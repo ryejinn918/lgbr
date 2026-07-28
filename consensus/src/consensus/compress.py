@@ -20,7 +20,7 @@ def _truncate(text: str, max_chars: int = 48_000) -> str:
     return text[:head] + "\n\n...[truncated]...\n\n" + text[-tail:]
 
 
-def local_compress(
+async def local_compress(
     slice_row: dict[str, Any],
     *,
     question: str,
@@ -76,7 +76,7 @@ Markdown output (section headers in English; body may be Korean to match the sou
 ## merge notes
 - tables / repetition / promo — memo only, not deletion
 """
-    content, usage = chat(
+    content, usage = await chat(
         [
             {
                 "role": "system",
@@ -116,14 +116,14 @@ async def local_compress_all(
 
     async def one(s: dict[str, Any]) -> dict[str, Any]:
         async with sem:
-            return await asyncio.to_thread(
-                local_compress, s, question=question, out_dir=out_dir, model=model
+            return await local_compress(
+                s, question=question, out_dir=out_dir, model=model
             )
 
     return list(await asyncio.gather(*[one(s) for s in slices]))
 
 
-def report_compress(
+async def report_compress(
     cards: list[dict[str, Any]],
     doc_meta: dict[str, Any],
     *,
@@ -163,7 +163,7 @@ Output (English headers; Korean body OK for Korean sources):
 ## Angle unique to this report
 ## Candidates to re-open in the body (keywords + page ranges)
 """
-    content, _ = chat(
+    content, _ = await chat(
         [
             {
                 "role": "system",

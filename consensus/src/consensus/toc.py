@@ -34,7 +34,7 @@ Rules:
 - Keep JSON compact."""
 
 
-def probe_toc(
+async def probe_toc(
     page_corpus: dict[str, Any],
     *,
     window: int = 8,
@@ -49,7 +49,7 @@ def probe_toc(
         f"front_window_pages=1..{min(window, total)}\n\n"
         f"TEXT:\n{front}\n"
     )
-    raw, usage = chat(
+    raw, usage = await chat(
         [
             {"role": "system", "content": TOC_SYSTEM},
             {"role": "user", "content": prompt},

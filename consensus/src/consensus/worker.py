@@ -26,7 +26,7 @@ from consensus.run_log import ConsensusLogger
 from consensus.toc import probe_toc
 
 # OpenRouter-bound I/O: parallelize docs and in-doc slices.
-DOC_CONCURRENCY = 4
+DOC_CONCURRENCY = 16
 SLICE_CONCURRENCY = 4
 
 
@@ -137,11 +137,11 @@ async def _process_doc(
         source_key=report["source_key"],
     )
     cache.mkdir(parents=True, exist_ok=True)
-    page_corpus = build_page_corpus(pdf_path)
+    page_corpus = await asyncio.to_thread(build_page_corpus, pdf_path)
     if page_corpus["corpus_char_len"] < 80:
         raise RuntimeError("empty or unreadable PDF text")
 
-    toc = probe_toc(page_corpus, window=8, model=model, out_dir=cache)
+    toc = await probe_toc(page_corpus, window=8, model=model, out_dir=cache)
     slices = slices_from_toc(page_corpus, toc)
     write_corpus_artifacts(cache, page_corpus, slices)
     log_c.emit(
@@ -167,7 +167,7 @@ async def _process_doc(
         "title": title,
         "corpus_char_len": page_corpus["corpus_char_len"],
     }
-    compress_md = report_compress(
+    compress_md = await report_compress(
         cards, meta, question=question, out_dir=cache, model=model
     )
     artifact_id = runs_store.upsert_artifact(
@@ -300,7 +300,7 @@ async def run_pipeline(run_id: str) -> None:
                 from consensus.select import select_for_theme
 
                 _ensure_not_stopped(run_id)
-                selected, excluded_pairs, criteria = select_for_theme(
+                selected, excluded_pairs, criteria = await select_for_theme(
                     theme,
                     thesis=thesis,
                     cut_logic=cut_logic,
@@ -386,7 +386,7 @@ async def run_pipeline(run_id: str) -> None:
             with log_c.stage("thesis", theme=theme):
                 from consensus.thesis import thesis_for_theme
 
-                cut = thesis_for_theme(theme, model=model)
+                cut = await thesis_for_theme(theme, model=model)
                 criteria = {**criteria0, **cut}
                 criteria.pop("resume_from", None)
                 runs_store.set_run_criteria(run_id, criteria)
@@ -501,7 +501,7 @@ async def run_pipeline(run_id: str) -> None:
             frame_cards = cards
 
         with log_c.stage("consensus", reports=len(frame_cards)):
-            frame = build_consensus(
+            frame = await build_consensus(
                 frame_cards,
                 question=question,
                 out_dir=consensus_dir,
@@ -515,7 +515,7 @@ async def run_pipeline(run_id: str) -> None:
 
         _ensure_not_stopped(run_id)
         with log_c.stage("fill", reports=len(slug_dirs)):
-            filled, plan_meta = fill_frame(
+            filled, plan_meta = await fill_frame(
                 frame,
                 slug_dirs,
                 question=question,
@@ -586,7 +586,7 @@ def main_run(run_id: str) -> None:
     asyncio.run(run_pipeline(run_id))
 
 
-def refill_run(run_id: str, *, model: str | None = None) -> dict[str, Any]:
+async def _refill_run_async(run_id: str, *, model: str | None = None) -> dict[str, Any]:
     """Re-run fill only for an existing run (reuse frame + doc caches)."""
     run = runs_store.get_run(run_id)
     if not run:
@@ -664,7 +664,7 @@ def refill_run(run_id: str, *, model: str | None = None) -> dict[str, Any]:
         model=use_model,
     )
     with log_c.stage("fill", reports=len(slug_dirs), refill=True):
-        filled, plan_meta = fill_frame(
+        filled, plan_meta = await fill_frame(
             frame,
             slug_dirs,
             question=question,
@@ -682,3 +682,7 @@ def refill_run(run_id: str, *, model: str | None = None) -> dict[str, Any]:
     runs_store.touch_run_message(run_id, msg)
     log(f"REFILL DONE run={run_id} {msg}")
     return {"run_id": run_id, "filled_chars": len(filled), "plan_meta": plan_meta}
+
+
+def refill_run(run_id: str, *, model: str | None = None) -> dict[str, Any]:
+    return asyncio.run(_refill_run_async(run_id, model=model))

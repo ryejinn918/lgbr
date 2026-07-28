@@ -219,7 +219,7 @@ def parse_pack_selection(
     return core, biblio, meta
 
 
-def llm_select_pack(
+async def llm_select_pack(
     cards: list[dict[str, Any]],
     *,
     theme: str,
@@ -267,7 +267,7 @@ def llm_select_pack(
         f"Locked axes JSON:\n{json.dumps(locked, ensure_ascii=False)}\n\n"
         f"Cards JSON:\n{json.dumps(llm_cards, ensure_ascii=False)}"
     )
-    raw_text, _ = chat(
+    raw_text, _ = await chat(
         [
             {"role": "system", "content": select_system_prompt(theme)},
             {"role": "user", "content": user},
@@ -297,7 +297,7 @@ def _rows_by_id(pool: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {str(r["id"]): r for r in pool}
 
 
-def select_for_theme(
+async def select_for_theme(
     theme: str,
     *,
     thesis: str,
@@ -325,7 +325,7 @@ def select_for_theme(
         raise RuntimeError(f"no quality_pass reports in {theme} pool")
 
     cards = build_audit_cards(qp)
-    core_pairs, biblio_pairs, sel_meta = llm_select_pack(
+    core_pairs, biblio_pairs, sel_meta = await llm_select_pack(
         cards,
         theme=theme,
         thesis=thesis,

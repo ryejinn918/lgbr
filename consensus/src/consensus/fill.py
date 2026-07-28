@@ -161,7 +161,7 @@ def _coerce_slice_id(slice_id: str, valid: list[str]) -> str | None:
     return valid[0]
 
 
-def fill_frame(
+async def fill_frame(
     frame: str,
     slug_to_dir: dict[str, Path],
     *,
@@ -195,7 +195,7 @@ def fill_frame(
     )
     (out_dir / "05_target_slots.md").write_text(slots_block + "\n", encoding="utf-8")
 
-    plan_raw, _ = chat(
+    plan_raw, _ = await chat(
         [
             {
                 "role": "system",
@@ -339,7 +339,7 @@ Output (English headers; Korean body OK for Korean sources):
 ## Reference reports
 ...
 """
-    content, _ = chat(
+    content, _ = await chat(
         [
             {
                 "role": "system",

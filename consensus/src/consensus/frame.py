@@ -10,7 +10,7 @@ from consensus.cite import HUMAN_CITE_RULE, human_doc_header
 from consensus.llm import DEFAULT_MODEL, chat, log
 
 
-def build_consensus(
+async def build_consensus(
     compress_cards: list[dict[str, Any]],
     *,
     question: str,
@@ -86,7 +86,7 @@ Output (English headers; Korean body OK for Korean sources):
 ## Body re-open priority (keywords)
 1. ...
 """
-    content, _ = chat(
+    content, _ = await chat(
         [
             {
                 "role": "system",

@@ -74,7 +74,7 @@ def parse_thesis_cut(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def llm_cut_axes(
+async def llm_cut_axes(
     cards: list[dict[str, Any]],
     *,
     theme: str,
@@ -100,7 +100,7 @@ def llm_cut_axes(
         f"not a checklist to cover.\n\n"
         f"Cards JSON:\n{json.dumps(llm_cards, ensure_ascii=False)}"
     )
-    raw_text, _ = chat(
+    raw_text, _ = await chat(
         [
             {"role": "system", "content": thesis_system_prompt(theme)},
             {"role": "user", "content": user},
@@ -115,7 +115,7 @@ def llm_cut_axes(
     return out
 
 
-def thesis_for_theme(
+async def thesis_for_theme(
     theme: str,
     *,
     model: str = DEFAULT_MODEL,
@@ -129,7 +129,7 @@ def thesis_for_theme(
     if not qp:
         raise RuntimeError(f"no quality_pass reports in {theme} pool")
     cards = build_audit_cards(qp)
-    cut = llm_cut_axes(cards, theme=theme, model=model)
+    cut = await llm_cut_axes(cards, theme=theme, model=model)
     return {
         "quality_pass": True,
         "theme": theme,
