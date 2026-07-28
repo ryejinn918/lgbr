@@ -198,7 +198,7 @@ export function FramesPage() {
     () =>
       [
         { key: 'core' as const, label: '중심축', items: coreDocs },
-        { key: 'biblio' as const, label: 'Supporting', items: biblioDocs },
+        { key: 'biblio' as const, label: '참고', items: biblioDocs },
       ].filter((g) => g.items.length > 0),
     [coreDocs, biblioDocs],
   )
@@ -405,9 +405,9 @@ export function FramesPage() {
         )}
         {tab === 'materials' && (
           <p className="section-note">
-            중심축·Supporting으로 나눈 선별 보고서와 문서별 요약입니다.
+            중심축·참고로 나눈 선별 보고서와 문서별 요약입니다.
             {selectedDocs.length > 0
-              ? ` · 중심축 ${coreDocs.length} · Supporting ${biblioDocs.length}`
+              ? ` · 중심축 ${coreDocs.length} · 참고 ${biblioDocs.length}`
               : ''}
             {selectOnly ? ' · 문서 요약은 전체 실행 후에 생깁니다.' : ''}
           </p>
@@ -451,7 +451,7 @@ export function FramesPage() {
                           >
                             <span className="materials-item-head">
                               <span className={`role-badge role-${role}`}>
-                                {role === 'core' ? '중심축' : 'Supporting'}
+                                {role === 'core' ? '중심축' : '참고'}
                               </span>
                               <span className="materials-title">{d.title}</span>
                             </span>
@@ -482,7 +482,7 @@ export function FramesPage() {
                         selectedDoc.role === 'fill_extra' ? 'biblio' : 'core'
                       }`}
                     >
-                      {selectedDoc.role === 'fill_extra' ? 'Supporting' : '중심축'}
+                      {selectedDoc.role === 'fill_extra' ? '참고' : '중심축'}
                     </span>
                     <a
                       className="text-link materials-title"

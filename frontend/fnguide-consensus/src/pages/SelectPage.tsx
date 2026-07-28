@@ -235,7 +235,7 @@ export function SelectPage() {
             {packRun && packLabel
               ? `${packLabel} · ${labelRunState(packRun.state)}${
                   selectOnly ? ' · 선별까지만' : ''
-                } · 중심축 ${coreDocs.length} · Supporting ${biblioDocs.length}`
+                } · 중심축 ${coreDocs.length} · 참고 ${biblioDocs.length}`
               : '이 섹터 실행 이력이 없습니다. 컨센서스를 시작하면 여기에 선별 결과가 남습니다.'}
           </p>
         </div>
@@ -277,7 +277,7 @@ export function SelectPage() {
         )}
         {packRun && packDocs.length === 0 && !docsError && (
           <p className="section-note">
-            아직 보고서 선별 전입니다. 선별이 끝나면 중심축·Supporting 목록과 이유가
+            아직 보고서 선별 전입니다. 선별이 끝나면 중심축·참고 목록과 이유가
             채워집니다.
           </p>
         )}
@@ -310,14 +310,14 @@ export function SelectPage() {
                         <td colSpan={5}>
                           {role === 'core'
                             ? `중심축 · ${coreDocs.length}건`
-                            : `Supporting · ${biblioDocs.length}건`}
+                            : `참고 · ${biblioDocs.length}건`}
                         </td>
                       </tr>
                     )}
                     <tr className={`input-row role-${role}`}>
                       <td className="col-role">
                         <span className={`role-badge role-${role}`}>
-                          {d.role === 'fill_extra' ? 'Supporting' : '중심축'}
+                          {role === 'core' ? '중심축' : '참고'}
                         </span>
                       </td>
                       <td>
@@ -351,7 +351,7 @@ export function SelectPage() {
             최근 3개월 · 후보 {inputs.length}
             {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
             {packDocs.length > 0
-              ? ` · 위 선별과 동일: 중심축 ${coreDocs.length} · Supporting ${biblioDocs.length}`
+              ? ` · 위 선별과 동일: 중심축 ${coreDocs.length} · 참고 ${biblioDocs.length}`
               : ` · 선별은 ${NAV.axes}에서 축 확정 후`}
           </p>
         </div>
@@ -384,7 +384,7 @@ export function SelectPage() {
                 kind === 'core'
                   ? '중심축'
                   : kind === 'biblio'
-                    ? 'Supporting'
+                    ? '참고'
                     : kind === 'pool'
                       ? '후보'
                       : '미달'
