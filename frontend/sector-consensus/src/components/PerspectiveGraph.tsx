@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentType,
-} from 'react'
-import ForceGraph2D from 'react-force-graph-2d'
+import { useEffect, useMemo, useState } from 'react'
 
 export type GraphNode = {
   id: string
@@ -28,187 +20,155 @@ export type PerspectiveGraphData = {
   meta?: Record<string, unknown>
 }
 
-type SimNode = GraphNode & {
-  x?: number
-  y?: number
-  fx?: number | null
-  fy?: number | null
+type ClaimRel = {
+  type: 'deepens' | 'disagrees'
+  targetId: string
+  targetLabel: string
 }
 
-type SimLink = {
-  source: string | SimNode
-  target: string | SimNode
-  type: string
+type AxisGroup = {
+  axis: GraphNode
+  axisIndex: number
+  claims: { node: GraphNode; rels: ClaimRel[] }[]
 }
 
-type FgApi = {
-  d3Force?: (
-    name: string,
-  ) =>
-    | { strength?: (n: number) => unknown; distance?: (n: number) => unknown }
-    | undefined
-  zoomToFit?: (ms?: number, padding?: number) => void
-}
-
-const COLORS = {
-  axis: '#0f172a',
-  axisFill: '#e2e8f0',
-  claim: '#64748b',
-  belongs: '#cbd5e1',
-  deepens: '#2563eb',
-  disagrees: '#dc2626',
-}
-
-const Graph = ForceGraph2D as unknown as ComponentType<Record<string, unknown>>
-
-function wrapLabel(text: string, maxChars: number, maxLines: number): string[] {
-  const t = text.trim()
-  if (!t) return ['']
-  const lines: string[] = []
-  let rest = t
-  while (rest && lines.length < maxLines) {
-    if (rest.length <= maxChars) {
-      lines.push(rest)
-      break
-    }
-    let cut = maxChars
-    const space = rest.lastIndexOf(' ', maxChars)
-    if (space > maxChars * 0.45) cut = space
-    const chunk = rest.slice(0, cut).trimEnd()
-    rest = rest.slice(cut).trimStart()
-    if (lines.length === maxLines - 1 && rest) {
-      lines.push(`${chunk.slice(0, Math.max(maxChars - 1, 1))}…`)
-      break
-    }
-    lines.push(chunk)
-  }
-  return lines
-}
-
-function axisShortLabel(label: string, index: number): string {
+function axisHeading(label: string, index: number): string {
   const raw = label.trim()
   const head = raw.split(/[:：]/)[0]?.trim() || raw
-  const body = head.length > 28 ? `${head.slice(0, 27)}…` : head
-  return `축${index + 1} · ${body}`
+  return `축${index + 1} · ${head}`
+}
+
+function shortLabel(label: string, max = 36): string {
+  const t = label.trim()
+  if (t.length <= max) return t
+  return `${t.slice(0, max - 1)}…`
+}
+
+function buildGroups(data: PerspectiveGraphData | null | undefined): {
+  groups: AxisGroup[]
+  byId: Map<string, GraphNode>
+  axisCount: number
+  nodeCount: number
+} {
+  const rawNodes = data?.nodes || []
+  const rawEdges = data?.edges || []
+  const byId = new Map(rawNodes.map((n) => [n.id, n]))
+  const axes = rawNodes.filter((n) => n.type === 'axis')
+  const claims = rawNodes.filter((n) => n.type !== 'axis')
+  const axisIndex = new Map(axes.map((a, i) => [a.id, i]))
+
+  const claimAxis = new Map<string, string>()
+  for (const e of rawEdges) {
+    if (e.type !== 'belongs') continue
+    if (axisIndex.has(e.source)) claimAxis.set(e.target, e.source)
+    else if (axisIndex.has(e.target)) claimAxis.set(e.source, e.target)
+  }
+
+  const relsByClaim = new Map<string, ClaimRel[]>()
+  for (const e of rawEdges) {
+    if (e.type !== 'deepens' && e.type !== 'disagrees') continue
+    const target = byId.get(e.target)
+    if (!target) continue
+    const list = relsByClaim.get(e.source) || []
+    list.push({
+      type: e.type,
+      targetId: e.target,
+      targetLabel: target.label || e.target,
+    })
+    relsByClaim.set(e.source, list)
+  }
+
+  const byAxis = new Map<string, GraphNode[]>()
+  for (const c of claims) {
+    const fromEdge = claimAxis.get(c.id)
+    const aid =
+      fromEdge && axisIndex.has(fromEdge)
+        ? fromEdge
+        : c.axis_id && axisIndex.has(c.axis_id)
+          ? c.axis_id
+          : axes[0]?.id || '__none__'
+    const list = byAxis.get(aid) || []
+    list.push(c)
+    byAxis.set(aid, list)
+  }
+
+  const groups: AxisGroup[] = axes.map((axis, i) => ({
+    axis,
+    axisIndex: i,
+    claims: (byAxis.get(axis.id) || []).map((node) => ({
+      node,
+      rels: relsByClaim.get(node.id) || [],
+    })),
+  }))
+
+  const orphanAid = '__none__'
+  const orphans = byAxis.get(orphanAid)
+  if (orphans?.length && !axisIndex.has(orphanAid)) {
+    const orphanAxis: GraphNode = {
+      id: orphanAid,
+      type: 'axis',
+      label: '미분류',
+    }
+    byId.set(orphanAid, orphanAxis)
+    groups.push({
+      axis: orphanAxis,
+      axisIndex: axes.length,
+      claims: orphans.map((node) => ({
+        node,
+        rels: relsByClaim.get(node.id) || [],
+      })),
+    })
+  }
+
+  return {
+    groups,
+    byId,
+    axisCount: axes.length,
+    nodeCount: rawNodes.length,
+  }
 }
 
 export function PerspectiveGraph({
   data,
   title,
+  resetKey,
 }: {
   data: PerspectiveGraphData | null | undefined
   title: string
+  /** Change to clear selection (e.g. when switching ours/baseline). */
+  resetKey?: string
 }) {
-  const wrapRef = useRef<HTMLDivElement | null>(null)
-  const fgRef = useRef<FgApi | null>(null)
-  const [size, setSize] = useState({ width: 420, height: 420 })
+  const { groups, byId, axisCount, nodeCount } = useMemo(
+    () => buildGroups(data),
+    [data],
+  )
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
-    const apply = () => {
-      const w = Math.max(el.clientWidth || 420, 240)
-      setSize({ width: w, height: Math.max(400, Math.round(w * 0.72)) })
-    }
-    apply()
-    const ro = new ResizeObserver(apply)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+    setSelectedId(null)
+  }, [resetKey, data])
 
-  const graph = useMemo(() => {
-    const rawNodes = data?.nodes || []
-    const rawEdges = data?.edges || []
-    const axes = rawNodes.filter((n) => n.type === 'axis')
-    const claims = rawNodes.filter((n) => n.type !== 'axis')
-    const axisIndex = new Map(axes.map((a, i) => [a.id, i]))
-    const claimAxis = new Map<string, string>()
-    for (const e of rawEdges) {
-      if (e.type !== 'belongs') continue
-      if (axisIndex.has(e.source)) claimAxis.set(e.target, e.source)
-      else if (axisIndex.has(e.target)) claimAxis.set(e.source, e.target)
-    }
-    const w = 640
-    const padX = 72
-    const axisY = 36
+  const selected = selectedId ? byId.get(selectedId) : undefined
 
-    const nodes: SimNode[] = []
-    axes.forEach((n, i) => {
-      const t = axes.length === 1 ? 0.5 : i / Math.max(axes.length - 1, 1)
-      const x = padX + t * (w - padX * 2)
-      nodes.push({
-        ...n,
-        fx: x,
-        fy: axisY,
-        x,
-        y: axisY,
-      })
-    })
-
-    const byAxis = new Map<string, GraphNode[]>()
-    for (const c of claims) {
-      const fromEdge = claimAxis.get(c.id)
-      const aid =
-        fromEdge && axisIndex.has(fromEdge)
-          ? fromEdge
-          : c.axis_id && axisIndex.has(c.axis_id)
-            ? c.axis_id
-            : axes[0]?.id || '__none__'
-      const list = byAxis.get(aid) || []
-      list.push(c)
-      byAxis.set(aid, list)
-    }
-
-    for (const [aid, list] of byAxis) {
-      const ai = axisIndex.get(aid) ?? 0
-      const ax = nodes.find((n) => n.id === aid)
-      const cx =
-        ax?.fx ??
-        padX + (ai / Math.max(axes.length - 1, 1)) * (w - padX * 2)
-      list.forEach((c, j) => {
-        const col = j % 3
-        const row = Math.floor(j / 3)
-        nodes.push({
-          ...c,
-          x: cx + (col - 1) * 56,
-          y: 110 + row * 52,
-        })
-      })
-    }
-
-    const idSet = new Set(nodes.map((n) => n.id))
-    const links: SimLink[] = (data?.edges || [])
-      .filter((e) => idSet.has(e.source) && idSet.has(e.target))
-      .map((e) => ({
-        source: e.source,
-        target: e.target,
+  const selectedRels = useMemo(() => {
+    if (!selected || selected.type === 'axis') return [] as ClaimRel[]
+    const edges = data?.edges || []
+    const out: ClaimRel[] = []
+    for (const e of edges) {
+      if (e.source !== selected.id) continue
+      if (e.type !== 'deepens' && e.type !== 'disagrees') continue
+      const target = byId.get(e.target)
+      if (!target) continue
+      out.push({
         type: e.type,
-      }))
+        targetId: e.target,
+        targetLabel: target.label || e.target,
+      })
+    }
+    return out
+  }, [selected, data?.edges, byId])
 
-    const axisOrder = axes.map((a) => a.id)
-    return { nodes, links, axisCount: axes.length, axisOrder }
-  }, [data])
-
-  useEffect(() => {
-    const fg = fgRef.current
-    if (!fg?.d3Force) return
-    fg.d3Force('charge')?.strength?.(-180)
-    fg.d3Force('link')?.distance?.(62)
-  }, [graph])
-
-  const onEngineStop = useCallback(() => {
-    fgRef.current?.zoomToFit?.(400, 48)
-  }, [])
-
-  useEffect(() => {
-    if (graph.nodes.length === 0) return
-    const t = window.setTimeout(() => {
-      fgRef.current?.zoomToFit?.(400, 48)
-    }, 900)
-    return () => window.clearTimeout(t)
-  }, [graph, size.width, size.height])
-
-  if (graph.nodes.length === 0) {
+  if (nodeCount === 0) {
     return (
       <div className="eval-graph-panel">
         <div className="section-head">
@@ -224,111 +184,104 @@ export function PerspectiveGraph({
       <div className="section-head">
         <h3>{title}</h3>
         <p className="section-note">
-          루트 {graph.axisCount}축 · 노드 {graph.nodes.length}
+          루트 {axisCount}축 · 노드 {nodeCount}
         </p>
       </div>
-      <div className="eval-graph-canvas" ref={wrapRef}>
-        <Graph
-          ref={fgRef}
-          graphData={graph}
-          width={size.width}
-          height={size.height}
-          backgroundColor="rgba(0,0,0,0)"
-          nodeId="id"
-          cooldownTicks={100}
-          enableNodeDrag
-          onEngineStop={onEngineStop}
-          linkColor={(l: SimLink) =>
-            COLORS[l.type as keyof typeof COLORS] || COLORS.belongs
-          }
-          linkWidth={(l: SimLink) => (l.type === 'belongs' ? 1.2 : 1.8)}
-          linkDirectionalArrowLength={(l: SimLink) =>
-            l.type === 'belongs' ? 0 : 5
-          }
-          linkDirectionalArrowRelPos={0.9}
-          nodeCanvasObject={(
-            node: SimNode,
-            ctx: CanvasRenderingContext2D,
-            globalScale: number,
-          ) => {
-            const x = node.x || 0
-            const y = node.y || 0
-            const isAxis = node.type === 'axis'
-
-            if (isAxis) {
-              const axisIdx = Math.max(0, graph.axisOrder.indexOf(node.id))
-              const label = axisShortLabel(node.label || node.id, axisIdx)
-              const lines = wrapLabel(label, 16, 2)
-              const fontSize = Math.max(11 / globalScale, 3)
-              ctx.font = `600 ${fontSize}px "IBM Plex Sans KR", "Noto Sans KR", sans-serif`
-              const lineH = fontSize * 1.25
-              const textW = Math.max(
-                ...lines.map((ln) => ctx.measureText(ln).width),
-                40,
-              )
-              const padX = 8 / globalScale
-              const padY = 5 / globalScale
-              const boxW = textW + padX * 2
-              const boxH = lines.length * lineH + padY * 2
-              const r = 6 / globalScale
-
-              ctx.beginPath()
-              const left = x - boxW / 2
-              const top = y - boxH / 2
-              ctx.moveTo(left + r, top)
-              ctx.arcTo(left + boxW, top, left + boxW, top + boxH, r)
-              ctx.arcTo(left + boxW, top + boxH, left, top + boxH, r)
-              ctx.arcTo(left, top + boxH, left, top, r)
-              ctx.arcTo(left, top, left + boxW, top, r)
-              ctx.closePath()
-              ctx.fillStyle = COLORS.axisFill
-              ctx.fill()
-              ctx.strokeStyle = COLORS.axis
-              ctx.lineWidth = 1.5 / globalScale
-              ctx.stroke()
-
-              ctx.fillStyle = COLORS.axis
-              ctx.textAlign = 'center'
-              ctx.textBaseline = 'top'
-              lines.forEach((ln, i) => {
-                ctx.fillText(ln, x, top + padY + i * lineH)
-              })
-              return
-            }
-
-            const r = 5
-            ctx.beginPath()
-            ctx.arc(x, y, r, 0, 2 * Math.PI)
-            ctx.fillStyle = COLORS.claim
-            ctx.fill()
-
-            if (globalScale > 1.05) {
-              const lines = wrapLabel(node.label || '', 12, 2)
-              const fontSize = Math.max(9 / globalScale, 2)
-              ctx.font = `400 ${fontSize}px "IBM Plex Sans KR", "Noto Sans KR", sans-serif`
-              ctx.fillStyle = '#334155'
-              ctx.textAlign = 'center'
-              ctx.textBaseline = 'top'
-              lines.forEach((ln, i) => {
-                ctx.fillText(ln, x, y + r + 2 + i * fontSize * 1.2)
-              })
-            }
-          }}
-          nodePointerAreaPaint={(
-            node: SimNode,
-            color: string,
-            ctx: CanvasRenderingContext2D,
-          ) => {
-            ctx.fillStyle = color
-            ctx.beginPath()
-            if (node.type === 'axis') {
-              ctx.rect((node.x || 0) - 48, (node.y || 0) - 18, 96, 36)
-            } else {
-              ctx.arc(node.x || 0, node.y || 0, 10, 0, 2 * Math.PI)
-            }
-            ctx.fill()
-          }}
-        />
+      <div className="eval-graph-layout">
+        <div className="eval-graph-outline">
+          {groups.map((g) => (
+            <section key={g.axis.id} className="eval-graph-axis">
+              <button
+                type="button"
+                className={`eval-graph-axis-btn${
+                  selectedId === g.axis.id ? ' is-selected' : ''
+                }`}
+                onClick={() => setSelectedId(g.axis.id)}
+              >
+                {axisHeading(g.axis.label || g.axis.id, g.axisIndex)}
+              </button>
+              <ul className="eval-graph-claims">
+                {g.claims.map(({ node, rels }) => (
+                  <li key={node.id}>
+                    <button
+                      type="button"
+                      className={`eval-graph-claim-btn${
+                        selectedId === node.id ? ' is-selected' : ''
+                      }`}
+                      title={node.label || node.id}
+                      onClick={() => setSelectedId(node.id)}
+                    >
+                      <span className="eval-graph-claim-label">
+                        {node.label || node.id}
+                      </span>
+                    </button>
+                    {rels.length > 0 && (
+                      <div className="eval-graph-rels">
+                        {rels.map((r) => (
+                          <button
+                            key={`${r.type}-${r.targetId}`}
+                            type="button"
+                            className={`eval-graph-rel eval-graph-rel-${r.type}`}
+                            onClick={() => setSelectedId(r.targetId)}
+                          >
+                            {r.type === 'deepens' ? '심화' : '이견'} →{' '}
+                            {shortLabel(r.targetLabel, 28)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        <aside className="eval-graph-detail">
+          {selected ? (
+            <>
+              <p className="eval-graph-detail-kind">
+                {selected.type === 'axis' ? '분석 축' : '주장'}
+              </p>
+              <h4 className="eval-graph-detail-title">
+                {selected.type === 'axis'
+                  ? axisHeading(
+                      selected.label || selected.id,
+                      groups.find((g) => g.axis.id === selected.id)
+                        ?.axisIndex ?? 0,
+                    )
+                  : selected.label || selected.id}
+              </h4>
+              {selected.type !== 'axis' && (
+                <blockquote className="eval-graph-quote">
+                  {selected.quote?.trim()
+                    ? selected.quote.trim()
+                    : '인용 없음'}
+                </blockquote>
+              )}
+              {selected.type === 'axis' && selected.label && (
+                <p className="eval-graph-detail-body">{selected.label}</p>
+              )}
+              {selectedRels.length > 0 && (
+                <ul className="eval-graph-detail-rels">
+                  {selectedRels.map((r) => (
+                    <li key={`${r.type}-${r.targetId}`}>
+                      <button
+                        type="button"
+                        className={`eval-graph-rel eval-graph-rel-${r.type}`}
+                        onClick={() => setSelectedId(r.targetId)}
+                      >
+                        {r.type === 'deepens' ? '심화' : '이견'} →{' '}
+                        {shortLabel(r.targetLabel, 40)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className="section-note">축 또는 주장을 선택하면 상세가 표시됩니다.</p>
+          )}
+        </aside>
       </div>
     </div>
   )

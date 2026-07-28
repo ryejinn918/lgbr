@@ -114,6 +114,7 @@ export function EvalPage() {
   const [liveTools, setLiveTools] = useState<LiveTool[]>([])
   const [liveBaseline, setLiveBaseline] = useState('')
   const [showReports, setShowReports] = useState(false)
+  const [graphSource, setGraphSource] = useState<'ours' | 'baseline'>('ours')
 
   const themeHistory = useMemo(
     () => history.filter((h) => h.theme === theme && h.state === 'ended'),
@@ -147,6 +148,8 @@ export function EvalPage() {
     setPhase(null)
     setLiveTools([])
     setLiveBaseline('')
+    setGraphSource('ours')
+    setShowReports(false)
     abortRef.current?.abort()
     abortRef.current = null
     setStreaming(false)
@@ -404,37 +407,60 @@ export function EvalPage() {
             <div className="section-head">
               <h2>관점 지식그래프</h2>
               <p className="section-note">
-                검은 점=분석 축 · 회색=주장 · 파란 선=심화 · 빨간 선=이견
+                축 · 주장 · 파란 링크=심화 · 빨간 링크=이견
               </p>
             </div>
-            <div className="eval-graph-row">
-              <GraphErrorBoundary title="컨센서스 보고서">
-                {graphHasNodes(evalData.graph_ours) ? (
-                  <PerspectiveGraph
-                    title="컨센서스 보고서"
-                    data={evalData.graph_ours}
-                  />
-                ) : (
-                  <div className="eval-graph-panel">
-                    <h3>컨센서스 보고서</h3>
-                    <p className="section-note">그래프 데이터 없음</p>
-                  </div>
-                )}
-              </GraphErrorBoundary>
-              <GraphErrorBoundary title="웹서치 대조군">
-                {graphHasNodes(evalData.graph_baseline) ? (
-                  <PerspectiveGraph
-                    title="웹서치 대조군"
-                    data={evalData.graph_baseline}
-                  />
-                ) : (
-                  <div className="eval-graph-panel">
-                    <h3>웹서치 대조군</h3>
-                    <p className="section-note">그래프 데이터 없음</p>
-                  </div>
-                )}
-              </GraphErrorBoundary>
+            <div className="chip-row eval-graph-tabs">
+              <button
+                type="button"
+                className={`chip ${graphSource === 'ours' ? 'active' : ''}`}
+                onClick={() => setGraphSource('ours')}
+              >
+                컨센서스 보고서
+              </button>
+              <button
+                type="button"
+                className={`chip ${graphSource === 'baseline' ? 'active' : ''}`}
+                onClick={() => setGraphSource('baseline')}
+              >
+                웹서치 대조군
+              </button>
             </div>
+            <GraphErrorBoundary
+              title={
+                graphSource === 'ours' ? '컨센서스 보고서' : '웹서치 대조군'
+              }
+              key={graphSource}
+            >
+              {graphHasNodes(
+                graphSource === 'ours'
+                  ? evalData.graph_ours
+                  : evalData.graph_baseline,
+              ) ? (
+                <PerspectiveGraph
+                  title={
+                    graphSource === 'ours'
+                      ? '컨센서스 보고서'
+                      : '웹서치 대조군'
+                  }
+                  data={
+                    graphSource === 'ours'
+                      ? evalData.graph_ours
+                      : evalData.graph_baseline
+                  }
+                  resetKey={graphSource}
+                />
+              ) : (
+                <div className="eval-graph-panel">
+                  <h3>
+                    {graphSource === 'ours'
+                      ? '컨센서스 보고서'
+                      : '웹서치 대조군'}
+                  </h3>
+                  <p className="section-note">그래프 데이터 없음</p>
+                </div>
+              )}
+            </GraphErrorBoundary>
           </section>
 
           <section className="panel">

@@ -7,7 +7,7 @@ type Props = {
 
 type State = { error: string | null }
 
-/** Keeps the eval route alive if react-force-graph throws. */
+/** Keeps the eval route alive if the perspective graph throws. */
 export class GraphErrorBoundary extends Component<Props, State> {
   state: State = { error: null }
 
