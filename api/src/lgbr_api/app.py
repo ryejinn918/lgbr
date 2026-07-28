@@ -21,6 +21,7 @@ from lgbr_api.collection import (
 )
 from lgbr_api.consensus_api import (
     compare_chat,
+    continue_run,
     get_current_run,
     get_latest_ended,
     get_outputs,
@@ -373,9 +374,36 @@ async def consensus_start(request: Request) -> JSONResponse:
         body = {}
     theme = str(body.get("theme") or "datacenter")
     question = body.get("question")
+    until_raw = body.get("until")
+    until = str(until_raw).strip() if until_raw is not None else None
     result = start_run(
         theme=theme,
         question=str(question) if question is not None else None,
+        until=until,
+    )
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
+
+
+async def consensus_continue(request: Request) -> JSONResponse:
+    run_id = str(request.path_params.get("run_id") or "")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    pillars = body.get("pillar_sketch")
+    if pillars is not None and not isinstance(pillars, list):
+        pillars = None
+    until_raw = body.get("until")
+    until = str(until_raw).strip() if until_raw is not None else None
+    result = continue_run(
+        run_id,
+        thesis=str(body["thesis"]) if body.get("thesis") is not None else None,
+        cut_logic=str(body["cut_logic"]) if body.get("cut_logic") is not None else None,
+        pillar_sketch=[str(p) for p in pillars] if pillars is not None else None,
+        until=until,
     )
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
@@ -499,6 +527,11 @@ def create_app() -> Starlette:
             Route("/api/consensus/latest", consensus_latest),
             Route("/api/consensus/events", consensus_events),
             Route("/api/consensus/start", consensus_start, methods=["POST"]),
+            Route(
+                "/api/consensus/runs/{run_id}/continue",
+                consensus_continue,
+                methods=["POST"],
+            ),
             Route("/api/consensus/stop", consensus_stop, methods=["POST"]),
             Route("/api/consensus/inputs", consensus_inputs),
             Route("/api/consensus/chat", consensus_chat, methods=["POST"]),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ConsensusRun,
   ConsensusStatusResponse,
@@ -17,22 +17,35 @@ const EMPTY: ConsensusStatusResponse = {
   can_start: true,
 }
 
+export type ContinuePayload = {
+  thesis?: string
+  cut_logic?: string
+  pillar_sketch?: string[]
+  until?: 'select'
+}
+
 export function useConsensusStatus(theme?: ConsensusTheme) {
   const [status, setStatus] = useState<ConsensusStatusResponse>(EMPTY)
   const [history, setHistory] = useState<ConsensusRun[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [requestingStart, setRequestingStart] = useState(false)
   const [requestingStop, setRequestingStop] = useState(false)
+  const themeRef = useRef(theme)
+  const genRef = useRef(0)
+  themeRef.current = theme
 
   const refresh = useCallback(async () => {
+    const requestedTheme = themeRef.current
+    const gen = genRef.current
     try {
       const histQs = new URLSearchParams({ limit: '2' })
-      if (theme) histQs.set('theme', theme)
+      if (requestedTheme) histQs.set('theme', requestedTheme)
       const [cur, hist] = await Promise.all([
         fetch('/api/consensus?events=50').then((r) => r.json()),
         fetch(`/api/consensus/history?${histQs}`).then((r) => r.json()),
       ])
-      setStatus({
+      if (genRef.current !== gen || themeRef.current !== requestedTheme) return
+      setStatus(() => ({
         ok: !!cur.ok,
         label: cur.label ?? '대기',
         state: cur.state ?? 'idle',
@@ -41,28 +54,36 @@ export function useConsensusStatus(theme?: ConsensusTheme) {
         events: cur.events ?? [],
         can_start: cur.can_start ?? true,
         message: cur.message,
-      })
-      setHistory(hist.items ?? [])
-      setFetchError(null)
+      }))
+      setHistory(() => hist.items ?? [])
+      setFetchError(() => null)
     } catch (e) {
-      setFetchError(e instanceof Error ? e.message : 'fetch failed')
+      if (genRef.current !== gen || themeRef.current !== requestedTheme) return
+      setFetchError(() => (e instanceof Error ? e.message : 'fetch failed'))
     }
-  }, [theme])
+  }, [])
 
   useEffect(() => {
+    genRef.current += 1
+    setHistory(() => [])
+    setStatus(() => EMPTY)
+    setFetchError(() => null)
     void refresh()
     const t = window.setInterval(() => void refresh(), POLL_MS)
-    return () => window.clearInterval(t)
-  }, [refresh])
+    return () => {
+      genRef.current += 1
+      window.clearInterval(t)
+    }
+  }, [theme, refresh])
 
   const startRun = useCallback(
     async (runTheme: ConsensusTheme) => {
-      setRequestingStart(true)
+      setRequestingStart(() => true)
       try {
         const res = await fetch('/api/consensus/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ theme: runTheme }),
+          body: JSON.stringify({ theme: runTheme, until: 'thesis' }),
         })
         const data = await res.json()
         if (!res.ok || !data.ok) {
@@ -70,14 +91,30 @@ export function useConsensusStatus(theme?: ConsensusTheme) {
         }
         await refresh()
       } finally {
-        setRequestingStart(false)
+        setRequestingStart(() => false)
       }
     },
     [refresh],
   )
 
+  const continueRun = useCallback(
+    async (runId: string, payload: ContinuePayload) => {
+      const res = await fetch(`/api/consensus/runs/${runId}/continue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`)
+      }
+      await refresh()
+    },
+    [refresh],
+  )
+
   const stopRun = useCallback(async () => {
-    setRequestingStop(true)
+    setRequestingStop(() => true)
     try {
       const res = await fetch('/api/consensus/stop', { method: 'POST' })
       const data = await res.json()
@@ -86,7 +123,7 @@ export function useConsensusStatus(theme?: ConsensusTheme) {
       }
       await refresh()
     } finally {
-      setRequestingStop(false)
+      setRequestingStop(() => false)
     }
   }, [refresh])
 
@@ -98,6 +135,7 @@ export function useConsensusStatus(theme?: ConsensusTheme) {
     requestingStop,
     refresh,
     startRun,
+    continueRun,
     stopRun,
   }
 }

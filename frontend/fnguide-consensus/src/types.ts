@@ -12,12 +12,16 @@ export type ConsensusState =
   | 'starting'
   | 'active'
   | 'stopping'
+  | 'awaiting'
   | 'ended'
   | 'error'
 
-/** Pack selection review stored on consensus_runs.criteria. */
+/** Pack / axis review stored on consensus_runs.criteria. */
 export type SelectCriteria = {
   select?: string
+  until?: string | null
+  thesis?: string | null
+  cut_logic?: string | null
   coverage_notes?: string | null
   pillar_sketch?: string[] | null
   core_count?: number
@@ -114,6 +118,7 @@ export const STATE_CLASS: Record<ConsensusState, string> = {
   starting: 'busy',
   active: 'active',
   stopping: 'busy',
+  awaiting: 'busy',
   ended: 'idle',
   error: 'danger',
 }

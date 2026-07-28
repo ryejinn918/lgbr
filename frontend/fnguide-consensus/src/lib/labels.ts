@@ -2,12 +2,12 @@
 
 export const APP_BRAND = '섹터 컨센서스'
 
-/** Nav labels; display order in App is compare → frames → select → ops. */
+/** Nav labels; display order: axes → select → frames → ops. */
 export const NAV = {
-  ops: '실행',
+  axes: '축',
   select: '선별',
   frames: '논지',
-  compare: '채팅',
+  ops: '실행',
 } as const
 
 /** Frame product views (API kinds stay filled_frame / consensus_frame). */
@@ -17,32 +17,10 @@ export const FRAME_TAB = {
   materials: '근거 보고서',
 } as const
 
-export const CHAT_MODE = {
-  plain: '일반 답변',
-  grounded: '컨센서스 근거 답변',
-} as const
-
-/** Compare-column roles: ours = grounded, control = plain. */
-export const CHAT_ROLE = {
-  ours: '근거 있음',
-  control: '근거 없음',
-} as const
-
-export const ROLE_LABEL: Record<string, string> = {
-  user: '질문',
-  assistant: '답변',
-  system: '시스템',
-}
-
-export const CHAT_PHASE: Record<string, string> = {
-  planning: '계획 중',
-  search: '검색 중',
-  answer: '작성 중',
-}
-
 /** Pipeline stages shown in progress / events. */
 export const STAGE_LABEL: Record<string, string> = {
   run: '실행',
+  thesis: '축 가르기',
   select: '보고서 선별',
   doc: '보고서 요약',
   consensus: '골격',
@@ -53,6 +31,8 @@ export const EVENT_LABEL: Record<string, string> = {
   claimed: '시작됨',
   stage_start: '시작',
   stage_end: '끝',
+  cut_done: '축 확정',
+  awaiting: '축 확인 대기',
   selected: '선별 완료',
   cache_hit: '요약 재사용',
   cache_miss: '새로 요약',
@@ -69,6 +49,7 @@ export const RUN_STATE: Record<string, string> = {
   starting: '시작 중',
   active: '실행 중',
   stopping: '종료 중',
+  awaiting: '축 확인 대기',
   ended: '완료',
   error: '오류',
 }
@@ -90,10 +71,6 @@ export function labelEvent(event: string): string {
   return EVENT_LABEL[event] ?? event
 }
 
-export function labelChatPhase(phase: string): string {
-  return CHAT_PHASE[phase] ?? phase
-}
-
 export function labelRunState(state: string): string {
   return RUN_STATE[state] ?? state
 }
@@ -106,7 +83,8 @@ export function labelRunSlot(
   if (
     state === 'starting' ||
     state === 'active' ||
-    state === 'stopping'
+    state === 'stopping' ||
+    state === 'awaiting'
   ) {
     return '현재 실행'
   }
@@ -117,8 +95,4 @@ export function labelRunSlot(
 
 export function labelDocStatus(status: string): string {
   return DOC_STATUS[status] ?? status
-}
-
-export function labelRole(role: string): string {
-  return ROLE_LABEL[role] ?? role
 }

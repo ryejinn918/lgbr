@@ -24,9 +24,7 @@ export function OpsPage() {
     status,
     history,
     fetchError,
-    requestingStart,
     requestingStop,
-    startRun,
     stopRun,
   } = useConsensusStatus(theme)
 
@@ -43,23 +41,9 @@ export function OpsPage() {
   const busy =
     status.state === 'starting' ||
     status.state === 'active' ||
-    status.state === 'stopping'
+    status.state === 'stopping' ||
+    status.state === 'awaiting'
   const badge = fetchError ? 'offline' : STATE_CLASS[status.state]
-
-  async function onStart() {
-    if (
-      !window.confirm(
-        `${THEME_LABEL[theme]} 섹터 컨센서스를 시작할까요?`,
-      )
-    ) {
-      return
-    }
-    try {
-      await startRun(theme)
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : '시작 실패')
-    }
-  }
 
   async function togglePreview(runId: string) {
     if (expandedId === runId) {
@@ -91,7 +75,7 @@ export function OpsPage() {
           {THEME_LABEL[theme]} · {NAV.ops}
         </h1>
         <p className="lede">
-          이 섹터 컨센서스를 시작하고, 진행 상황과 이력을 봅니다.
+          진행 상황·중지·이력을 봅니다. 시작은 축 탭에서 합니다.
         </p>
       </header>
 
@@ -132,25 +116,20 @@ export function OpsPage() {
         <div className="section-head">
           <h2>시작</h2>
         </div>
-        <button
-          type="button"
-          className="btn"
-          disabled={!status.can_start || busy || requestingStart}
-          onClick={() => void onStart()}
-        >
-          {requestingStart ? '시작 중…' : '컨센서스 시작'}
-        </button>
-        {!status.can_start && (
-          <p className="section-note">이미 실행 중인 작업이 있습니다.</p>
-        )}
-        {theme === 'ai' && (
+        <p className="section-note">
+          파이프라인은{' '}
+          <Link className="text-link" to={themePath(theme, 'axes')}>
+            {NAV.axes}
+          </Link>{' '}
+          탭에서 시작합니다. 여기서는 진행·중지·이력만 봅니다.
+        </p>
+        {status.state === 'awaiting' && (
           <p className="section-note">
-            시작하면 최근 3개월 보고서 선별 → 요약 → 골격 → 살 붙이기까지
-            이어서 진행됩니다. 선별 결과는{' '}
-            <Link className="text-link" to={themePath(theme, 'select')}>
-              {NAV.select}
-            </Link>{' '}
-            메뉴에서 확인합니다.
+            축 확인 대기 중입니다.{' '}
+            <Link className="text-link" to={themePath(theme, 'axes')}>
+              {NAV.axes}
+            </Link>
+            에서 수정 후 이어가세요.
           </p>
         )}
       </section>

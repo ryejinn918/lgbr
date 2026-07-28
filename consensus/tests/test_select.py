@@ -26,9 +26,12 @@ def test_select_system_requires_korean_and_omit_summary():
         assert "Omit summary" in prompt
         assert "omitted[]" in prompt
         assert "humans" in prompt
-        assert "(provider)" in prompt
+        assert "[provider]" in prompt
         assert "published_at" in prompt
         assert "short_title alone" in prompt
+        assert "square brackets" in prompt
+        assert "fixed" in prompt.lower() or "Locked" in prompt or "locked" in prompt
+        assert "Do NOT reinvent" in prompt or "Do NOT return pillar_sketch" in prompt
 
 
 def test_pool_themes_ai_includes_datacenter():
@@ -74,13 +77,14 @@ def test_parse_pack_selection_caps_core_and_dedupes():
         "coverage_notes": "notes",
         "pillar_sketch": ["power", "network", ""],
     }
+    locked = ["축 A", "축 B"]
     core, biblio, meta = parse_pack_selection(
-        raw, allowed_ids=allowed, core_max=CORE_MAX
+        raw, allowed_ids=allowed, core_max=CORE_MAX, locked_pillars=locked
     )
     assert len(core) == CORE_MAX
     assert [c[0] for c in core] == [f"id-{i}" for i in range(CORE_MAX)]
     assert biblio == [("id-12", "b")]
-    assert meta["pillar_sketch"] == ["power", "network"]
+    assert meta["pillar_sketch"] == locked
     assert meta["coverage_notes"] == "notes"
 
 

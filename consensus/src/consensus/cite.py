@@ -9,10 +9,14 @@ HUMAN_CITE_RULE = (
     "When naming a report in human prose, use only card fields "
     "provider, short_title, and published_at "
     "(never report_id, title, slug, slice_id, UUID, paths, or hashes). "
-    "Always lead with provider. If unambiguous, (provider) alone is fine. "
-    "Otherwise (provider, short_title); add published_at when still needed: "
-    "(provider, short_title, published_at). "
-    "Do not cite short_title alone. Optional page suffix: …, N쪽)."
+    "Prefer naming the broker as the sentence subject when natural; "
+    "put the source tag in square brackets at the end of the claim. "
+    "Always lead with provider inside the brackets. "
+    "If unambiguous, [provider] alone is fine. "
+    "Otherwise [provider, short_title]; add published_at when still needed: "
+    "[provider, short_title, published_at]. "
+    "Do not cite short_title alone. Optional page suffix: …, N쪽]. "
+    "Use [] for sources only — keep () for ordinary parentheticals in the prose."
 )
 
 _PROVIDER_STRIP = (
@@ -102,11 +106,11 @@ def footnote_label(
     short_title: str | None = None,
     published_at: object | None = None,
 ) -> str:
-    """Provider-first footnote; include published_at when provided."""
+    """Provider-first square-bracket footnote; include published_at when provided."""
     house = short_provider(provider) or ""
     short = (short_title or "").strip() or short_report_title(title)
     pub = format_published_at(published_at)
     parts = [p for p in (house, short, pub) if p]
     if not parts:
-        return "(보고서)"
-    return "(" + ", ".join(parts) + ")"
+        return "[보고서]"
+    return "[" + ", ".join(parts) + "]"

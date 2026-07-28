@@ -35,7 +35,8 @@ export function SelectPage() {
     status.run?.theme === theme &&
     (status.run.state === 'starting' ||
       status.run.state === 'active' ||
-      status.run.state === 'stopping')
+      status.run.state === 'stopping' ||
+      status.run.state === 'awaiting')
       ? status.run
       : null
 
@@ -160,13 +161,25 @@ export function SelectPage() {
           {THEME_LABEL[theme]} · 보고서 선별
         </h1>
         <p className="lede">
-          컨센서스에 쓸 보고서를 어떻게 골랐는지 봅니다. 시작은{' '}
-          <Link className="text-link" to={themePath(theme, 'ops')}>
-            {NAV.ops}
+          컨센서스에 쓸 보고서를 어떻게 골랐는지 봅니다. 축 가르기·시작은{' '}
+          <Link className="text-link" to={themePath(theme, 'axes')}>
+            {NAV.axes}
           </Link>{' '}
           메뉴에서 합니다.
         </p>
       </header>
+
+      {status.run?.theme === theme && status.run.state === 'awaiting' && (
+        <section className="panel">
+          <p className="section-note">
+            축 확인 대기 중입니다. 선별은 축을 확정한 뒤에 진행됩니다.{' '}
+            <Link className="text-link" to={themePath(theme, 'axes')}>
+              {NAV.axes}
+            </Link>
+            에서 확인하세요.
+          </p>
+        </section>
+      )}
 
       <section className="panel">
         <div className="section-head">
@@ -290,7 +303,7 @@ export function SelectPage() {
             {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
             {packDocs.length > 0
               ? ` · 위 선별과 동일: 골격 ${coreDocs.length} · 참고 ${biblioDocs.length}`
-              : ` · 선별은 ${NAV.ops}에서 컨센서스 시작 시`}
+              : ` · 선별은 ${NAV.axes}에서 축 확정 후`}
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}

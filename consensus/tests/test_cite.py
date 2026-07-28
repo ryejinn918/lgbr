@@ -49,18 +49,19 @@ def test_human_doc_header():
     )
 
 
-def test_human_cite_rule_provider_first():
+def test_human_cite_rule_square_brackets():
     assert "provider" in HUMAN_CITE_RULE
     assert "short_title" in HUMAN_CITE_RULE
     assert "published_at" in HUMAN_CITE_RULE
     assert "Always lead with provider" in HUMAN_CITE_RULE
-    assert "(provider) alone is fine" in HUMAN_CITE_RULE
+    assert "[provider] alone is fine" in HUMAN_CITE_RULE
+    assert "square brackets" in HUMAN_CITE_RULE
     assert "Do not cite short_title alone" in HUMAN_CITE_RULE
     assert "report_id" in HUMAN_CITE_RULE
 
 
-def test_footnote_label_provider_first():
-    assert footnote_label(provider="KB증권", title="정유 Monthly") == "(KB, 정유 Monthly)"
+def test_footnote_label_square_brackets():
+    assert footnote_label(provider="KB증권", title="정유 Monthly") == "[KB, 정유 Monthly]"
     assert (
         footnote_label(
             provider="IBK",
@@ -68,5 +69,5 @@ def test_footnote_label_provider_first():
             short_title="자동차/2차전지 Monthly",
             published_at="2026-06-12",
         )
-        == "(IBK, 자동차/2차전지 Monthly, 2026-06-12)"
+        == "[IBK, 자동차/2차전지 Monthly, 2026-06-12]"
     )

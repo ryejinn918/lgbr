@@ -234,8 +234,8 @@ export function FramesPage() {
         ) : (
           <p className="section-note">
             이 섹터에 실행 이력이 없습니다.{' '}
-            <Link className="text-link" to={themePath(theme, 'ops')}>
-              {NAV.ops}에서 시작
+            <Link className="text-link" to={themePath(theme, 'axes')}>
+              {NAV.axes}에서 시작
             </Link>
           </p>
         )}

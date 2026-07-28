@@ -80,21 +80,24 @@ def pool_themes_for(theme: str) -> tuple[str, ...]:
 def select_system_prompt(theme: str) -> str:
     sector = THEME_LABEL_KO.get(theme, theme)
     hint = THEME_SELECT_HINTS.get(theme, "Prefer structural industry analyses.")
-    return f"""You build a research pack for a {sector} industry consensus note.
+    return f"""You place quality-passed sell-side notes into a **fixed** axis pack
+for a {sector} industry consensus note.
 
-You receive audit cards (title, topic, framework_summary, rationale) for quality-passed
-sell-side notes. Choose which reports belong in the pack.
+Axes are already decided (thesis + pillar_sketch). Do NOT reinvent or rename axes.
+Your job is placement: which reports fill which axis holes.
 
 Language (mandatory):
-- Write coverage_notes, pillar_sketch, and every why field in Korean.
+- Write coverage_notes and every why field in Korean.
 - Those fields are read by humans (analysts). Report naming in prose:
   - Allowed card fields only: provider, short_title, published_at.
-  - Always lead with provider. If unambiguous, (provider) alone is fine
-    e.g. (IBK). Otherwise (provider, short_title)
-    e.g. (IBK, 자동차/2차전지 Monthly).
+  - Prefer the broker as the sentence subject when natural; put the source
+    tag in square brackets at the end of the claim (use () only for ordinary
+    parentheticals in the prose).
+  - Always lead with provider inside []. If unambiguous, [provider] alone is
+    fine e.g. [IBK]. Otherwise [provider, short_title]
+    e.g. [IBK, 자동차/2차전지 Monthly].
   - If still ambiguous (same series), add published_at:
-    (provider, short_title, published_at)
-    e.g. (IBK, 자동차/2차전지 Monthly, 2026-06-12).
+    [provider, short_title, published_at].
   - Do not cite short_title alone. Never use report_id, title, UUID, or hex
     in prose. report_id belongs only in core[].report_id and
     bibliography[].report_id.
@@ -102,40 +105,31 @@ Language (mandatory):
 Sector focus ({sector}):
 - {hint}
 
-Goals:
-- Cover diverse analytical axes across the pack so the consensus can have several
-  major pillars.
-- Do NOT name specific broker products or famous report brands in your reasoning.
-
-Pillar discipline (critical):
-- Diversity means multiple separate pillars later — NOT mixing unrelated fields into one axis.
-- Each future pillar should feel like one desk/part could own it: one mechanism or one
-  value-chain segment, precise and coherent.
-- If two topics cannot sit in the same desk narrative, keep them as separate axes
-  (or put the weaker one in bibliography / omit).
+Placement goals:
+- For each locked pillar, prefer the scarcest mechanism-dense notes that support it.
+- why must say which locked axis the report serves (or why bibliography).
+- Do NOT invent new pillar names.
 
 Limits:
 - core: at most 10 report ids — these drive the consensus frame.
 - bibliography: useful extras for detail-fill later (not in the frame). May be empty.
 - Only use report_id values from the provided cards. No duplicates across core/bibliography.
 - Do NOT list every omitted report_id. No omitted[] array.
-- Even if the pool is small, still assign why for every chosen report; put weaker
-  duplicates in bibliography or omit with a typed reason in coverage_notes.
+- Do NOT return pillar_sketch (axes are locked upstream).
 
-coverage_notes (Korean, short paragraphs):
-1) What the pack covers (axes / balance).
-2) Omit summary: main types of quality-passed notes left out and why
-   (e.g. thin macro, duplicate axis, off-theme). Types and representative reasons only —
-   never enumerate all omitted titles.
+coverage_notes (Korean, short paragraphs — readability first):
+1) Opening: restate the locked thesis in one sentence (no broker/report names).
+2) How the core pack covers the locked axes (counts / balance) — no stacked titles.
+3) Omit summary vs the locked tension (duplicate series, off-theme, single-name,
+   thin macro). Types and reasons only.
+4) Optional last line: compact [provider, short_title] tags for representatives.
 
 Return JSON only:
 {{
   "core": [{{"report_id": "...", "why": "..."}}],
   "bibliography": [{{"report_id": "...", "why": "..."}}],
-  "coverage_notes": "...",
-  "pillar_sketch": ["축 1...", "축 2..."]
+  "coverage_notes": "..."
 }}
-pillar_sketch: short Korean list of non-overlapping axes the core pack can support.
 """
 
 
@@ -208,6 +202,7 @@ def parse_pack_selection(
     *,
     allowed_ids: set[str],
     core_max: int = CORE_MAX,
+    locked_pillars: list[str] | None = None,
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]], dict[str, Any]]:
     """Return (core_pairs, biblio_pairs, meta) from model JSON."""
     used: set[str] = set()
@@ -215,13 +210,10 @@ def parse_pack_selection(
     biblio = _pick_ids(
         raw.get("bibliography"), allowed=allowed_ids, used=used, cap=None
     )
-    sketch = raw.get("pillar_sketch")
-    if not isinstance(sketch, list):
-        sketch = []
-    sketch_s = [_clip(x, 160) for x in sketch if str(x).strip()]
+    pillars = [p for p in (locked_pillars or []) if str(p).strip()]
     meta = {
         "coverage_notes": _clip(raw.get("coverage_notes"), COVERAGE_NOTES_MAX),
-        "pillar_sketch": sketch_s,
+        "pillar_sketch": pillars,
         "core_max": core_max,
     }
     return core, biblio, meta
@@ -231,14 +223,21 @@ def llm_select_pack(
     cards: list[dict[str, Any]],
     *,
     theme: str,
+    thesis: str,
+    cut_logic: str,
+    pillar_sketch: list[str],
     model: str = DEFAULT_MODEL,
     core_max: int = CORE_MAX,
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]], dict[str, Any]]:
     if not cards:
         raise RuntimeError("no audit cards for pack selection")
+    pillars = [str(p).strip() for p in pillar_sketch if str(p).strip()]
+    if len(pillars) < 2:
+        raise RuntimeError("select requires locked pillar_sketch (2+)")
+    if not str(thesis or "").strip():
+        raise RuntimeError("select requires locked thesis")
     allowed = {c["report_id"] for c in cards}
     sector = THEME_LABEL_KO.get(theme, theme)
-    # Keep report_id for machine selection; surface human labels first in JSON order.
     llm_cards = [
         {
             "provider": c.get("provider"),
@@ -254,11 +253,18 @@ def llm_select_pack(
         }
         for c in cards
     ]
+    locked = {
+        "thesis": thesis,
+        "cut_logic": cut_logic,
+        "pillar_sketch": pillars,
+    }
     user = (
-        f"Select a consensus pack for {sector}. core_max={core_max}.\n"
-        "In coverage_notes / why / pillar_sketch name reports with provider first: "
-        "`(provider)` if unambiguous, else `(provider, short_title)` or "
-        "`(provider, short_title, published_at)` — never report_id / short_title alone.\n\n"
+        f"Place reports into the locked pack for {sector}. core_max={core_max}.\n"
+        "Axes are fixed — do not rename them.\n"
+        "In coverage_notes / why name reports with provider first in square brackets: "
+        "`[provider]` if unambiguous, else `[provider, short_title]` or "
+        "`[provider, short_title, published_at]`.\n\n"
+        f"Locked axes JSON:\n{json.dumps(locked, ensure_ascii=False)}\n\n"
         f"Cards JSON:\n{json.dumps(llm_cards, ensure_ascii=False)}"
     )
     raw_text, _ = chat(
@@ -272,7 +278,10 @@ def llm_select_pack(
     )
     parsed = parse_json(raw_text)
     core, biblio, meta = parse_pack_selection(
-        parsed, allowed_ids=allowed, core_max=core_max
+        parsed,
+        allowed_ids=allowed,
+        core_max=core_max,
+        locked_pillars=pillars,
     )
     if not core:
         raise RuntimeError(f"{theme} pack selection returned empty core")
@@ -291,6 +300,9 @@ def _rows_by_id(pool: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 def select_for_theme(
     theme: str,
     *,
+    thesis: str,
+    cut_logic: str,
+    pillar_sketch: list[str],
     model: str = DEFAULT_MODEL,
     core_max: int = CORE_MAX,
 ) -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], str]], dict[str, Any]]:
@@ -314,7 +326,13 @@ def select_for_theme(
 
     cards = build_audit_cards(qp)
     core_pairs, biblio_pairs, sel_meta = llm_select_pack(
-        cards, theme=theme, model=model, core_max=core_max
+        cards,
+        theme=theme,
+        thesis=thesis,
+        cut_logic=cut_logic,
+        pillar_sketch=pillar_sketch,
+        model=model,
+        core_max=core_max,
     )
     by_id = _rows_by_id(qp)
     selected: list[dict[str, Any]] = []
@@ -345,6 +363,8 @@ def select_for_theme(
         "selected_count": len(selected),
         "excluded_count": len(excluded),
         "coverage_notes": sel_meta.get("coverage_notes"),
-        "pillar_sketch": sel_meta.get("pillar_sketch"),
+        "thesis": str(thesis or "").strip(),
+        "cut_logic": str(cut_logic or "").strip(),
+        "pillar_sketch": sel_meta.get("pillar_sketch") or list(pillar_sketch),
     }
     return selected, excluded, criteria

@@ -160,6 +160,58 @@ def end_run(run_id: str, *, state: str, message: str | None = None) -> None:
         conn.commit()
 
 
+def pause_awaiting(run_id: str, *, message: str | None = None) -> None:
+    """Stop after thesis for human review (ended_at stays null)."""
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET state = 'awaiting',
+                pid = NULL,
+                message = COALESCE(%s, message),
+                stop_requested_at = NULL
+            WHERE id = %s::uuid AND ended_at IS NULL
+            """,
+            (message, run_id),
+        )
+        conn.commit()
+
+
+def set_run_criteria(run_id: str, criteria: dict[str, Any]) -> None:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET criteria = %s::jsonb
+            WHERE id = %s::uuid
+            """,
+            (json.dumps(criteria, ensure_ascii=False), run_id),
+        )
+        conn.commit()
+
+
+def reopen_for_continue(run_id: str, *, criteria: dict[str, Any]) -> bool:
+    """Move awaiting → starting with updated criteria (resume_from=select)."""
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET state = 'starting',
+                pid = NULL,
+                ended_at = NULL,
+                stop_requested_at = NULL,
+                message = NULL,
+                criteria = %s::jsonb
+            WHERE id = %s::uuid AND state = 'awaiting' AND ended_at IS NULL
+            RETURNING id
+            """,
+            (json.dumps(criteria, ensure_ascii=False), run_id),
+        )
+        row = cur.fetchone()
+        conn.commit()
+    return row is not None
+
+
 def update_progress(run_id: str, fields: dict[str, Any]) -> None:
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
@@ -239,6 +291,10 @@ def insert_run_docs(
     excluded: list[tuple[dict[str, Any], str]],
 ) -> None:
     with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM consensus_run_docs WHERE run_id = %s::uuid",
+            (run_id,),
+        )
         for i, r in enumerate(selected, start=1):
             role = str(r.get("select_role") or "selected")
             if role not in ("selected", "fill_extra"):

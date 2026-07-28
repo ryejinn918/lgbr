@@ -29,6 +29,12 @@ def main(argv: list[str] | None = None) -> None:
     run_p.add_argument("--run-id", help="Existing run UUID (skip create)")
     run_p.add_argument("--question", default=None)
     run_p.add_argument("--model", default=DEFAULT_MODEL)
+    run_p.add_argument(
+        "--until",
+        choices=["thesis", "select"],
+        default="thesis",
+        help="Fresh runs stop after thesis (awaiting). Use select only via continue.",
+    )
 
     refill_p = sub.add_parser(
         "refill", help="Re-run fill only for an existing run (reuse frame + caches)"
@@ -46,7 +52,10 @@ def main(argv: list[str] | None = None) -> None:
             if not args.theme:
                 p.error("--theme is required unless --run-id is set")
             run_id = start_theme_run(
-                theme=args.theme, question=args.question, model=args.model
+                theme=args.theme,
+                question=args.question,
+                model=args.model,
+                until=args.until,
             )
             print(f"created run_id={run_id}", flush=True)
         main_run(run_id)

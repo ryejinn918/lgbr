@@ -30,6 +30,13 @@ DOC_CONCURRENCY = 4
 SLICE_CONCURRENCY = 4
 
 
+def _clip_msg(s: Any, n: int) -> str:
+    t = " ".join(str(s or "").split())
+    if len(t) <= n:
+        return t
+    return t[: n - 1] + "…"
+
+
 async def _process_doc(
     report: dict[str, Any],
     *,
@@ -187,16 +194,68 @@ async def run_pipeline(run_id: str) -> None:
     consensus_dir.mkdir(exist_ok=True)
 
     log_c.emit(stage="run", event="claimed", theme=theme, asset_id=asset_id, pid=pid)
+    criteria0 = dict(row.get("criteria") or {})
+    until = str(criteria0.get("until") or "").strip()
+    resume_from = str(criteria0.get("resume_from") or "").strip()
     log_c.set_progress(
-        stage="select", theme=theme, artifact_dir=str(out), model=model
+        stage="thesis" if resume_from != "select" else "select",
+        theme=theme,
+        artifact_dir=str(out),
+        model=model,
     )
 
     try:
+        if resume_from != "select":
+            with log_c.stage("thesis", theme=theme):
+                from consensus.thesis import thesis_for_theme
+
+                cut = thesis_for_theme(theme, model=model)
+                criteria = {**criteria0, **cut}
+                criteria.pop("resume_from", None)
+                runs_store.set_run_criteria(run_id, criteria)
+                runs_store.update_progress(
+                    run_id,
+                    {
+                        "stage": "thesis",
+                        "criteria_snapshot": {
+                            k: criteria.get(k)
+                            for k in (
+                                "thesis",
+                                "cut_logic",
+                                "pillar_sketch",
+                                "pool_qp_count",
+                            )
+                        },
+                    },
+                )
+                log_c.emit(
+                    stage="thesis",
+                    event="cut_done",
+                    pillars=len(criteria.get("pillar_sketch") or []),
+                    thesis=_clip_msg(criteria.get("thesis"), 120),
+                )
+            msg = "awaiting axis review"
+            runs_store.pause_awaiting(run_id, message=msg)
+            log_c.emit(stage="run", event="awaiting", until="thesis")
+            log(f"AWAITING run={run_id} {msg}")
+            return
+
+        # resume_from=select: place reports on locked axes, then optional early end.
+        thesis = str(criteria0.get("thesis") or "").strip()
+        cut_logic = str(criteria0.get("cut_logic") or "").strip()
+        pillars = criteria0.get("pillar_sketch") or []
+        if not isinstance(pillars, list):
+            pillars = []
+
         with log_c.stage("select", theme=theme):
             from consensus.select import select_for_theme
 
             selected, excluded_pairs, criteria = select_for_theme(
-                theme, model=model
+                theme,
+                thesis=thesis,
+                cut_logic=cut_logic,
+                pillar_sketch=[str(p) for p in pillars],
+                model=model,
             )
             if not selected:
                 raise RuntimeError(f"no reports selected for theme={theme}")
@@ -207,23 +266,29 @@ async def run_pipeline(run_id: str) -> None:
             biblio_n = sum(
                 1 for r in selected if r.get("select_role") == "fill_extra"
             )
+            # Preserve cut + continue flags from criteria0.
+            for k in (
+                "thesis",
+                "cut_logic",
+                "pillar_sketch",
+                "cut",
+                "pool_qp_count",
+                "until",
+            ):
+                if k in criteria0 and k not in criteria:
+                    criteria[k] = criteria0[k]
+            criteria["thesis"] = thesis
+            criteria["cut_logic"] = cut_logic
+            criteria["pillar_sketch"] = list(pillars) or criteria.get("pillar_sketch")
+            criteria.pop("resume_from", None)
+            if until:
+                criteria["until"] = until
 
             runs_store.insert_run_docs(
                 run_id, selected=selected, excluded=excluded_pairs
             )
+            runs_store.set_run_criteria(run_id, criteria)
             runs_store.update_progress(run_id, {"criteria_snapshot": criteria})
-            from consensus.db import connect
-
-            import json as _json
-
-            with connect() as conn, conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE consensus_runs SET criteria = %s::jsonb WHERE id = %s::uuid
-                    """,
-                    (_json.dumps(criteria, ensure_ascii=False), run_id),
-                )
-                conn.commit()
             log_c.emit(
                 stage="select",
                 event="selected",
@@ -240,6 +305,19 @@ async def run_pipeline(run_id: str) -> None:
             log_c.set_progress(
                 docs_total=len(selected), docs_done=0, docs_failed=0, docs_cache_hit=0
             )
+
+        if until == "select":
+            msg = f"ok until=select core={core_n} biblio={biblio_n}"
+            runs_store.end_run(run_id, state="ended", message=msg)
+            log_c.emit(
+                stage="run",
+                event="ended",
+                until="select",
+                core=core_n,
+                bibliography=biblio_n,
+            )
+            log(f"DONE run={run_id} {msg}")
+            return
 
         cards: list[dict[str, Any]] = []
         slug_dirs: dict[str, Path] = {}
@@ -319,7 +397,13 @@ async def run_pipeline(run_id: str) -> None:
 
         with log_c.stage("consensus", reports=len(frame_cards)):
             frame = build_consensus(
-                frame_cards, question=question, out_dir=consensus_dir, model=model
+                frame_cards,
+                question=question,
+                out_dir=consensus_dir,
+                model=model,
+                thesis=str(criteria.get("thesis") or "") or None,
+                cut_logic=str(criteria.get("cut_logic") or "") or None,
+                pillar_sketch=list(criteria.get("pillar_sketch") or []),
             )
             runs_store.save_output(run_id, kind="consensus_frame", body_md=frame)
             log_c.emit(stage="consensus", event="frame_validated", chars=len(frame))
@@ -358,21 +442,30 @@ def start_theme_run(
     theme: str,
     question: str | None = None,
     model: str = DEFAULT_MODEL,
+    until: str | None = None,
 ) -> str:
+    """Create a run. Fresh runs always stop after thesis (awaiting)."""
     if theme not in runs_store.THEMES:
         raise ValueError(f"theme must be one of {sorted(runs_store.THEMES)}")
+    if until is not None and until not in ("thesis", "select"):
+        raise ValueError("until must be 'thesis', 'select', or omitted")
     q = question or runs_store.DEFAULT_QUESTION[theme]
     prompt_set_id = runs_store.ensure_prompt_set(
         label=f"{theme}-runtime-v1",
         notes="prompts executed from consensus package code",
     )
     asset_id = make_asset_id(theme)
+    criteria: dict[str, Any] = {
+        "quality_pass": True,
+        "theme": theme,
+        "until": until or "thesis",
+    }
     run_id = runs_store.create_run(
         asset_id=asset_id,
         prompt_set_id=prompt_set_id,
         theme=theme,
         question=q,
-        criteria={"quality_pass": True, "theme": theme},
+        criteria=criteria,
         model=model,
     )
     return run_id

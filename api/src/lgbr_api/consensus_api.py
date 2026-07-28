@@ -55,6 +55,7 @@ STATE_LABELS = {
     "starting": "시작 중",
     "active": "실행 중",
     "stopping": "종료 중",
+    "awaiting": "축 확인 대기",
     "ended": "종료",
     "error": "오류",
     "idle": "대기",
@@ -138,6 +139,9 @@ def reconcile_stale_runs() -> None:
         for row in cur.fetchall():
             pid = row.get("pid")
             if pid is None:
+                # Human review pause after thesis — not a dead worker.
+                if row.get("state") == "awaiting":
+                    continue
                 started = row.get("started_at")
                 age = 9999.0
                 if isinstance(started, datetime):
@@ -563,7 +567,30 @@ def _ensure_prompt_set(label: str) -> str:
     return set_id
 
 
-def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
+def _spawn_worker(run_id: str) -> None:
+    python = ROOT / ".venv" / "bin" / "python"
+    if not python.is_file():
+        python = Path(sys.executable)
+    CONSENSUS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log_f = open(CONSENSUS_LOG, "a", encoding="utf-8")  # noqa: SIM115
+    log_f.write(f"\n--- consensus worker {_now().isoformat()} id={run_id} ---\n")
+    log_f.flush()
+    subprocess.Popen(
+        [str(python), "-m", "consensus", "run", "--run-id", run_id],
+        cwd=str(ROOT),
+        stdout=log_f,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
+def start_run(
+    *,
+    theme: str,
+    question: str | None = None,
+    until: str | None = None,
+) -> dict[str, Any]:
+    """Start thesis cut; always pauses at awaiting for axis review."""
     if theme not in THEMES:
         return {
             "ok": False,
@@ -575,6 +602,14 @@ def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
             "can_start": False,
             "run": None,
         }
+    if until is not None and until not in ("thesis", "select"):
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "until must be 'thesis', 'select', or omitted",
+            "can_start": False,
+            "run": None,
+        }
     reconcile_stale_runs()
     open_row = _get_open_row()
     if open_row:
@@ -582,7 +617,7 @@ def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
         return {
             "ok": False,
             "status": 409,
-            "message": "이미 컨센서스 런이 실행 중입니다.",
+            "message": "이미 컨센서스 런이 실행 중이거나 축 확인 대기 중입니다.",
             "label": run["label"] if run else "busy",
             "can_start": False,
             "run": run,
@@ -590,6 +625,12 @@ def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
 
     q = (question or "").strip() or DEFAULT_QUESTION[theme]
     model = DEFAULT_MODEL
+    # Fresh runs always cut axes first (until=thesis); select-only is via continue.
+    criteria: dict[str, Any] = {
+        "quality_pass": True,
+        "theme": theme,
+        "until": "thesis",
+    }
     try:
         prompt_set_id = _ensure_prompt_set(label=f"{theme}-api-v1")
         asset_id = _make_asset_id(theme)
@@ -607,7 +648,7 @@ def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
                     prompt_set_id,
                     theme,
                     q,
-                    json.dumps({"quality_pass": True, "theme": theme}),
+                    json.dumps(criteria),
                     model,
                 ),
             )
@@ -623,22 +664,8 @@ def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
         }
 
     run_id = str(row["id"])
-    python = ROOT / ".venv" / "bin" / "python"
-    if not python.is_file():
-        python = Path(sys.executable)
-
-    CONSENSUS_LOG.parent.mkdir(parents=True, exist_ok=True)
-    log_f = open(CONSENSUS_LOG, "a", encoding="utf-8")  # noqa: SIM115
     try:
-        log_f.write(f"\n--- consensus start {_now().isoformat()} id={run_id} ---\n")
-        log_f.flush()
-        subprocess.Popen(
-            [str(python), "-m", "consensus", "run", "--run-id", run_id],
-            cwd=str(ROOT),
-            stdout=log_f,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        _spawn_worker(run_id)
     except Exception as exc:
         with connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -661,15 +688,153 @@ def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
     return {
         "ok": True,
         "status": 202,
-        "message": "컨센서스 런을 시작했습니다.",
+        "message": "축 가르기를 시작했습니다.",
         "label": "시작 중",
         "can_start": False,
         "run": _serialize_run(row),
     }
 
 
+def continue_run(
+    run_id: str,
+    *,
+    thesis: str | None = None,
+    cut_logic: str | None = None,
+    pillar_sketch: list[str] | None = None,
+    until: str | None = None,
+) -> dict[str, Any]:
+    """Resume from awaiting after optional axis edits."""
+    if until is not None and until not in ("select",):
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "until must be 'select' (stop after pack) or omitted (full)",
+            "can_start": False,
+            "run": None,
+        }
+    reconcile_stale_runs()
+    row = _get_run_row(run_id)
+    if not row:
+        return {
+            "ok": False,
+            "status": 404,
+            "message": "런을 찾을 수 없습니다.",
+            "can_start": False,
+            "run": None,
+        }
+    if str(row.get("state") or "") != "awaiting":
+        return {
+            "ok": False,
+            "status": 409,
+            "message": f"축 확인 대기 상태가 아닙니다 (state={row.get('state')}).",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+
+    criteria = _parse_jsonb(row.get("criteria") or {})
+    if not isinstance(criteria, dict):
+        criteria = {}
+    if thesis is not None:
+        criteria["thesis"] = str(thesis).strip()
+    if cut_logic is not None:
+        criteria["cut_logic"] = str(cut_logic).strip()
+    if pillar_sketch is not None:
+        criteria["pillar_sketch"] = [
+            str(p).strip() for p in pillar_sketch if str(p).strip()
+        ]
+    if not criteria.get("thesis") or len(criteria.get("pillar_sketch") or []) < 2:
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "thesis와 pillar_sketch(2개 이상)가 필요합니다.",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+    criteria["resume_from"] = "select"
+    if until == "select":
+        criteria["until"] = "select"
+    else:
+        criteria.pop("until", None)
+
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET state = 'starting',
+                pid = NULL,
+                ended_at = NULL,
+                stop_requested_at = NULL,
+                message = NULL,
+                criteria = %s::jsonb
+            WHERE id = %s::uuid AND state = 'awaiting' AND ended_at IS NULL
+            RETURNING id
+            """,
+            (json.dumps(criteria, ensure_ascii=False), run_id),
+        )
+        ok = cur.fetchone() is not None
+        conn.commit()
+    if not ok:
+        return {
+            "ok": False,
+            "status": 409,
+            "message": "런을 재개할 수 없습니다.",
+            "can_start": False,
+            "run": _serialize_run(row),
+        }
+    try:
+        _spawn_worker(run_id)
+    except Exception as exc:
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE consensus_runs
+                SET state='awaiting', message=%s
+                WHERE id=%s::uuid
+                """,
+                (f"spawn failed: {exc}", run_id),
+            )
+            conn.commit()
+        return {
+            "ok": False,
+            "status": 500,
+            "message": f"워커 기동 실패: {exc}",
+            "can_start": False,
+            "run": _serialize_run(_get_run_row(run_id)),
+        }
+    return {
+        "ok": True,
+        "status": 202,
+        "message": "축을 반영해 선별을 이어서 시작합니다.",
+        "label": "시작 중",
+        "can_start": False,
+        "run": _serialize_run(_get_run_row(run_id)),
+    }
+
+
 def request_stop() -> dict[str, Any]:
     with connect() as conn, conn.cursor() as cur:
+        # Cancel human-review pause immediately.
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET state = 'ended',
+                ended_at = now(),
+                pid = NULL,
+                message = COALESCE(message, '축 확인에서 종료됨'),
+                stop_requested_at = now()
+            WHERE ended_at IS NULL AND state = 'awaiting'
+            RETURNING *
+            """
+        )
+        awaiting = cur.fetchone()
+        if awaiting:
+            conn.commit()
+            return {
+                "ok": True,
+                "message": "축 확인 대기를 종료했습니다.",
+                "run": _serialize_run(dict(awaiting)),
+                "can_start": True,
+            }
         cur.execute(
             """
             UPDATE consensus_runs
