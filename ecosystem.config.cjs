@@ -1,14 +1,14 @@
 const path = require('path')
 
 const root = __dirname
-const searchMonitorDir = path.join(root, 'frontend', 'fnguide-search-monitor')
-const consensusDir = path.join(root, 'frontend', 'fnguide-consensus')
+const trendCollectDir = path.join(root, 'frontend', 'trend-collect')
+const consensusDir = path.join(root, 'frontend', 'sector-consensus')
 const python = path.join(root, '.venv', 'bin', 'python')
 
 module.exports = {
   apps: [
     {
-      name: 'fnguide-search-monitor-api',
+      name: 'lgbr-api',
       cwd: root,
       script: python,
       args: '-m lgbr_api --host 127.0.0.1 --port 8787',
@@ -22,8 +22,8 @@ module.exports = {
       kill_timeout: 90000,
     },
     {
-      name: 'fnguide-search-monitor',
-      cwd: searchMonitorDir,
+      name: 'trend-collect',
+      cwd: trendCollectDir,
       script: './node_modules/vite/bin/vite.js',
       args: 'preview',
       interpreter: 'node',
@@ -34,7 +34,7 @@ module.exports = {
       min_uptime: '5s',
     },
     {
-      name: 'fnguide-consensus',
+      name: 'sector-consensus',
       cwd: consensusDir,
       script: './node_modules/vite/bin/vite.js',
       args: 'preview',

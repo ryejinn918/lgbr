@@ -17,7 +17,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function basicAuthPlugin(user: string, password: string): Plugin {
-  const realm = 'fnguide-search-monitor'
+  const realm = 'trend-collect'
 
   const middleware: Connect.NextHandleFunction = (req, res, next) => {
     const header = req.headers.authorization

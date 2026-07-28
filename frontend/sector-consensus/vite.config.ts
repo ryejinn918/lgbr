@@ -17,7 +17,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function basicAuthPlugin(user: string, password: string): Plugin {
-  const realm = 'fnguide-consensus'
+  const realm = 'sector-consensus'
 
   const middleware: Connect.NextHandleFunction = (req, res, next) => {
     const header = req.headers.authorization

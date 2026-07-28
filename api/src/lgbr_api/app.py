@@ -1,4 +1,4 @@
-"""Local status API for the Fnguide search monitor."""
+"""Local LGBR API for industry-trend collect and sector consensus."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Local status API for Fnguide search monitor."""
+"""Local LGBR API for industry-trend collect and sector consensus."""
 
 from lgbr_api.app import app, create_app
 

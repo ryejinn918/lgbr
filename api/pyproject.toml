@@ -1,7 +1,7 @@
 [project]
 name = "lgbr-api"
 version = "0.1.0"
-description = "Local status API for Fnguide search monitor"
+description = "Local LGBR API for industry-trend collect and sector consensus"
 readme = "README.md"
 authors = [
     { name = "taehee", email = "ktthee1995@gmail.com" }

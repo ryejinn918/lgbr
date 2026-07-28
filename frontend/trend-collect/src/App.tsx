@@ -16,6 +16,7 @@ import { CollectTypesRouter } from './pages/collect/CollectTypesRouter'
 import { DashboardPage } from './pages/DashboardPage'
 import { ArticlesPage } from './pages/docs/ArticlesPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { APP_BRAND } from './lib/labels'
 import './App.css'
 
 function ReportsLegacyRedirect() {
@@ -33,7 +34,7 @@ function App() {
   return (
     <div className="monitor">
       <header className="app-shell">
-        <p className="brand">fnguide-search-monitor</p>
+        <p className="brand">{APP_BRAND}</p>
         <nav className="app-nav" aria-label="주요 메뉴">
           <NavLink to="/" end>
             대시보드
