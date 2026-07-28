@@ -26,64 +26,85 @@ async def build_consensus(
         f"{c['compress']}"
         for c in compress_cards
     )
-    log(f"consensus: reports={len(compress_cards)} chars={len(joined):,}")
-    pillars = [str(p).strip() for p in (pillar_sketch or []) if str(p).strip()]
+    n_reports = len(compress_cards)
+    providers = {
+        str(c.get("provider") or "").strip()
+        for c in compress_cards
+        if str(c.get("provider") or "").strip()
+    }
+    n_providers = len(providers)
+    log(
+        f"consensus: reports={n_reports} providers={n_providers} "
+        f"chars={len(joined):,}"
+    )
+    topics = [str(p).strip() for p in (pillar_sketch or []) if str(p).strip()]
     locked_block = ""
-    if thesis or pillars:
+    if thesis or topics:
         locked_block = (
-            "\nLocked cut (do not reinvent axes; roof/pillars must follow this):\n"
-            f"- thesis: {thesis or '—'}\n"
+            "\nLocked cut (do not reinvent topics; Executive Summary and "
+            "주제별 Deep Dive must follow this):\n"
+            f"- thesis (핵심 긴장): {thesis or '—'}\n"
             f"- cut_logic: {cut_logic or '—'}\n"
-            f"- pillar_sketch: {json.dumps(pillars, ensure_ascii=False)}\n"
+            f"- topics (pillar_sketch): {json.dumps(topics, ensure_ascii=False)}\n"
         )
 
     prompt = f"""Below are compress views from several broker reports.
-Do the hard part: lock a **consensus frame** that can hold the whole bundle.
+Lock a **consensus skeleton (골격)** that can hold the whole bundle.
 
 Question: {question}
+Pack facts (use these numbers; do not invent coverage %%):
+- reports={n_reports}
+- distinct_providers={n_providers}
 {locked_block}
 In scope / out of scope:
-- In scope: roof + major pillars where views converge. Fine numbers need not be filled yet.
-- Out of scope: per-report summary dump, thin exec bullet lists, forcing an industry template.
+- In scope: Executive Summary + 2–4 topics (주제) where views converge.
+  Fine numbers need not be filled yet — leave under 추후 보강.
+- Out of scope: per-report summary dump, thin exec bullet lists,
+  forcing a canned industry template.
 
 Rules:
-- One roof + 2–4 major pillars (faces of the same roof)
-- If locked pillar_sketch is provided, major pillars MUST map to those axes
+- Topics should be close to MECE: mutually distinct, jointly covering the tension.
+  Do not pad topics that the compress views do not support.
+- If locked topics (pillar_sketch) are provided, 주제별 Deep Dive MUST map to them
   (same cut; wording may be tightened, not replaced with a new taxonomy)
-- Each pillar = one desk-owned axis: a single mechanism or value-chain segment,
-  dense and precise — like one team part would cover it
-- Do NOT merge unrelated fields into one pillar (keep them as separate pillars
-  or move the weaker angle to Outside-the-frame)
-- Each pillar: why it belongs + which body details are slots to fill later
-- State overlap (consensus) vs one-sided angles
-- Leave slots so the frame can grow with detail later
+- Each topic = one desk-owned mechanism or value-chain segment
+- Do NOT merge unrelated fields into one topic (keep separate, or move the weaker
+  angle to 범위 밖 주제)
+- Per topic: 선정 근거, agreement vs disagreement, and 추후 보강 slots
 - Do not invent facts absent from the compress views
+- Keep number units and foreign-term spelling consistent within the document
+- Do not write period-over-period change unless compress views explicitly compare
+  periods; otherwise omit or put under 추후 보강 as defer
 - {HUMAN_CITE_RULE}
 
 Compress views:
 {joined}
 
-Output (English headers; Korean body OK for Korean sources):
-# Consensus frame
+Output (section headers exactly as below; Korean body OK for Korean sources):
+# 컨센서스 골격
 
-## Roof
+## 분석 범위 및 커버리지
+- 대상 리포트 수 / 증권사 수 (use pack facts above)
+- 잠긴 주제가 묶음을 어떻게 커버하는지 (주제별 지지 감각; no invented %%)
+
+## Executive Summary
 ...
 
-## Why this frame holds the bundle
-...
-
-## Major pillars
+## 주제별 Deep Dive
 ### 1. ...
-- Role of this pillar:
-- Consensus (which compress views support it; end bullets with short footnotes):
-- Slots to fill later:
+- 주제 역할:
+- 선정 근거:
+- 현황 및 전망: (슬롯 — 비관~낙관 분포는 살붙임에서)
+- 주요 플레이어: (슬롯, 국내 중심)
+- 성장·저해 요인: (의견 갈림이 있으면 이유까지)
+- 추후 보강:
 ### 2. ...
 ### 3. ...
 
-## Outside-the-frame angles (side / weak)
+## 범위 밖 주제
 ...
 
-## Body re-open priority (keywords)
+## 본문 재오픈 우선순위
 1. ...
 """
     content, _ = await chat(
@@ -91,11 +112,12 @@ Output (English headers; Korean body OK for Korean sources):
             {
                 "role": "system",
                 "content": (
-                    "Lock a consensus FRAME from compressed multi-report views. "
-                    "Structure over detail. No invented facts. "
-                    "Keep each major pillar a single coherent axis — never mash "
-                    "unrelated domains into one pillar. "
-                    "English section headers; Korean body when sources are Korean. "
+                    "Lock a consensus skeleton (골격) from compressed multi-report "
+                    "views. Structure over detail. No invented facts. "
+                    "Each Deep Dive topic must be a single coherent theme — never "
+                    "mash unrelated domains into one topic. "
+                    "Use the exact Korean/English section headers from the user "
+                    "template. Korean body when sources are Korean. "
                     + HUMAN_CITE_RULE
                 ),
             },
@@ -106,7 +128,7 @@ Output (English headers; Korean body OK for Korean sources):
         label="consensus",
         out_dir=out_dir,
     )
-    if "Body re-open priority" not in content or "Major pillars" not in content:
+    if "주제별 Deep Dive" not in content or "Executive Summary" not in content:
         (out_dir / "04_consensus_frame.partial.md").write_text(content, encoding="utf-8")
         raise RuntimeError("consensus incomplete; saved partial")
     (out_dir / "04_consensus_frame.md").write_text(content, encoding="utf-8")

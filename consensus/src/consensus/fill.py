@@ -12,20 +12,29 @@ from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
 
 SLICE_CHAR_CAP = 12_000
 
+# New LG-facing label + legacy English (older frames / filled drafts).
+_SLOT_LABEL = r"(?:추후 보강|Slots to fill later)"
 _SLOT_BLOCK_RE = re.compile(
-    r"(?m)^([ \t]*[-*][ \t]+)?\*\*Slots to fill later\*\*[^\n]*\n"
+    rf"(?m)^([ \t]*[-*][ \t]+)?\*\*{_SLOT_LABEL}\*\*[^\n]*\n"
     r"(?:[ \t]*[-*][ \t]+[^\n]*\n|[ \t]+\S[^\n]*\n)*"
+)
+# Also match unbolded "추후 보강:" lines from the new frame template.
+_SLOT_LINE_RE = re.compile(
+    rf"(?ims)^[ \t]*[-*]?[ \t]*\*\*{_SLOT_LABEL}\*\*[^\n]*\n(.*?)(?=\n### |\n## |\Z)"
+    rf"|^[ \t]*[-*]?[ \t]*{_SLOT_LABEL}\s*:[^\n]*\n(.*?)(?=\n### |\n## |\Z)"
+)
+_STILL_EMPTY_SPLIT_RE = re.compile(
+    r"(?m)^(## (?:미충족 보강|Still-empty slots)\b.*)$"
 )
 
 
 def extract_target_slots(frame: str) -> list[str]:
-    """Collect bullet items under per-pillar 'Slots to fill later'."""
+    """Collect bullet items under per-topic 추후 보강 (or legacy Slots)."""
     slots: list[str] = []
-    for m in re.finditer(
-        r"(?ims)\*\*Slots to fill later\*\*[^\n]*\n(.*?)(?=\n### |\n## |\Z)",
-        frame or "",
-    ):
-        block = m.group(1)
+    for m in _SLOT_LINE_RE.finditer(frame or ""):
+        block = m.group(1) if m.group(1) is not None else m.group(2)
+        if not block:
+            continue
         for line in block.splitlines():
             s = line.strip()
             if s.startswith(("-", "*")):
@@ -36,31 +45,43 @@ def extract_target_slots(frame: str) -> list[str]:
 
 
 def strip_slot_sections(frame: str) -> str:
-    """Remove per-pillar Slots-to-fill-later blocks from a frame draft."""
+    """Remove per-topic 추후 보강 / legacy Slots blocks from a frame draft."""
     if not frame:
         return frame
     out = _SLOT_BLOCK_RE.sub("", frame)
+    # Unbolded "추후 보강:" blocks (new frame template).
+    out = re.sub(
+        r"(?ims)^[ \t]*[-*]?[ \t]*추후 보강\s*:[^\n]*\n"
+        r"(?:[ \t]*[-*][ \t]+[^\n]*\n|[ \t]+\S[^\n]*\n)*",
+        "",
+        out,
+    )
     out = re.sub(r"\n{3,}", "\n\n", out)
     return out.strip() + "\n"
 
 
 def strip_pillar_slots_from_filled(content: str) -> tuple[str, bool]:
-    """Strip illegal per-pillar Slots blocks from filled output.
+    """Strip illegal per-topic 추후 보강 blocks from filled output.
 
-    Keeps a top-level ``## Still-empty slots`` section if present.
+    Keeps a top-level ``## 미충족 보강`` / ``## Still-empty slots`` section.
     Returns (cleaned, did_strip).
     """
     if not content:
         return content, False
-    # Only strip under Major pillars / Pillar enrichment — not Still-empty header text.
-    parts = re.split(r"(?m)^(## Still-empty slots\b.*)$", content, maxsplit=1)
+    parts = _STILL_EMPTY_SPLIT_RE.split(content, maxsplit=1)
     head = parts[0]
     tail = "".join(parts[1:]) if len(parts) > 1 else ""
     cleaned_head, n = _SLOT_BLOCK_RE.subn("", head)
-    if n == 0:
+    cleaned_head2, n2 = re.subn(
+        r"(?ims)^[ \t]*[-*]?[ \t]*추후 보강\s*:[^\n]*\n"
+        r"(?:[ \t]*[-*][ \t]+[^\n]*\n|[ \t]+\S[^\n]*\n)*",
+        "",
+        cleaned_head,
+    )
+    if n == 0 and n2 == 0:
         return content, False
-    cleaned_head = re.sub(r"\n{3,}", "\n\n", cleaned_head)
-    return (cleaned_head.rstrip() + "\n\n" + tail.lstrip()).rstrip() + "\n", True
+    cleaned_head2 = re.sub(r"\n{3,}", "\n\n", cleaned_head2)
+    return (cleaned_head2.rstrip() + "\n\n" + tail.lstrip()).rstrip() + "\n", True
 
 
 def open_slice_body(text: str, *, cap: int = SLICE_CHAR_CAP) -> str:
@@ -297,13 +318,18 @@ async def fill_frame(
         f"{d['body']}"
         for d in dossiers
     )
-    prompt = f"""Preserve the locked frame's roof/pillar titles. Thicken pillars using **only**
-sentences/numbers that actually appear in the OPEN bodies below.
+    prompt = f"""Preserve the locked skeleton's Executive Summary and 주제 titles.
+Thicken each 주제 using **only** sentences/numbers that actually appear in the
+OPEN bodies below.
 Never invent numbers, company facts, or prices missing from OPEN.
-Absorb filled TARGET SLOTS into Evidence — do **not** copy "Slots to fill later"
-under pillars.
+Absorb filled TARGET SLOTS into Evidence — do **not** copy "추후 보강"
+(or legacy "Slots to fill later") under topics.
 {HUMAN_CITE_RULE}
 Use each OPEN header's human label in footnotes.
+Keep number units and foreign-term spelling consistent.
+Outlook: only if OPEN supports it, note 비관~낙관 distribution with footnotes.
+Players: domestic first; include global/unlisted only when OPEN names them.
+Growth/headwinds: emphasize disagreements and why they diverge.
 
 The output must be a **standalone, self-contained document**. Forbidden shorthand:
 (unchanged), same as above, as in locked frame, 중략, 생략, and similar.
@@ -319,24 +345,27 @@ Question: {question}
 ## Opened slice bodies
 {dossier_txt}
 
-Output (English headers; Korean body OK for Korean sources):
-# Filled frame
+Output (section headers exactly as below; Korean body OK for Korean sources):
+# 살 붙인 논지
 
-## Roof
+## Executive Summary
 (full prose)
 
-## Pillar enrichment
-### 1. (existing pillar title)
-- **Role of this pillar**
+## 주제별 Deep Dive
+### 1. (existing topic title)
+- **주제 역할**
 - **Claim**
 - **Evidence (number / date; end each bullet with short footnote)**
+- **현황 및 전망** (비관~낙관; OPEN에 있을 때만)
+- **주요 플레이어**
+- **성장·저해 요인**
 - **Watch**
-(dense; self-contained; NO "Slots to fill later" under pillars)
+(dense; self-contained; NO 추후 보강 under topics)
 
-## Still-empty slots (defer to web/other sources)
+## 미충족 보강 (다른 출처로 미룸)
 - Only TARGET SLOTS not supported by OPEN bodies. One follow-up query each.
 
-## Reference reports
+## 참고 보고서
 ...
 """
     content, _ = await chat(
@@ -344,12 +373,13 @@ Output (English headers; Korean body OK for Korean sources):
             {
                 "role": "system",
                 "content": (
-                    "Enrich a locked consensus frame with opened report slice bodies. "
-                    "Keep roof/pillar titles. Grow density. No invented facts. "
-                    "Use Pillar enrichment with Role/Claim/Evidence/Watch. "
-                    "Never emit per-pillar 'Slots to fill later'. "
-                    "Still-empty slots = only targets not filled from OPEN. "
-                    "English headers; Korean body when sources are Korean. "
+                    "Enrich a locked consensus skeleton with opened report slice "
+                    "bodies. Keep Executive Summary and 주제 titles. Grow density. "
+                    "No invented facts. Use 주제별 Deep Dive with "
+                    "주제 역할/Claim/Evidence/전망/플레이어/성장·저해/Watch. "
+                    "Never emit per-topic 추후 보강. "
+                    "미충족 보강 = only targets not filled from OPEN. "
+                    "Korean body when sources are Korean. "
                     + HUMAN_CITE_RULE
                 ),
             },
@@ -362,7 +392,7 @@ Output (English headers; Korean body OK for Korean sources):
     )
     content, stripped = strip_pillar_slots_from_filled(content)
     if stripped:
-        log("fill: warning — stripped per-pillar Slots to fill later from output")
+        log("fill: warning — stripped per-topic 추후 보강 from output")
 
     (out_dir / "06_filled_frame.md").write_text(content, encoding="utf-8")
     log(f"fill DONE opens_used={len(dossiers)} slice_chars={sum(d['slice_chars'] for d in dossiers)}")

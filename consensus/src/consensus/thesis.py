@@ -22,14 +22,17 @@ PILLAR_MAX = 4
 def thesis_system_prompt(theme: str) -> str:
     sector = THEME_LABEL_KO.get(theme, theme)
     hint = THEME_SELECT_HINTS.get(theme, "Prefer structural industry analyses.")
-    return f"""You cut the analytical axes for a {sector} industry consensus note.
+    return f"""You cut the analytical **topics (주제)** for a {sector} industry
+consensus note.
 
 You receive audit cards (topic, framework_summary, rationale) for quality-passed
 sell-side notes. Do NOT choose which reports to keep. Only decide how the sector
 is splitting right now.
 
-Goal: one sharp industrial tension, then 2–4 non-overlapping axes that follow
-from that cut — not a coverage catalog of every topic in the pool.
+Goal: one sharp industrial tension, then {PILLAR_MIN}–{PILLAR_MAX} non-overlapping
+topics that follow from that cut — close to MECE, not a coverage catalog of every
+theme in the pool. Do not pad topics the cards do not support. Do not force a
+canned strategy matrix (e.g. BCG) onto the cut.
 
 Sector cues ({sector}):
 - {hint}
@@ -38,10 +41,11 @@ Write thesis, cut_logic, and pillar_sketch in Korean.
 
 Rules:
 - thesis: one sentence — what is diverging / binding capital or attention now.
-- cut_logic: 2–4 short sentences — why these axes are separate (what you refuse
+- cut_logic: 2–4 short sentences — why these topics are separate (what you refuse
   to merge and why).
-- pillar_sketch: {PILLAR_MIN}–{PILLAR_MAX} axis labels; each one desk-owned mechanism
-  or value-chain segment. No report names, no broker names, no report_id/UUID.
+- pillar_sketch: {PILLAR_MIN}–{PILLAR_MAX} **주제** labels; each one desk-owned
+  mechanism or value-chain segment. No report names, no broker names,
+  no report_id/UUID. (JSON key stays pillar_sketch.)
 - Do not invent facts absent from the cards; synthesize the cut from them.
 
 Return JSON only:

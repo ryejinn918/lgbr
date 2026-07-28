@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 
-# Shared instruction for frame / fill / chat (and echoed in select).
+# Multi-doc human prose only: frame / fill / coverage_notes.
+# Do NOT apply to per-row select why (UI already shows title/provider).
 HUMAN_CITE_RULE = (
     "When naming a report in human prose, use only card fields "
     "provider, short_title, and published_at "

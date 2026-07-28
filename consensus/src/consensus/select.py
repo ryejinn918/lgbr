@@ -80,23 +80,21 @@ def pool_themes_for(theme: str) -> tuple[str, ...]:
 def select_system_prompt(theme: str) -> str:
     sector = THEME_LABEL_KO.get(theme, theme)
     hint = THEME_SELECT_HINTS.get(theme, "Prefer structural industry analyses.")
-    return f"""You place quality-passed sell-side notes into a **fixed** axis pack
+    return f"""You place quality-passed sell-side notes into a **fixed topic pack**
 for a {sector} industry consensus note.
 
-Axes are already decided (thesis + pillar_sketch). Do NOT reinvent or rename axes.
-Your job is placement: which reports fill which axis holes.
+Topics are already decided (thesis + pillar_sketch as topic labels).
+Do NOT reinvent or rename topics. Your job is placement: which reports fill
+which topic holes.
 
 Language (mandatory):
 - Write coverage_notes and every why field in Korean.
 - Never use report_id, full title, UUID, or hex in prose. report_id belongs
   only in core[].report_id and bibliography[].report_id.
 
-why (per report; shown next to title/provider columns — no self-citation):
-- Say which locked axis this report serves (or why bibliography) in 1–2 Korean
-  sentences. Focus on contribution, not bibliography.
-- Do NOT put [provider], [provider, short_title], or any square-bracket source
-  tags in why. Do not end why with a citation.
-- If you must refer to the report itself, say "이 보고서" (this report).
+why (per report; UI already shows title/provider — do not name or cite the report):
+- 1–2 Korean sentences: which locked **주제(topic)** it serves (or why Supporting)
+  and what contribution it adds. No report names, no [provider] tags.
 
 coverage_notes (pack summary — naming other reports is OK):
 - Allowed name fields: provider, short_title, published_at.
@@ -113,21 +111,25 @@ Sector focus ({sector}):
 - {hint}
 
 Placement goals:
-- For each locked pillar, prefer the scarcest mechanism-dense notes that support it.
-- why must say which locked axis the report serves (or why bibliography);
-  never append [provider…] tags in why.
-- Do NOT invent new pillar names.
+- For each locked topic, pick **중심축(core) 1–2 reports** that densest cover it;
+  put reinforcing notes in bibliography as **Supporting**.
+- A topic covered uniquely/densely by a single report may still be 중심축
+  (emerging trend / scarce mechanism) — do not require two hubs.
+- Do not force a hub onto every topic if the pool is thin.
+- why must say which locked topic the report serves (or why Supporting).
+- Do NOT invent new topic names.
 
 Limits:
-- core: at most 10 report ids — these drive the consensus frame.
-- bibliography: useful extras for detail-fill later (not in the frame). May be empty.
+- core (중심축): at most 10 report ids — these drive the consensus skeleton.
+- bibliography (Supporting): useful extras for detail-fill later. May be empty.
 - Only use report_id values from the provided cards. No duplicates across core/bibliography.
 - Do NOT list every omitted report_id. No omitted[] array.
-- Do NOT return pillar_sketch (axes are locked upstream).
+- Do NOT return pillar_sketch (topics are locked upstream).
 
 coverage_notes (Korean, short paragraphs — readability first):
 1) Opening: restate the locked thesis in one sentence (no broker/report names).
-2) How the core pack covers the locked axes (counts / balance) — no stacked titles.
+2) How 중심축 vs Supporting covers the locked topics (counts / balance) —
+   no stacked titles.
 3) Omit summary vs the locked tension (duplicate series, off-theme, single-name,
    thin macro). Types and reasons only.
 4) Optional last line: compact [provider, short_title] tags for representatives.
@@ -268,12 +270,12 @@ async def llm_select_pack(
     }
     user = (
         f"Place reports into the locked pack for {sector}. core_max={core_max}.\n"
-        "Axes are fixed — do not rename them.\n"
-        "In coverage_notes only, name other reports with provider-first square "
+        "Topics (pillar_sketch) are fixed — do not rename them.\n"
+        "Per topic: 1–2 중심축 (core), rest Supporting (bibliography) when useful.\n"
+        "In coverage_notes, name other reports with provider-first square "
         "brackets: `[provider]` if unambiguous, else `[provider, short_title]` or "
         "`[provider, short_title, published_at]`. "
-        "In why: no square-bracket tags; refer as 이 보고서 if needed; "
-        "state which locked axis this report fills.\n\n"
+        "In why: topic contribution only — do not name or cite the report.\n\n"
         f"Locked axes JSON:\n{json.dumps(locked, ensure_ascii=False)}\n\n"
         f"Cards JSON:\n{json.dumps(llm_cards, ensure_ascii=False)}"
     )
