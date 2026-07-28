@@ -55,7 +55,7 @@ STATE_LABELS = {
     "starting": "시작 중",
     "active": "실행 중",
     "stopping": "종료 중",
-    "awaiting": "축 확인 대기",
+    "awaiting": "분석 축 확인 대기",
     "ended": "종료",
     "error": "오류",
     "idle": "대기",
@@ -546,47 +546,17 @@ def get_run_doc_compress(run_id: str, report_id: str) -> dict[str, Any]:
     }
 
 
-def _ensure_prompt_set(label: str) -> str:
+def _ensure_prompt_set(label: str | None = None) -> str:
     """FK/label only — prompt SSOT is consensus package code (not these rows)."""
-    stages = (
-        "toc",
-        "local_compress",
-        "report_compress",
-        "consensus",
-        "reduce",
-        "fill_plan",
-        "fill",
+    from consensus.runs_store import (  # noqa: WPS433
+        DOC_PROMPT_SET_LABEL,
+        ensure_prompt_set,
     )
-    with connect() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO consensus_prompt_sets (label, notes)
-            VALUES (%s, %s)
-            RETURNING id::text
-            """,
-            (
-                label,
-                "SSOT=consensus package code; DB prompts are placeholders (not loaded)",
-            ),
-        )
-        set_id = cur.fetchone()["id"]
-        for stage in stages:
-            cur.execute(
-                """
-                INSERT INTO consensus_prompts
-                    (prompt_set_id, stage, system_text, user_template)
-                VALUES (%s::uuid, %s, %s, %s)
-                """,
-                (
-                    set_id,
-                    stage,
-                    f"[SSOT=code] {stage} system — consensus package, not this row",
-                    f"[SSOT=code] {stage} user — consensus package, not this row",
-                ),
-            )
-        conn.commit()
-    return set_id
 
+    return ensure_prompt_set(
+        label=label or DOC_PROMPT_SET_LABEL,
+        notes="SSOT=consensus package code; DB prompts are placeholders (not loaded)",
+    )
 
 def _spawn_worker(run_id: str) -> None:
     python = ROOT / ".venv" / "bin" / "python"
@@ -638,7 +608,7 @@ def start_run(
         return {
             "ok": False,
             "status": 409,
-            "message": "이미 컨센서스 런이 실행 중이거나 축 확인 대기 중입니다.",
+            "message": "이미 컨센서스 런이 실행 중이거나 분석 축 확인 대기 중입니다.",
             "label": run["label"] if run else "busy",
             "can_start": False,
             "run": run,
@@ -653,7 +623,7 @@ def start_run(
         "until": "thesis",
     }
     try:
-        prompt_set_id = _ensure_prompt_set(label=f"{theme}-api-v1")
+        prompt_set_id = _ensure_prompt_set()
         asset_id = _make_asset_id(theme)
         with connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -709,7 +679,7 @@ def start_run(
     return {
         "ok": True,
         "status": 202,
-        "message": "축 가르기를 시작했습니다.",
+        "message": "분석 축 잡기를 시작했습니다.",
         "label": "시작 중",
         "can_start": False,
         "run": _serialize_run(row),
@@ -788,7 +758,7 @@ def continue_run(
         return {
             "ok": False,
             "status": 409,
-            "message": f"축 확인 대기 상태가 아닙니다 (state={state}).",
+            "message": f"분석 축 확인 대기 상태가 아닙니다 (state={state}).",
             "can_start": False,
             "run": _serialize_run(row),
         }
@@ -918,7 +888,7 @@ def _continue_from_select_only(
         return {
             "ok": False,
             "status": 409,
-            "message": "이미 컨센서스 런이 실행 중이거나 축 확인 대기 중입니다.",
+            "message": "이미 컨센서스 런이 실행 중이거나 분석 축 확인 대기 중입니다.",
             "can_start": False,
             "run": _serialize_run(row),
         }
@@ -1009,7 +979,7 @@ def request_stop() -> dict[str, Any]:
             SET state = 'ended',
                 ended_at = now(),
                 pid = NULL,
-                message = COALESCE(message, '축 확인에서 종료됨'),
+                message = COALESCE(message, '분석 축 확인에서 종료됨'),
                 stop_requested_at = now()
             WHERE ended_at IS NULL AND state = 'awaiting'
             RETURNING *
@@ -1020,7 +990,7 @@ def request_stop() -> dict[str, Any]:
             conn.commit()
             return {
                 "ok": True,
-                "message": "축 확인 대기를 종료했습니다.",
+                "message": "분석 축 확인 대기를 종료했습니다.",
                 "run": _serialize_run(dict(awaiting)),
                 "can_start": True,
             }

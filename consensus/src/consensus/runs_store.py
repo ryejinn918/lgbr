@@ -33,27 +33,47 @@ DEFAULT_QUESTION = {
 # Consensus pool: only reports with published_at within this many calendar months.
 PERIOD_MONTHS_DEFAULT = 3
 
+# Stable FK label for doc-compress artifact cache. Bump manually when toc /
+# compress / corpus slicing changes in a way that invalidates compress views.
+# Do not bump for frame/fill-only edits.
+DOC_PROMPT_SET_LABEL = "consensus-doc-v2"
+
+_PROMPT_STAGES = (
+    "toc",
+    "local_compress",
+    "report_compress",
+    "consensus",
+    "reduce",
+    "fill_plan",
+    "fill",
+)
+
 
 def ensure_prompt_set(*, label: str, notes: str = "") -> str:
-    """Create a prompt_set row for run FK / labeling only.
+    """Get or create a prompt_set row for run FK / labeling only.
 
     SSOT for prompt text is the consensus package modules (toc/compress/frame/fill),
-    not ``consensus_prompts`` rows. DB stage rows are placeholders so schema stays
-    ready for a future prompt-set editor; the worker never loads them.
+    not ``consensus_prompts`` rows. Same ``label`` always returns the same id so
+    doc artifacts can cache across runs.
     """
-    stages = (
-        "toc",
-        "local_compress",
-        "report_compress",
-        "consensus",
-        "reduce",
-        "fill_plan",
-        "fill",
-    )
     note = notes or (
         "SSOT=consensus package code; DB prompts are placeholders (not loaded at runtime)"
     )
     with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id::text AS id
+            FROM consensus_prompt_sets
+            WHERE label = %s
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (label,),
+        )
+        row = cur.fetchone()
+        if row:
+            return str(row["id"])
+
         cur.execute(
             """
             INSERT INTO consensus_prompt_sets (label, notes)
@@ -63,7 +83,7 @@ def ensure_prompt_set(*, label: str, notes: str = "") -> str:
             (label, note),
         )
         set_id = cur.fetchone()["id"]
-        for stage in stages:
+        for stage in _PROMPT_STAGES:
             cur.execute(
                 """
                 INSERT INTO consensus_prompts
@@ -196,7 +216,7 @@ def pause_awaiting(run_id: str, *, message: str | None = None) -> str:
             SET state = 'ended',
                 ended_at = now(),
                 pid = NULL,
-                message = COALESCE(%s, message, '종료 요청으로 축 확인 전 종료됨'),
+                message = COALESCE(%s, message, '종료 요청으로 분석 축 확인 전 종료됨'),
                 stop_requested_at = NULL
             WHERE id = %s::uuid
               AND ended_at IS NULL

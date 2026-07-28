@@ -574,7 +574,7 @@ def start_theme_run(
         raise ValueError("until must be 'thesis', 'select', or omitted")
     q = question or runs_store.DEFAULT_QUESTION[theme]
     prompt_set_id = runs_store.ensure_prompt_set(
-        label=f"{theme}-runtime-v1",
+        label=runs_store.DOC_PROMPT_SET_LABEL,
         notes="prompts executed from consensus package code",
     )
     asset_id = make_asset_id(theme)

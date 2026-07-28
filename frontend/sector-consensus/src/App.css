@@ -14,6 +14,43 @@
   gap: 0.75rem 1.25rem;
 }
 
+.app-status {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  margin: 0;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-status-text {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.app-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.app-status.state-active .app-status-text {
+  color: var(--active);
+}
+
+.app-status.state-busy .app-status-text {
+  color: var(--busy);
+}
+
+.app-status.state-danger .app-status-text,
+.app-status.state-offline {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .app-theme-chips {
   flex: 1 1 auto;
   justify-content: center;

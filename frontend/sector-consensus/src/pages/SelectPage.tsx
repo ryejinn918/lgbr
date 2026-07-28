@@ -1,8 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { useConsensusStatus } from '../hooks/useConsensusStatus'
+import { useConsensusStatusContext } from '../hooks/ConsensusStatusContext'
+import { isLiveState, openRunForTheme } from '../lib/runState'
 import { parseTheme, themePath } from '../lib/theme'
-import { NAV, labelRunSlot, labelRunState } from '../lib/labels'
+import {
+  BLOCKED_BY_OPEN_RUN,
+  NAV,
+  labelRunSlot,
+  labelRunState,
+} from '../lib/labels'
 import type { InputReport, RunDoc, SelectCriteria } from '../types'
 import { THEME_LABEL } from '../types'
 
@@ -23,7 +29,7 @@ export function SelectPage() {
   const [runDocs, setRunDocs] = useState<RunDoc[]>([])
   const [docsError, setDocsError] = useState<string | null>(null)
 
-  const { status, history, continueRun, refresh } = useConsensusStatus(theme)
+  const { status, history, continueRun, refresh } = useConsensusStatusContext()
   const [continuingFull, setContinuingFull] = useState(false)
 
   const themeHistory = useMemo(
@@ -31,15 +37,7 @@ export function SelectPage() {
     [history, theme],
   )
 
-  // status.run falls back to latest ended run when idle — only force-select when busy.
-  const openThemeRun =
-    status.run?.theme === theme &&
-    (status.run.state === 'starting' ||
-      status.run.state === 'active' ||
-      status.run.state === 'stopping' ||
-      status.run.state === 'awaiting')
-      ? status.run
-      : null
+  const openThemeRun = openRunForTheme(status, theme)
 
   const packRun = useMemo(() => {
     if (openThemeRun) return openThemeRun
@@ -147,11 +145,7 @@ export function SelectPage() {
         })
     }
     load()
-    const busy =
-      packRun.state === 'starting' ||
-      packRun.state === 'active' ||
-      packRun.state === 'stopping'
-    const t = busy ? window.setInterval(load, 3_000) : 0
+    const t = isLiveState(packRun.state) ? window.setInterval(load, 3_000) : 0
     return () => {
       cancelled = true
       if (t) window.clearInterval(t)
@@ -165,7 +159,7 @@ export function SelectPage() {
           {THEME_LABEL[theme]} · 보고서 선별
         </h1>
         <p className="lede">
-          컨센서스에 쓸 보고서를 어떻게 골랐는지 봅니다. 축 가르기·시작은{' '}
+          컨센서스에 쓸 보고서를 어떻게 골랐는지 봅니다. 분석 축 잡기·시작은{' '}
           <Link className="text-link" to={themePath(theme, 'axes')}>
             {NAV.axes}
           </Link>{' '}
@@ -173,58 +167,35 @@ export function SelectPage() {
         </p>
       </header>
 
-      {status.run?.theme === theme && status.run.state === 'awaiting' && (
-        <section className="panel">
-          <p className="section-note">
-            축 확인 대기 중입니다. 선별은 축을 확정한 뒤에 진행됩니다.{' '}
-            <Link className="text-link" to={themePath(theme, 'axes')}>
-              {NAV.axes}
-            </Link>
-            에서 확인하세요.
-          </p>
-        </section>
-      )}
-
       {selectOnly && packRun && packDocs.length > 0 && (
         <section className="panel">
-          <p className="section-note">
-            이 실행은 선별까지만 진행했습니다. 같은 팩으로 논지(요약·골격·살붙임)를
-            이어서 만들 수 있습니다.
-          </p>
-          <div className="chip-row" style={{ gap: '0.5rem', marginTop: '0.75rem' }}>
-            <button
-              type="button"
-              className="btn"
-              disabled={!status.can_start || continuingFull}
-              onClick={() => {
-                if (!packRun.id || !status.can_start) return
-                if (
-                  !window.confirm(
-                    '이 선별 팩을 유지한 채 요약·골격·살 붙인 논지를 이어서 만들까요?',
-                  )
-                ) {
-                  return
-                }
-                setContinuingFull(() => true)
-                void continueRun(packRun.id, { resume_from: 'doc' })
-                  .then(() => refresh())
-                  .catch((e) =>
-                    window.alert(e instanceof Error ? e.message : '계속 실패'),
-                  )
-                  .finally(() => setContinuingFull(() => false))
-              }}
-            >
-              {continuingFull ? '진행 중…' : '이 선별로 논지까지 계속'}
-            </button>
-            <Link className="btn ghost" to={themePath(theme, 'frames')}>
-              {NAV.frames} 보기
-            </Link>
-            {!status.can_start && (
-              <span className="section-note">
-                다른 작업이 열려 있어 지금은 이을 수 없습니다.
-              </span>
-            )}
-          </div>
+          <button
+            type="button"
+            className="btn"
+            disabled={!status.can_start || continuingFull}
+            onClick={() => {
+              if (!packRun.id || !status.can_start) return
+              if (
+                !window.confirm(
+                  '이 선별 팩을 유지한 채 요약·골격·살 붙인 논지를 이어서 만들까요?',
+                )
+              ) {
+                return
+              }
+              setContinuingFull(() => true)
+              void continueRun(packRun.id, { resume_from: 'doc' })
+                .then(() => refresh())
+                .catch((e) =>
+                  window.alert(e instanceof Error ? e.message : '계속 실패'),
+                )
+                .finally(() => setContinuingFull(() => false))
+            }}
+          >
+            {continuingFull ? '진행 중…' : '이 선별로 논지까지 계속'}
+          </button>
+          {!status.can_start ? (
+            <p className="section-note">{BLOCKED_BY_OPEN_RUN}</p>
+          ) : null}
         </section>
       )}
 
@@ -352,7 +323,7 @@ export function SelectPage() {
             {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
             {packDocs.length > 0
               ? ` · 위 선별과 동일: 주요 ${coreDocs.length} · 보조 ${biblioDocs.length}`
-              : ` · 선별은 ${NAV.axes}에서 축 확정 후`}
+              : ` · 선별은 ${NAV.axes}에서 분석 축 확정 후`}
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}

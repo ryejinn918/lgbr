@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Markdown } from '../components/Markdown'
-import { useConsensusStatus } from '../hooks/useConsensusStatus'
+import { useConsensusStatusContext } from '../hooks/ConsensusStatusContext'
 import { formatTime } from '../lib/format'
 import {
+  BLOCKED_BY_OPEN_RUN,
   FRAME_TAB,
   NAV,
   labelDocStatus,
   labelRunSlot,
   labelRunState,
 } from '../lib/labels'
+import { isLiveState, isOpenState, openRunForTheme } from '../lib/runState'
 import { parseTheme, themePath } from '../lib/theme'
 import type { SelectCriteria } from '../types'
 import { THEME_LABEL } from '../types'
@@ -34,15 +36,6 @@ type DocRow = {
   select_why?: string | null
 }
 
-function isBusyState(state: string | null | undefined): boolean {
-  return (
-    state === 'starting' ||
-    state === 'active' ||
-    state === 'stopping' ||
-    state === 'awaiting'
-  )
-}
-
 export function FramesPage() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
@@ -60,7 +53,7 @@ export function FramesPage() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const { status, history, continueRun, refresh } = useConsensusStatus(theme)
+  const { status, history, continueRun, refresh } = useConsensusStatusContext()
   const [continuingFull, setContinuingFull] = useState(false)
 
   const themeHistory = useMemo(
@@ -68,11 +61,7 @@ export function FramesPage() {
     [history, theme],
   )
 
-  // status.run falls back to latest ended run when idle — only force-select when busy.
-  const openThemeRun =
-    status.run?.theme === theme && isBusyState(status.run.state)
-      ? status.run
-      : null
+  const openThemeRun = openRunForTheme(status, theme)
 
   const packRun = useMemo(() => {
     if (openThemeRun) return openThemeRun
@@ -166,8 +155,7 @@ export function FramesPage() {
         })
     }
     load()
-    const busy = isBusyState(packRun.state)
-    const t = busy ? window.setInterval(load, 3_000) : 0
+    const t = isLiveState(packRun.state) ? window.setInterval(load, 3_000) : 0
     return () => {
       cancelled = true
       if (t) window.clearInterval(t)
@@ -249,7 +237,7 @@ export function FramesPage() {
 
   const frameBody = tab === 'filled' ? filled : tab === 'consensus' ? consensus : null
   const runTimeNote = packRun
-    ? isBusyState(packRun.state)
+    ? isOpenState(packRun.state)
       ? labelRunState(packRun.state)
       : formatTime(packRun.ended_at)
     : null
@@ -285,21 +273,6 @@ export function FramesPage() {
     }
   }
 
-  const selectOnlyNote = (
-    <>
-      이 실행은 선별까지만 진행했습니다. 골격·살 붙인 논지는 아직 없습니다. 아래
-      버튼으로 같은 선별을 유지한 채 논지까지 이을 수 있습니다.{' '}
-      <Link className="text-link" to={themePath(theme, 'select')}>
-        {NAV.select}
-      </Link>
-      에서 선별을 확인하거나,{' '}
-      <Link className="text-link" to={themePath(theme, 'axes')}>
-        {NAV.axes}
-      </Link>
-      에서 축부터 다시 시작할 수도 있습니다.
-    </>
-  )
-
   return (
     <>
       <header className="monitor-header">
@@ -311,7 +284,7 @@ export function FramesPage() {
         </p>
         {packRun && packLabel ? (
           <p className="section-note">
-            {packLabel} · {runTimeNote} · {packRun.question}
+            {packLabel} · {runTimeNote}
             {selectOnly ? ' · 선별까지만' : ''}
           </p>
         ) : (
@@ -327,22 +300,17 @@ export function FramesPage() {
 
       {selectOnly && packRun && (
         <section className="panel">
-          <p className="section-note">{selectOnlyNote}</p>
-          <div className="chip-row" style={{ gap: '0.5rem', marginTop: '0.75rem' }}>
-            <button
-              type="button"
-              className="btn"
-              disabled={!status.can_start || continuingFull}
-              onClick={() => void onContinueToFrames()}
-            >
-              {continuingFull ? '진행 중…' : '이 선별로 논지까지 계속'}
-            </button>
-            {!status.can_start && (
-              <span className="section-note">
-                다른 작업이 열려 있어 지금은 이을 수 없습니다.
-              </span>
-            )}
-          </div>
+          <button
+            type="button"
+            className="btn"
+            disabled={!status.can_start || continuingFull}
+            onClick={() => void onContinueToFrames()}
+          >
+            {continuingFull ? '진행 중…' : '이 선별로 논지까지 계속'}
+          </button>
+          {!status.can_start ? (
+            <p className="section-note">{BLOCKED_BY_OPEN_RUN}</p>
+          ) : null}
         </section>
       )}
 
@@ -420,7 +388,7 @@ export function FramesPage() {
             </div>
           ) : (
             <p className="section-note">
-              {selectOnly ? selectOnlyNote : '표시할 논지가 없습니다.'}
+              {'표시할 논지가 없습니다.'}
             </p>
           ))}
 

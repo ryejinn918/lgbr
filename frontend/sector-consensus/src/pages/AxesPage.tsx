@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useConsensusStatus } from '../hooks/useConsensusStatus'
-import { NAV, labelRunState, labelStage } from '../lib/labels'
+import { useConsensusStatusContext } from '../hooks/ConsensusStatusContext'
+import {
+  BLOCKED_BY_OPEN_RUN,
+  BLOCKED_BY_THIS_SECTOR,
+  NAV,
+} from '../lib/labels'
+import { isLiveState, openRunForTheme } from '../lib/runState'
 import { parseTheme, themePath } from '../lib/theme'
-import type { ConsensusTheme, SelectCriteria } from '../types'
-import { STATE_CLASS, THEME_LABEL } from '../types'
+import type { SelectCriteria } from '../types'
+import { THEME_LABEL } from '../types'
 
 function asCriteria(raw: unknown): SelectCriteria | null {
   if (!raw || typeof raw !== 'object') return null
@@ -22,29 +27,17 @@ function parsePillars(text: string): string[] {
     .filter(Boolean)
 }
 
-function isOpenState(state: string | undefined): boolean {
-  return (
-    state === 'starting' ||
-    state === 'active' ||
-    state === 'stopping' ||
-    state === 'awaiting'
-  )
-}
-
 export function AxesPage() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
   const {
     status,
     history,
-    fetchError,
     requestingStart,
-    requestingStop,
     startRun,
-    stopRun,
     continueRun,
     refresh,
-  } = useConsensusStatus(theme)
+  } = useConsensusStatusContext()
 
   const [thesis, setThesis] = useState('')
   const [cutLogic, setCutLogic] = useState('')
@@ -56,10 +49,7 @@ export function AxesPage() {
     [history, theme],
   )
 
-  const openRun =
-    status.run?.theme === theme && isOpenState(status.run.state)
-      ? status.run
-      : null
+  const openRun = openRunForTheme(status, theme)
 
   const lastEnded = useMemo(() => {
     if (openRun) return null
@@ -72,16 +62,8 @@ export function AxesPage() {
   const openCriteria = asCriteria(openRun?.criteria)
   const pillarsKey = JSON.stringify(openCriteria?.pillar_sketch || [])
 
-  const busy =
-    openRun?.state === 'starting' ||
-    openRun?.state === 'active' ||
-    openRun?.state === 'stopping'
+  const busy = isLiveState(openRun?.state)
   const awaiting = openRun?.state === 'awaiting'
-  const badge = fetchError
-    ? 'offline'
-    : openRun
-      ? STATE_CLASS[openRun.state] || 'idle'
-      : 'idle'
 
   useEffect(() => {
     if (!openRun) {
@@ -107,11 +89,8 @@ export function AxesPage() {
 
   const canEdit = Boolean(awaiting && openRun?.id)
   const hasCut = Boolean(thesis.trim() && parsePillars(pillars).length >= 2)
-  const stage = String(status.progress?.stage || '')
-  const resumeFrom = openCriteria?.resume_from
   const axesLocked = hasCut
   const cuttingAxes = Boolean(busy && !axesLocked)
-  const downstreamBusy = Boolean(busy && axesLocked)
   const showWorkForm = Boolean(openRun)
   const showLastAxes = Boolean(
     !openRun &&
@@ -122,7 +101,7 @@ export function AxesPage() {
   async function onCut() {
     if (
       !window.confirm(
-        `${THEME_LABEL[theme]} 섹터 축 가르기를 시작할까요? 끝나면 여기서 확인·수정합니다.`,
+        `${THEME_LABEL[theme]} 섹터 분석 축 잡기를 시작할까요? 끝나면 여기서 확인·수정합니다.`,
       )
     ) {
       return
@@ -157,79 +136,6 @@ export function AxesPage() {
     }
   }
 
-  const otherBusyTheme =
-    status.run && status.run.theme !== theme && isOpenState(status.run.state)
-      ? (status.run.theme as ConsensusTheme)
-      : null
-
-  const note = useMemo((): ReactNode => {
-    if (cuttingAxes) {
-      return '축 가르기 진행 중… 새 긴장이 채워질 때까지 기다립니다.'
-    }
-    if (downstreamBusy) {
-      const isFrames =
-        resumeFrom === 'doc' ||
-        stage === 'doc' ||
-        stage === 'consensus' ||
-        stage === 'fill'
-      const isSelect = resumeFrom === 'select' || stage === 'select'
-      if (isFrames) {
-        return (
-          <>
-            논지 생성 진행 중… 축은 확정된 상태입니다.{' '}
-            <Link className="text-link" to={themePath(theme, 'frames')}>
-              {NAV.frames}
-            </Link>
-            에서 확인하세요.
-          </>
-        )
-      }
-      if (isSelect) {
-        return (
-          <>
-            보고서 선별 진행 중… 축은 확정된 상태입니다.{' '}
-            <Link className="text-link" to={themePath(theme, 'select')}>
-              {NAV.select}
-            </Link>
-            에서 확인하세요.
-          </>
-        )
-      }
-      return (
-        <>
-          후속 단계 진행 중… (축은 확정됨){' '}
-          <Link className="text-link" to={themePath(theme, 'select')}>
-            {NAV.select}
-          </Link>
-          ·
-          <Link className="text-link" to={themePath(theme, 'frames')}>
-            {NAV.frames}
-          </Link>
-        </>
-      )
-    }
-    if (awaiting) return '축을 확인·수정한 뒤 선별 또는 전체를 이어가세요.'
-    if (otherBusyTheme)
-      return `${THEME_LABEL[otherBusyTheme]} 섹터에서 작업 중입니다.`
-    return '축 가르기를 실행하면 아래에 이번 긴장이 채워집니다.'
-  }, [
-    cuttingAxes,
-    downstreamBusy,
-    stage,
-    resumeFrom,
-    awaiting,
-    otherBusyTheme,
-    theme,
-  ])
-
-  const statusLabel = fetchError
-    ? 'API 연결 끊김'
-    : downstreamBusy && stage
-      ? labelStage(stage)
-      : openRun
-        ? labelRunState(openRun.state)
-        : '대기'
-
   return (
     <>
       <header className="monitor-header">
@@ -237,52 +143,24 @@ export function AxesPage() {
           {THEME_LABEL[theme]} · {NAV.axes}
         </h1>
         <p className="lede">
-          산업 긴장을 먼저 자르고, 확인한 뒤 보고서 선별로 이어갑니다.
+          산업 긴장을 분석 축으로 정리한 뒤, 확인한 다음 보고서 선별로 이어갑니다.
         </p>
       </header>
 
-      <section className={`panel badge-panel state-${badge}`}>
-        <p className="badge-label">이번 작업</p>
-        <p className="badge-value">{statusLabel}</p>
-        <p className="section-note">{note}</p>
-        {(busy || awaiting) && (
-          <button
-            type="button"
-            className="btn ghost"
-            disabled={requestingStop}
-            onClick={() => {
-              if (!window.confirm('종료를 요청할까요?')) return
-              void stopRun().catch((e) =>
-                window.alert(e instanceof Error ? e.message : '실패'),
-              )
-            }}
-          >
-            종료 요청
-          </button>
-        )}
-      </section>
-
       <section className="panel">
-        <div className="section-head">
-          <h2>축 가르기</h2>
-        </div>
         <button
           type="button"
           className="btn"
           disabled={!status.can_start || busy || requestingStart}
           onClick={() => void onCut()}
         >
-          {requestingStart ? '시작 중…' : '축 가르기 실행'}
+          {requestingStart ? '시작 중…' : '분석 축 잡기'}
         </button>
-        {!status.can_start && (
-          <p className="section-note">
-            다른 작업이 열려 있습니다.{' '}
-            <Link className="text-link" to={themePath(theme, 'ops')}>
-              {NAV.ops}
-            </Link>
-            에서 상태를 확인하세요.
-          </p>
-        )}
+        {!status.can_start ? (
+          <p className="section-note">{BLOCKED_BY_OPEN_RUN}</p>
+        ) : busy ? (
+          <p className="section-note">{BLOCKED_BY_THIS_SECTOR}</p>
+        ) : null}
       </section>
 
       {showWorkForm && (
@@ -291,20 +169,7 @@ export function AxesPage() {
             <h2>긴장 · 축</h2>
           </div>
           {cuttingAxes && (
-            <p className="section-note">가르는 중… 결과가 나오면 여기에 채워집니다.</p>
-          )}
-          {downstreamBusy && (
-            <p className="section-note">
-              축은 확정된 상태입니다. 진행은{' '}
-              <Link className="text-link" to={themePath(theme, 'select')}>
-                {NAV.select}
-              </Link>
-              ·
-              <Link className="text-link" to={themePath(theme, 'frames')}>
-                {NAV.frames}
-              </Link>
-              탭에서 보세요.
-            </p>
+            <p className="section-note">분석 축 잡는 중…</p>
           )}
           <label className="section-note" htmlFor="thesis">
             긴장 (한 줄)
@@ -372,19 +237,8 @@ export function AxesPage() {
               >
                 {continuing ? '진행 중…' : '이 축으로 전체 계속'}
               </button>
-              <Link className="btn ghost" to={themePath(theme, 'select')}>
-                {NAV.select} 보기
-              </Link>
             </div>
           )}
-        </section>
-      )}
-
-      {!openRun && !showLastAxes && (
-        <section className="panel">
-          <p className="section-note">
-            축 가르기를 실행하면 이번 긴장·축이 여기에 나타납니다.
-          </p>
         </section>
       )}
 
@@ -392,7 +246,6 @@ export function AxesPage() {
         <section className="panel">
           <div className="section-head">
             <h2>최근 축</h2>
-            <p className="section-note">이전 실행 결과 (읽기 전용)</p>
           </div>
           <p className="section-note">긴장</p>
           <p className="select-review-body">{lastCriteria.thesis}</p>
@@ -409,7 +262,6 @@ export function AxesPage() {
             ))}
           </ul>
           <p className="section-note">
-            선별·논지 결과는{' '}
             <Link className="text-link" to={themePath(theme, 'select')}>
               {NAV.select}
             </Link>
@@ -417,7 +269,6 @@ export function AxesPage() {
             <Link className="text-link" to={themePath(theme, 'frames')}>
               {NAV.frames}
             </Link>
-            에서 확인합니다.
           </p>
         </section>
       )}
