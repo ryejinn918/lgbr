@@ -1,20 +1,31 @@
 import { useEffect, useState } from 'react'
-import type { NewsArticleRecord, NewsArticlesResponse } from '../types'
+import type {
+  NewsArticleBodyCounts,
+  NewsArticleBodyFilter,
+  NewsArticleRecord,
+  NewsArticlesResponse,
+} from '../types'
 
 const POLL_MS = 5_000
+
+const EMPTY_COUNTS: NewsArticleBodyCounts = { all: 0, yes: 0, no: 0 }
 
 export function useNewsArticles(opts?: {
   source?: string
   q?: string
+  hasBody?: NewsArticleBodyFilter
   limit?: number
   offset?: number
 }) {
   const source = opts?.source ?? 'all'
   const q = opts?.q ?? ''
+  const hasBody = opts?.hasBody ?? 'all'
   const limit = opts?.limit ?? 30
   const offset = opts?.offset ?? 0
   const [items, setItems] = useState<NewsArticleRecord[]>([])
   const [total, setTotal] = useState(0)
+  const [bodyCounts, setBodyCounts] =
+    useState<NewsArticleBodyCounts>(EMPTY_COUNTS)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
@@ -27,6 +38,7 @@ export function useNewsArticles(opts?: {
           source,
           limit: String(limit),
           offset: String(offset),
+          has_body: hasBody,
         })
         if (q.trim()) params.set('q', q.trim())
         const res = await fetch(`/api/news-articles?${params}`)
@@ -35,6 +47,11 @@ export function useNewsArticles(opts?: {
         if (!cancelled) {
           setItems(data.items ?? [])
           setTotal(data.total ?? 0)
+          setBodyCounts({
+            all: data.body_counts?.all ?? 0,
+            yes: data.body_counts?.yes ?? 0,
+            no: data.body_counts?.no ?? 0,
+          })
           setFetchError(null)
           setLoading(false)
         }
@@ -52,7 +69,7 @@ export function useNewsArticles(opts?: {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [source, q, limit, offset])
+  }, [source, q, hasBody, limit, offset])
 
-  return { items, total, loading, fetchError }
+  return { items, total, bodyCounts, loading, fetchError }
 }

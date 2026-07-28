@@ -306,6 +306,7 @@ async def news_articles(request: Request) -> JSONResponse:
     result = list_articles(
         source=request.query_params.get("source") or "all",
         q=request.query_params.get("q"),
+        has_body=request.query_params.get("has_body") or "all",
         limit=limit,
         offset=offset,
     )

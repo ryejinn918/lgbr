@@ -1,7 +1,10 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useNewsArticles } from '../../hooks/useNewsArticles'
-import type { NewsArticleRecord } from '../../types'
+import type {
+  NewsArticleBodyFilter,
+  NewsArticleRecord,
+} from '../../types'
 import {
   formatPublishedAt,
   formatRelative,
@@ -12,15 +15,25 @@ const SOURCE_LABEL: Record<string, string> = {
   arg: 'ARG',
 }
 
+const BODY_FILTERS: NewsArticleBodyFilter[] = ['all', 'yes', 'no']
+
+const BODY_LABEL: Record<NewsArticleBodyFilter, string> = {
+  all: '전체',
+  yes: '수집됨',
+  no: '미수집',
+}
+
 export function ArticlesPage() {
   const [qDraft, setQDraft] = useState('')
   const [q, setQ] = useState('')
+  const [hasBody, setHasBody] = useState<NewsArticleBodyFilter>('all')
   const [offset, setOffset] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const limit = 30
   const articles = useNewsArticles({
     source: 'all',
     q,
+    hasBody,
     limit,
     offset,
   })
@@ -29,6 +42,22 @@ export function ArticlesPage() {
     if (!selectedId) return null
     return articles.items.find((item) => item.id === selectedId) ?? null
   }, [articles.items, selectedId])
+
+  const dirty = hasBody !== 'all' || q !== '' || qDraft !== ''
+
+  function commitBody(next: NewsArticleBodyFilter) {
+    setHasBody(next)
+    setOffset(0)
+    setSelectedId(null)
+  }
+
+  function resetFilters() {
+    setHasBody('all')
+    setQ('')
+    setQDraft('')
+    setOffset(0)
+    setSelectedId(null)
+  }
 
   function onRowClick(id: string) {
     setSelectedId((prev) => (prev === id ? null : id))
@@ -80,6 +109,28 @@ export function ArticlesPage() {
           </p>
         </div>
 
+        <div className="filter-row">
+          {BODY_FILTERS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={`filter-chip${hasBody === key ? ' active' : ''}`}
+              onClick={() => commitBody(key)}
+            >
+              {BODY_LABEL[key]} {articles.bodyCounts[key] ?? 0}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="filter-chip filter-reset"
+            disabled={!dirty}
+            onClick={resetFilters}
+            title="본문 필터·검색·페이지 초기화"
+          >
+            초기화
+          </button>
+        </div>
+
         <div className="report-sheet">
           <table className="report-table">
             <thead>
@@ -88,6 +139,7 @@ export function ArticlesPage() {
                 <th className="col-published">발행</th>
                 <th className="col-provider">섹션</th>
                 <th className="col-title">제목</th>
+                <th className="col-status">본문</th>
                 <th className="col-rpt">키</th>
                 <th className="col-seen">최근</th>
               </tr>
@@ -95,7 +147,7 @@ export function ArticlesPage() {
             <tbody>
               {articles.items.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     {articles.loading
                       ? '불러오는 중…'
                       : '아직 기사가 없습니다. 수집에서 리스트 발굴을 실행하세요.'}
@@ -104,6 +156,7 @@ export function ArticlesPage() {
               ) : (
                 articles.items.map((item) => {
                   const selectedRow = selectedId === item.id
+                  const hasBody = Boolean(item.has_body)
                   return (
                     <tr
                       key={item.id}
@@ -122,6 +175,18 @@ export function ArticlesPage() {
                       </td>
                       <td className="col-title report-title" title={item.title}>
                         {item.title}
+                      </td>
+                      <td className="col-status">
+                        <span
+                          className={`status-pill status-${hasBody ? 'downloaded' : 'listed'}`}
+                          title={
+                            hasBody
+                              ? undefined
+                              : item.body_fetch_error || undefined
+                          }
+                        >
+                          {hasBody ? '수집됨' : '미수집'}
+                        </span>
                       </td>
                       <td className="col-rpt mono">{item.source_key}</td>
                       <td
@@ -265,7 +330,7 @@ export function ArticlesPage() {
                       </>
                     ) : (
                       <>
-                        본문이 아직 없습니다.{' '}
+                        본문을 아직 수집하지 않았습니다.{' '}
                         <Link to="/collect/arg/body/fetch">본문 채우기</Link>
                         로 가져오거나 원문 링크로 확인하세요.
                       </>

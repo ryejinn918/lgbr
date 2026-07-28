@@ -340,12 +340,23 @@ export type NewsArticleRecord = {
   has_body?: boolean
 }
 
+export type NewsArticleBodyFilter = 'all' | 'yes' | 'no'
+
+export type NewsArticleBodyCounts = {
+  all: number
+  yes: number
+  no: number
+  [key: string]: number
+}
+
 export type NewsArticlesResponse = {
   ok?: boolean
   source?: string
+  has_body?: NewsArticleBodyFilter | string
   items: NewsArticleRecord[]
   total: number
   limit: number
   offset: number
+  body_counts?: NewsArticleBodyCounts
   message?: string
 }

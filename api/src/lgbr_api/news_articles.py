@@ -11,12 +11,14 @@ from lgbr_api.db import connect
 
 # Phase 1 allowlist for the other-media document lane.
 OTHER_MEDIA_SOURCES = frozenset({"arg"})
+VALID_BODY = frozenset({"all", "yes", "no"})
 
 
 def list_articles(
     *,
     source: str | None = "all",
     q: str | None = None,
+    has_body: str | None = "all",
     limit: int = 30,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -44,6 +46,7 @@ def list_articles(
             ),
             "items": [],
             "total": 0,
+            "body_counts": {},
         }
 
     q_s = (q or "").strip()
@@ -52,9 +55,34 @@ def list_articles(
         like = f"%{q_s}%"
         params.extend([like, like, like])
 
+    body_s = (has_body or "all").strip().lower()
+    if body_s not in VALID_BODY:
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "has_body must be all, yes, or no",
+            "items": [],
+            "total": 0,
+            "body_counts": {},
+        }
+
+    # Counts ignore the body filter (like report status chips).
+    count_where_sql = " AND ".join(where)
+    count_params = list(params)
+
+    if body_s == "yes":
+        where.append(
+            "(body_text IS NOT NULL AND BTRIM(body_text) <> '')"
+        )
+    elif body_s == "no":
+        where.append(
+            "(body_text IS NULL OR BTRIM(body_text) = '')"
+        )
+
     where_sql = " AND ".join(where)
     with connect() as conn:
         with conn.cursor() as cur:
+            body_counts = _body_counts(cur, count_where_sql, count_params)
             cur.execute(
                 f"SELECT COUNT(*) AS n FROM news_articles WHERE {where_sql}",
                 params,
@@ -81,10 +109,38 @@ def list_articles(
         "ok": True,
         "status": 200,
         "source": source_out,
+        "has_body": body_s,
         "items": items,
         "total": total,
         "limit": limit,
         "offset": offset,
+        "body_counts": body_counts,
+    }
+
+
+def _body_counts(
+    cur: Any, where_sql: str, params: list[Any]
+) -> dict[str, int]:
+    cur.execute(
+        f"""
+        SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (
+                WHERE body_text IS NOT NULL AND BTRIM(body_text) <> ''
+            )::int AS yes,
+            COUNT(*) FILTER (
+                WHERE body_text IS NULL OR BTRIM(body_text) = ''
+            )::int AS no
+        FROM news_articles
+        WHERE {where_sql}
+        """,
+        params,
+    )
+    row = dict(cur.fetchone())
+    return {
+        "all": int(row.get("total") or 0),
+        "yes": int(row.get("yes") or 0),
+        "no": int(row.get("no") or 0),
     }
 
 
