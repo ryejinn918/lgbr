@@ -22,7 +22,7 @@ export const SOURCE_MEANS: Record<
   { list: ListMeans[]; body: BodyMeans[] }
 > = {
   fnguide: { list: ['search'], body: ['download'] },
-  arg: { list: ['feed'], body: [] },
+  arg: { list: ['feed'], body: ['fetch'] },
 }
 
 export function defaultCollectPath(source: CollectSource): string {

@@ -1,6 +1,6 @@
 """Source-agnostic collection jobs (list expansion / body fill).
 
-Separate from fnguide_crawls. Phase 1: feed list-expansion only.
+Separate from fnguide_crawls. Feed + ARG fetch_body.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from lgbr_api.db import connect
 
 ROOT = Path(__file__).resolve().parents[3]
 FEED_LOG = ROOT / ".crawler" / "feed.log"
+FETCH_BODY_LOG = ROOT / ".crawler" / "fetch_body.log"
 
 JOB_STATE_LABELS = {
     "starting": "시작 중",
@@ -266,6 +267,160 @@ def start_feed(
         "state": job["state"],
         "label": job["label"],
         "message": f"{source_s} feed 목록 확장을 시작했습니다.",
+        "job": job,
+        "progress": job.get("progress") or {},
+        "can_start": False,
+    }
+
+
+DEFAULT_BODY_LIMIT = 200
+MIN_BODY_LIMIT = 1
+MAX_BODY_LIMIT = 1000
+DEFAULT_DELAY_SECONDS = 1.0
+MIN_DELAY_SECONDS = 0.5
+MAX_DELAY_SECONDS = 5.0
+BODY_ALLOWLIST = frozenset({"arg"})
+
+
+def start_fetch_body(
+    *,
+    source: str = "arg",
+    limit: int | None = None,
+    delay_seconds: float | None = None,
+) -> dict[str, Any]:
+    source_s = (source or "").strip().lower()
+    if source_s not in BODY_ALLOWLIST:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                "source must be one of: "
+                + ", ".join(sorted(BODY_ALLOWLIST))
+            ),
+            "job": None,
+            "can_start": False,
+        }
+
+    lim = DEFAULT_BODY_LIMIT if limit is None else int(limit)
+    if lim < MIN_BODY_LIMIT or lim > MAX_BODY_LIMIT:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                f"limit must be between {MIN_BODY_LIMIT} and {MAX_BODY_LIMIT}"
+            ),
+            "job": None,
+            "can_start": False,
+        }
+
+    delay = (
+        DEFAULT_DELAY_SECONDS
+        if delay_seconds is None
+        else float(delay_seconds)
+    )
+    if delay < MIN_DELAY_SECONDS or delay > MAX_DELAY_SECONDS:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                f"delay_seconds must be between "
+                f"{MIN_DELAY_SECONDS} and {MAX_DELAY_SECONDS}"
+            ),
+            "job": None,
+            "can_start": False,
+        }
+
+    reconcile_stale_jobs()
+    open_job = _get_open(source=source_s, capability="fetch_body")
+    if open_job:
+        job = _serialize(open_job)
+        return {
+            "ok": False,
+            "status": 409,
+            "label": job["label"],
+            "message": "이미 해당 소스 본문 채우기 잡이 실행 중입니다.",
+            "job": job,
+            "can_start": False,
+        }
+
+    try:
+        job = _create_job(source=source_s, capability="fetch_body")
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": 500,
+            "label": "오류",
+            "message": f"잡 행 생성 실패: {exc}",
+            "job": None,
+            "can_start": False,
+        }
+
+    python = ROOT / ".venv" / "bin" / "python"
+    if not python.is_file():
+        python = Path(sys.executable)
+
+    FETCH_BODY_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log_f = open(FETCH_BODY_LOG, "a", encoding="utf-8")  # noqa: SIM115
+    try:
+        log_f.write(
+            f"\n--- fetch_body start {_now().isoformat()} "
+            f"id={job['id']} source={source_s} "
+            f"limit={lim} delay={delay} ---\n"
+        )
+        log_f.flush()
+        subprocess.Popen(
+            [
+                str(python),
+                "-m",
+                "crawler",
+                "fetch-body",
+                "run",
+                "--job-id",
+                job["id"],
+                "--limit",
+                str(lim),
+                "--delay",
+                str(delay),
+            ],
+            cwd=str(ROOT),
+            stdout=log_f,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env=os.environ.copy(),
+        )
+    except Exception as exc:
+        log_f.close()
+        try:
+            _fail_job(job["id"], message=str(exc))
+        except Exception as db_exc:
+            return {
+                "ok": False,
+                "status": 500,
+                "label": "오류",
+                "message": (
+                    f"fetch_body 시작 실패: {exc}; DB mark failed: {db_exc}"
+                ),
+                "job": job,
+                "can_start": False,
+            }
+        return {
+            "ok": False,
+            "status": 500,
+            "label": "오류",
+            "message": f"fetch_body 시작 실패: {exc}",
+            "job": None,
+            "can_start": False,
+        }
+
+    return {
+        "ok": True,
+        "status": 202,
+        "state": job["state"],
+        "label": job["label"],
+        "message": f"{source_s} 본문 채우기를 시작했습니다.",
         "job": job,
         "progress": job.get("progress") or {},
         "can_start": False,

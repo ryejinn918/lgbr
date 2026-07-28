@@ -64,7 +64,8 @@ def list_articles(
                 f"""
                 SELECT
                     id, source, source_key, title, snippet, url,
-                    published_at, publisher, first_seen_at, last_seen_at, attrs
+                    published_at, publisher, first_seen_at, last_seen_at, attrs,
+                    body_text, body_fetched_at, body_fetch_error
                 FROM news_articles
                 WHERE {where_sql}
                 ORDER BY
@@ -108,4 +109,6 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     if isinstance(out.get("attrs"), dict):
         section = out["attrs"].get("section")
     out["section"] = section or out.get("publisher")
+    body = out.get("body_text")
+    out["has_body"] = bool(body and str(body).strip())
     return out

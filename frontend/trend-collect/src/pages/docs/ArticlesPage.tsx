@@ -44,7 +44,9 @@ export function ArticlesPage() {
         <h2>기사</h2>
         <p className="section-note">
           매체 공통 기사 리스트 ·{' '}
-          <Link to="/collect/arg/list/feed">ARG 피드 실행</Link>
+          <Link to="/collect/arg/list/feed">ARG 피드</Link>
+          {' · '}
+          <Link to="/collect/arg/body/fetch">ARG 본문</Link>
         </p>
       </div>
 
@@ -244,8 +246,30 @@ export function ArticlesPage() {
                 <div>
                   <dt>본문</dt>
                   <dd>
-                    본문 채우기가 아직 없습니다. 지금은 리스트 메타만 저장하며,
-                    원문은 위 링크로 확인하세요.
+                    {selected.has_body && selected.body_text ? (
+                      <pre
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          margin: 0,
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {selected.body_text}
+                      </pre>
+                    ) : selected.body_fetch_error ? (
+                      <>
+                        본문 채우기 실패:{' '}
+                        {selected.body_fetch_error}
+                        {' · '}
+                        <Link to="/collect/arg/body/fetch">다시 시도</Link>
+                      </>
+                    ) : (
+                      <>
+                        본문이 아직 없습니다.{' '}
+                        <Link to="/collect/arg/body/fetch">본문 채우기</Link>
+                        로 가져오거나 원문 링크로 확인하세요.
+                      </>
+                    )}
                   </dd>
                 </div>
               </dl>

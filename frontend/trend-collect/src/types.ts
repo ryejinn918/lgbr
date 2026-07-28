@@ -334,6 +334,10 @@ export type NewsArticleRecord = {
   first_seen_at: string | null
   last_seen_at: string | null
   attrs?: Record<string, unknown>
+  body_text?: string | null
+  body_fetched_at?: string | null
+  body_fetch_error?: string | null
+  has_body?: boolean
 }
 
 export type NewsArticlesResponse = {

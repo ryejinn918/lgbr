@@ -7,6 +7,7 @@ import {
 } from '../../lib/collectNav'
 import { CrawlPage } from '../CrawlPage'
 import { ArgFeedRunPage } from './ArgFeedRunPage'
+import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
 import { FnGuideDownloadPage } from './FnGuideDownloadPage'
 
 type Ctx = {
@@ -34,6 +35,9 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'arg' && ctx.stage === 'list' && ctx.means === 'feed') {
     return <ArgFeedRunPage />
+  }
+  if (ctx.source === 'arg' && ctx.stage === 'body' && ctx.means === 'fetch') {
+    return <ArgFetchBodyRunPage />
   }
   return <Navigate to={defaultCollectPath(ctx.source)} replace />
 }

@@ -18,6 +18,7 @@ from lgbr_api.collection import (
     get_current_job,
     request_stop as collection_request_stop,
     start_feed,
+    start_fetch_body,
 )
 from lgbr_api.consensus_api import (
     compare_chat,
@@ -194,6 +195,55 @@ async def collection_start(request: Request) -> JSONResponse:
     if not isinstance(body, dict):
         body = {}
     source = str(body.get("source") or "arg")
+    capability = str(body.get("capability") or "feed").strip().lower()
+
+    if capability == "fetch_body":
+        limit_raw = body.get("limit")
+        delay_raw = body.get("delay_seconds")
+        try:
+            limit = int(limit_raw) if limit_raw is not None else None
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "label": "오류",
+                    "message": "limit must be an integer",
+                    "job": None,
+                    "can_start": False,
+                },
+                status_code=400,
+            )
+        try:
+            delay = float(delay_raw) if delay_raw is not None else None
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "label": "오류",
+                    "message": "delay_seconds must be a number",
+                    "job": None,
+                    "can_start": False,
+                },
+                status_code=400,
+            )
+        result = start_fetch_body(
+            source=source, limit=limit, delay_seconds=delay
+        )
+        status = int(result.pop("status", 200 if result.get("ok") else 400))
+        return JSONResponse(result, status_code=status)
+
+    if capability != "feed":
+        return JSONResponse(
+            {
+                "ok": False,
+                "label": "오류",
+                "message": "capability must be 'feed' or 'fetch_body'",
+                "job": None,
+                "can_start": False,
+            },
+            status_code=400,
+        )
+
     max_pages = body.get("max_pages")
     period_months = body.get("period_months")
     try:

@@ -20,6 +20,15 @@ from crawler.feed_job import (
     MIN_PERIOD_MONTHS,
     run_feed_job,
 )
+from crawler.fetch_body_job import (
+    DEFAULT_LIMIT as FETCH_BODY_DEFAULT_LIMIT,
+    DEFAULT_REQUEST_DELAY_SECONDS,
+    MAX_DELAY_SECONDS,
+    MAX_LIMIT as FETCH_BODY_MAX_LIMIT,
+    MIN_DELAY_SECONDS,
+    MIN_LIMIT as FETCH_BODY_MIN_LIMIT,
+    run_fetch_body_job,
+)
 from crawler.fnguide_session import (
     DEFAULT_IDLE_SECONDS,
     DEFAULT_TTL_SECONDS,
@@ -145,6 +154,46 @@ def main() -> None:
         help="Show latest/open feed collection job",
     )
     feed_current.add_argument("--source", default=None)
+
+    fetch_body_parser = sub.add_parser(
+        "fetch-body",
+        help="Body-fill worker (started by API with --job-id)",
+    )
+    fetch_body_sub = fetch_body_parser.add_subparsers(dest="fetch_body_command")
+    fetch_body_run = fetch_body_sub.add_parser(
+        "run",
+        help="Claim collection_jobs row and fetch article bodies",
+    )
+    fetch_body_run.add_argument(
+        "--job-id",
+        required=True,
+        help="collection_jobs id created by POST /api/collection/start",
+    )
+    fetch_body_run.add_argument(
+        "--limit",
+        type=int,
+        default=FETCH_BODY_DEFAULT_LIMIT,
+        help=(
+            f"Max pending articles to fetch "
+            f"(default {FETCH_BODY_DEFAULT_LIMIT}, "
+            f"{FETCH_BODY_MIN_LIMIT}–{FETCH_BODY_MAX_LIMIT})"
+        ),
+    )
+    fetch_body_run.add_argument(
+        "--delay",
+        type=float,
+        default=DEFAULT_REQUEST_DELAY_SECONDS,
+        help=(
+            f"Seconds between requests "
+            f"(default {DEFAULT_REQUEST_DELAY_SECONDS}, "
+            f"{MIN_DELAY_SECONDS}–{MAX_DELAY_SECONDS})"
+        ),
+    )
+    fetch_body_current = fetch_body_sub.add_parser(
+        "current",
+        help="Show latest/open fetch_body collection job",
+    )
+    fetch_body_current.add_argument("--source", default=None)
 
     session_parser = sub.add_parser(
         "session",
@@ -312,6 +361,50 @@ def main() -> None:
                 raise SystemExit(1)
             return
         parser.error(f"Unknown feed command: {feed_command}")
+
+    if command == "fetch-body":
+        fetch_command = args.fetch_body_command or "current"
+        if fetch_command == "current":
+            source = getattr(args, "source", None)
+            open_job = collection_jobs_store.get_open_job(
+                source=source, capability="fetch_body"
+            )
+            latest = open_job or collection_jobs_store.get_latest_job(
+                source=source, capability="fetch_body"
+            )
+            print(
+                json.dumps(
+                    latest
+                    or {
+                        "state": "ended",
+                        "label": "종료",
+                        "job": None,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if fetch_command == "run":
+            try:
+                result = run_fetch_body_job(
+                    args.job_id,
+                    limit=args.limit,
+                    delay_seconds=args.delay,
+                )
+            except Exception as exc:
+                print(
+                    json.dumps(
+                        {"state": "error", "message": str(exc)},
+                        ensure_ascii=False,
+                    )
+                )
+                raise SystemExit(1) from exc
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            if result.get("state") == "error":
+                raise SystemExit(1)
+            return
+        parser.error(f"Unknown fetch-body command: {fetch_command}")
 
     if command == "session":
         session_command = args.session_command or "current"

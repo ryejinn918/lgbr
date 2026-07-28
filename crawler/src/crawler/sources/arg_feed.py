@@ -9,15 +9,12 @@ from typing import Any
 from urllib.parse import urlencode, urljoin
 from zoneinfo import ZoneInfo
 
-import httpx
+from curl_cffi.requests import Session
+
+from crawler.sources.arg_http import AJAX_URL, BASE, LIST_URL, get_json, make_session
 
 SOURCE = "arg"
-BASE = "https://www.arg.co.kr"
-LIST_URL = f"{BASE}/news/articleList.html?view_type=sm"
-AJAX_URL = f"{BASE}/news/ajaxArticlePaging.php"
 KST = ZoneInfo("Asia/Seoul")
-
-_USER_AGENT = "lgbr-feed/0.1 (+local; list-meta only)"
 
 
 @dataclass(frozen=True)
@@ -33,7 +30,7 @@ class ArgListItem:
 def fetch_page(
     page: int,
     *,
-    client: httpx.Client | None = None,
+    client: Session | None = None,
     list_per_page: int = 20,
     total: str = "0",
 ) -> list[ArgListItem]:
@@ -67,19 +64,9 @@ def fetch_page(
         "box_idxno": "",
     }
     own = client is None
-    http = client or httpx.Client(
-        timeout=30.0,
-        headers={
-            "User-Agent": _USER_AGENT,
-            "Accept": "application/json",
-            "Referer": LIST_URL,
-            "X-Requested-With": "XMLHttpRequest",
-        },
-    )
+    http = client or make_session(accept="application/json")
     try:
-        resp = http.get(AJAX_URL, params=params)
-        resp.raise_for_status()
-        payload = resp.json()
+        payload = get_json(http, AJAX_URL, params=params)
     finally:
         if own:
             http.close()

@@ -7,11 +7,10 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-import httpx
-
 from crawler import collection_jobs_store, news_articles_store
 from crawler.sources import FEED_ALLOWLIST
 from crawler.sources import arg_feed
+from crawler.sources.arg_http import make_session
 
 DEFAULT_MAX_PAGES = 50
 DEFAULT_LIST_PER_PAGE = 20
@@ -128,15 +127,8 @@ def _run_arg_feed(
     progress["cutoff"] = cutoff.isoformat()
     collection_jobs_store.set_progress(job_id, progress)
 
-    with httpx.Client(
-        timeout=30.0,
-        headers={
-            "User-Agent": "lgbr-feed/0.1 (+local; list-meta only)",
-            "Accept": "application/json",
-            "Referer": arg_feed.LIST_URL,
-            "X-Requested-With": "XMLHttpRequest",
-        },
-    ) as client:
+    client = make_session(accept="application/json")
+    try:
         for page in range(1, max_pages + 1):
             if collection_jobs_store.stop_requested(job_id):
                 stop_reason = "stop_requested"
@@ -221,6 +213,8 @@ def _run_arg_feed(
             if hit_cutoff:
                 stop_reason = "older_than_period"
                 break
+    finally:
+        client.close()
 
     message = {
         "older_than_period": f"최근 {period_months}개월 구간 도달",
