@@ -22,12 +22,34 @@ DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _SEOUL = ZoneInfo("Asia/Seoul")
 
-THEMES = frozenset({"datacenter", "ai", "physical_ai"})
-THEME_ABBREV = {"datacenter": "dc", "ai": "ai", "physical_ai": "pai"}
+THEMES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
+THEME_ABBREV = {
+    "datacenter": "dc",
+    "ai": "ai",
+    "physical_ai": "pai",
+    "appliance": "ap",
+    "display": "dp",
+    "automotive": "am",
+    "petrochemical": "pc",
+}
 DEFAULT_QUESTION = {
     "datacenter": "데이터센터, 지금 뭐 보면 돼?",
     "ai": "AI, 지금 뭐 보면 돼?",
-    "physical_ai": "Physical AI, 지금 뭐 보면 돼?",
+    "physical_ai": "피지컬 AI, 지금 뭐 보면 돼?",
+    "appliance": "가전, 지금 뭐 보면 돼?",
+    "display": "디스플레이, 지금 뭐 보면 돼?",
+    "automotive": "자동차, 지금 뭐 보면 돼?",
+    "petrochemical": "석유화학, 지금 뭐 보면 돼?",
 }
 STATE_LABELS = {
     "starting": "시작 중",
@@ -546,7 +568,10 @@ def start_run(*, theme: str, question: str | None = None) -> dict[str, Any]:
         return {
             "ok": False,
             "status": 400,
-            "message": "theme must be datacenter, ai, or physical_ai",
+            "message": (
+                "theme must be datacenter, ai, physical_ai, "
+                "appliance, display, automotive, or petrochemical"
+            ),
             "can_start": False,
             "run": None,
         }

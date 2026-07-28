@@ -10,11 +10,25 @@ from psycopg.types.json import Jsonb
 
 from consensus.db import connect
 
-THEMES = frozenset({"datacenter", "ai", "physical_ai"})
+THEMES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
 DEFAULT_QUESTION = {
     "datacenter": "데이터센터, 지금 뭐 보면 돼?",
     "ai": "AI, 지금 뭐 보면 돼?",
-    "physical_ai": "Physical AI, 지금 뭐 보면 돼?",
+    "physical_ai": "피지컬 AI, 지금 뭐 보면 돼?",
+    "appliance": "가전, 지금 뭐 보면 돼?",
+    "display": "디스플레이, 지금 뭐 보면 돼?",
+    "automotive": "자동차, 지금 뭐 보면 돼?",
+    "petrochemical": "석유화학, 지금 뭐 보면 돼?",
 }
 # Consensus pool: only reports with published_at within this many calendar months.
 PERIOD_MONTHS_DEFAULT = 3
@@ -402,6 +416,8 @@ def list_selected_docs_for_refill(run_id: str) -> list[dict[str, Any]]:
                 d.artifact_id::text AS artifact_id,
                 r.source_key,
                 r.title,
+                r.attrs->>'provider' AS provider,
+                r.published_at,
                 r.file_path,
                 a.compress_md,
                 a.content_hash,

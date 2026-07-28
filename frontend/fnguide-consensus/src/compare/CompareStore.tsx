@@ -19,7 +19,15 @@ import {
 } from './compareState'
 
 const STORAGE_KEY = 'lgbr.compare.v1'
-const THEMES: ConsensusTheme[] = ['datacenter', 'ai', 'physical_ai']
+const THEMES: ConsensusTheme[] = [
+  'datacenter',
+  'ai',
+  'physical_ai',
+  'appliance',
+  'display',
+  'automotive',
+  'petrochemical',
+]
 
 type PersistedColumn = {
   messages: UiMessage[]
@@ -73,6 +81,10 @@ function emptyStateByTheme(): StateByTheme {
     datacenter: initialCompareState(),
     ai: initialCompareState(),
     physical_ai: initialCompareState(),
+    appliance: initialCompareState(),
+    display: initialCompareState(),
+    automotive: initialCompareState(),
+    petrochemical: initialCompareState(),
   }
 }
 

@@ -12,17 +12,33 @@ from consensus.select import (
 
 
 def test_select_system_requires_korean_and_omit_summary():
-    for theme in ("ai", "datacenter", "physical_ai"):
+    for theme in (
+        "ai",
+        "datacenter",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    ):
         prompt = select_system_prompt(theme)
         assert "Korean" in prompt
         assert "Omit summary" in prompt
         assert "omitted[]" in prompt
+        assert "humans" in prompt
+        assert "(provider)" in prompt
+        assert "published_at" in prompt
+        assert "short_title alone" in prompt
 
 
 def test_pool_themes_ai_includes_datacenter():
     assert pool_themes_for("ai") == ("ai", "datacenter")
     assert pool_themes_for("datacenter") == ("datacenter",)
     assert pool_themes_for("physical_ai") == ("physical_ai",)
+    assert pool_themes_for("appliance") == ("appliance",)
+    assert pool_themes_for("display") == ("display",)
+    assert pool_themes_for("automotive") == ("automotive",)
+    assert pool_themes_for("petrochemical") == ("petrochemical",)
 
 
 def test_build_audit_cards_clips_quality_json():

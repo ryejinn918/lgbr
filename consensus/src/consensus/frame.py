@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
+from pathlib import Path
 
+from consensus.cite import HUMAN_CITE_RULE, human_doc_header
 from consensus.llm import DEFAULT_MODEL, chat, log
 
 
@@ -17,7 +18,7 @@ def build_consensus(
 ) -> str:
     out_dir.mkdir(parents=True, exist_ok=True)
     joined = "\n\n========\n\n".join(
-        f"### COMPRESS: {c['slug']} | {Path(c.get('source_pdf') or '').name}\n"
+        f"### COMPRESS: {human_doc_header(provider=c.get('provider'), title=c.get('short_title') or c.get('title'), published_at=c.get('published_at'))}\n"
         f"{c['compress']}"
         for c in compress_cards
     )
@@ -42,7 +43,7 @@ Rules:
 - State overlap (consensus) vs one-sided angles
 - Leave slots so the frame can grow with detail later
 - Do not invent facts absent from the compress views
-- Cite slug as provenance
+- {HUMAN_CITE_RULE}
 
 Compress views:
 {joined}
@@ -59,7 +60,7 @@ Output (English headers; Korean body OK for Korean sources):
 ## Major pillars
 ### 1. ...
 - Role of this pillar:
-- Consensus (which compress views support it):
+- Consensus (which compress views support it; end bullets with short footnotes):
 - Slots to fill later:
 ### 2. ...
 ### 3. ...
@@ -79,7 +80,8 @@ Output (English headers; Korean body OK for Korean sources):
                     "Structure over detail. No invented facts. "
                     "Keep each major pillar a single coherent axis — never mash "
                     "unrelated domains into one pillar. "
-                    "English section headers; Korean body when sources are Korean."
+                    "English section headers; Korean body when sources are Korean. "
+                    + HUMAN_CITE_RULE
                 ),
             },
             {"role": "user", "content": prompt},

@@ -6,11 +6,17 @@ import json
 from typing import Any
 
 from consensus import runs_store
+from consensus.cite import (
+    format_published_at,
+    short_provider,
+    short_report_title,
+)
 from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
 from consensus.runs_store import PERIOD_MONTHS_DEFAULT
 
 CORE_MAX = 10
 AI_POOL_THEMES = ("ai", "datacenter")
+COVERAGE_NOTES_MAX = 2500
 
 ROLE_CORE = "selected"
 ROLE_BIBLIO = "fill_extra"
@@ -19,6 +25,10 @@ THEME_LABEL_KO = {
     "datacenter": "데이터센터",
     "ai": "AI·AIDC",
     "physical_ai": "피지컬 AI",
+    "appliance": "가전",
+    "display": "디스플레이",
+    "automotive": "자동차",
+    "petrochemical": "석유화학",
 }
 
 # Extra sector cues for the pack LLM (English; output fields stay Korean).
@@ -37,6 +47,26 @@ THEME_SELECT_HINTS = {
         "Axes often include robotics, factory automation, sensors/actuators, and "
         "deployment constraints. Prefer structural industry analyses over thin "
         "thematic or equity-only notes."
+    ),
+    "appliance": (
+        "Axes often include demand cycles, channel/mix, component cost, and "
+        "regional competition. Prefer structural industry analyses over thin "
+        "single-name or promo-driven notes."
+    ),
+    "display": (
+        "Axes often include panel supply/demand, technology migration (OLED/LCD), "
+        "equipment/materials, and end-market mix. Prefer mechanism-dense industry "
+        "notes over thin equity-only briefs."
+    ),
+    "automotive": (
+        "Axes often include EV/ICE mix, parts/value-chain, demand and policy, and "
+        "OEM vs supplier dynamics. Prefer structural industry analyses over thin "
+        "thematic or single-name notes."
+    ),
+    "petrochemical": (
+        "Axes often include feedstock spreads, capacity cycles, downstream demand, "
+        "and China/global supply. Prefer mechanism-dense industry notes over thin "
+        "macro or equity-only briefs."
     ),
 }
 
@@ -57,6 +87,17 @@ sell-side notes. Choose which reports belong in the pack.
 
 Language (mandatory):
 - Write coverage_notes, pillar_sketch, and every why field in Korean.
+- Those fields are read by humans (analysts). Report naming in prose:
+  - Allowed card fields only: provider, short_title, published_at.
+  - Always lead with provider. If unambiguous, (provider) alone is fine
+    e.g. (IBK). Otherwise (provider, short_title)
+    e.g. (IBK, 자동차/2차전지 Monthly).
+  - If still ambiguous (same series), add published_at:
+    (provider, short_title, published_at)
+    e.g. (IBK, 자동차/2차전지 Monthly, 2026-06-12).
+  - Do not cite short_title alone. Never use report_id, title, UUID, or hex
+    in prose. report_id belongs only in core[].report_id and
+    bibliography[].report_id.
 
 Sector focus ({sector}):
 - {hint}
@@ -120,14 +161,16 @@ def build_audit_cards(pool: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 qj = {}
         if not isinstance(qj, dict):
             qj = {}
-        pub = r.get("published_at")
+        title = str(r.get("title") or "")
         cards.append(
             {
                 "report_id": str(r["id"]),
-                "title": str(r.get("title") or ""),
+                "provider": short_provider(str(r.get("provider") or "")),
+                "short_title": short_report_title(title),
+                "title": title,
                 "theme": str(r.get("theme") or ""),
                 "page_count": r.get("page_count"),
-                "published_at": pub.isoformat() if hasattr(pub, "isoformat") else str(pub or ""),
+                "published_at": format_published_at(r.get("published_at")),
                 "topic": _clip(qj.get("topic"), 200),
                 "framework_summary": _clip(qj.get("framework_summary"), 500),
                 "rationale": _clip(qj.get("rationale"), 400),
@@ -177,7 +220,7 @@ def parse_pack_selection(
         sketch = []
     sketch_s = [_clip(x, 160) for x in sketch if str(x).strip()]
     meta = {
-        "coverage_notes": _clip(raw.get("coverage_notes"), 1000),
+        "coverage_notes": _clip(raw.get("coverage_notes"), COVERAGE_NOTES_MAX),
         "pillar_sketch": sketch_s,
         "core_max": core_max,
     }
@@ -195,9 +238,28 @@ def llm_select_pack(
         raise RuntimeError("no audit cards for pack selection")
     allowed = {c["report_id"] for c in cards}
     sector = THEME_LABEL_KO.get(theme, theme)
+    # Keep report_id for machine selection; surface human labels first in JSON order.
+    llm_cards = [
+        {
+            "provider": c.get("provider"),
+            "short_title": c.get("short_title"),
+            "published_at": c.get("published_at"),
+            "title": c.get("title"),
+            "theme": c.get("theme"),
+            "page_count": c.get("page_count"),
+            "topic": c.get("topic"),
+            "framework_summary": c.get("framework_summary"),
+            "rationale": c.get("rationale"),
+            "report_id": c.get("report_id"),
+        }
+        for c in cards
+    ]
     user = (
-        f"Select a consensus pack for {sector}. core_max={core_max}.\n\n"
-        f"Cards JSON:\n{json.dumps(cards, ensure_ascii=False)}"
+        f"Select a consensus pack for {sector}. core_max={core_max}.\n"
+        "In coverage_notes / why / pillar_sketch name reports with provider first: "
+        "`(provider)` if unambiguous, else `(provider, short_title)` or "
+        "`(provider, short_title, published_at)` — never report_id / short_title alone.\n\n"
+        f"Cards JSON:\n{json.dumps(llm_cards, ensure_ascii=False)}"
     )
     raw_text, _ = chat(
         [

@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from consensus.cite import HUMAN_CITE_RULE, human_doc_header
 from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
 
 SLICE_CHAR_CAP = 12_000
@@ -122,8 +123,13 @@ def _build_reopen_index(
         ids = _slice_inventory(doc_dir) if doc_dir and doc_dir.is_dir() else []
         slug_slices[slug] = ids
         reopen = _extract_reopen_section(str(card.get("compress") or ""))
+        label = human_doc_header(
+            provider=card.get("provider"),
+            title=card.get("short_title") or card.get("title"),
+            published_at=card.get("published_at"),
+        )
         blocks.append(
-            f"### INDEX slug={slug}\n"
+            f"### INDEX slug={slug} | {label}\n"
             f"valid_slice_ids: {json.dumps(ids, ensure_ascii=False)}\n"
             f"{reopen}\n"
         )
@@ -276,15 +282,28 @@ def fill_frame(
     if not dossiers:
         raise RuntimeError("fill: no body opens succeeded")
 
+    slug_label = {
+        str(c.get("slug") or ""): human_doc_header(
+            provider=c.get("provider"),
+            title=c.get("short_title") or c.get("title"),
+            published_at=c.get("published_at"),
+        )
+        for c in cards
+        if c.get("slug")
+    }
     dossier_txt = "\n\n========\n\n".join(
-        f"### OPEN {d['slug']}/{d['slice_id']} | slot={d['slot']} | why={d['why']}\n{d['body']}"
+        f"### OPEN {slug_label.get(d['slug'], '보고서')} | "
+        f"slot={d['slot']} | why={d['why']}\n"
+        f"{d['body']}"
         for d in dossiers
     )
     prompt = f"""Preserve the locked frame's roof/pillar titles. Thicken pillars using **only**
 sentences/numbers that actually appear in the OPEN bodies below.
 Never invent numbers, company facts, or prices missing from OPEN.
 Absorb filled TARGET SLOTS into Evidence — do **not** copy "Slots to fill later"
-under pillars. Cite slug in evidence.
+under pillars.
+{HUMAN_CITE_RULE}
+Use each OPEN header's human label in footnotes.
 
 The output must be a **standalone, self-contained document**. Forbidden shorthand:
 (unchanged), same as above, as in locked frame, 중략, 생략, and similar.
@@ -310,7 +329,7 @@ Output (English headers; Korean body OK for Korean sources):
 ### 1. (existing pillar title)
 - **Role of this pillar**
 - **Claim**
-- **Evidence (number / date / slug)**
+- **Evidence (number / date; end each bullet with short footnote)**
 - **Watch**
 (dense; self-contained; NO "Slots to fill later" under pillars)
 
@@ -330,7 +349,8 @@ Output (English headers; Korean body OK for Korean sources):
                     "Use Pillar enrichment with Role/Claim/Evidence/Watch. "
                     "Never emit per-pillar 'Slots to fill later'. "
                     "Still-empty slots = only targets not filled from OPEN. "
-                    "English headers; Korean body when sources are Korean."
+                    "English headers; Korean body when sources are Korean. "
+                    + HUMAN_CITE_RULE
                 ),
             },
             {"role": "user", "content": prompt},

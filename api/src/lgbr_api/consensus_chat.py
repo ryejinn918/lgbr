@@ -234,8 +234,12 @@ def _build_system(
     base = (
         f"Today is {today} in Asia/Seoul.\n"
         "You are writing for LG Economic Research Institute (LGERI) practitioners. "
-        "Be concise and logical. Ground every claim in a source "
-        "(frame report slug when available). "
+        "Be concise and logical. Ground every claim in a source using a short "
+        "footnote that always leads with provider: `(provider)` if unambiguous, "
+        "else `(provider, short_title)` or "
+        "`(provider, short_title, published_at)` when still needed; "
+        "optional `N쪽` suffix. Do not cite short_title alone. Never cite "
+        "report_id, slug, slice_id, UUID, or file paths. "
         "Avoid speculation and rhetoric; if unknown, say so. "
         "Reply in Korean unless the user asks otherwise. "
         # SerpAPI web_search disabled — do not instruct the model to call it.

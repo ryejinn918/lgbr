@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from consensus import runs_store
+from consensus.cite import format_published_at, short_provider, short_report_title
 from consensus.compress import local_compress_all, report_compress
 from consensus.corpus import (
     build_page_corpus,
@@ -46,9 +47,14 @@ async def _process_doc(
 
     content_hash = sha256_file(pdf_path)
     cache = doc_cache_dir(report_id, content_hash)
+    title = str(report.get("title") or "")
+    provider = str(report.get("provider") or "").strip()
     slug = slug_from_report(
-        source_key=str(report["source_key"]), title=str(report.get("title") or "")
+        source_key=str(report["source_key"]), title=title
     )
+    cite_provider = short_provider(provider)
+    cite_title = short_report_title(title)
+    cite_published = format_published_at(report.get("published_at"))
 
     existing = runs_store.find_artifact(
         report_id=report_id,
@@ -72,6 +78,10 @@ async def _process_doc(
         )
         return {
             "slug": slug,
+            "provider": cite_provider,
+            "short_title": cite_title,
+            "published_at": cite_published,
+            "title": title,
             "source_pdf": str(pdf_path),
             "compress": existing["compress_md"],
             "cache_dir": cache,
@@ -113,7 +123,10 @@ async def _process_doc(
     )
     meta = {
         "slug": slug,
-        "source_pdf": str(pdf_path),
+        "provider": cite_provider,
+        "short_title": cite_title,
+        "published_at": cite_published,
+        "title": title,
         "corpus_char_len": page_corpus["corpus_char_len"],
     }
     compress_md = report_compress(
@@ -141,6 +154,10 @@ async def _process_doc(
     )
     return {
         "slug": slug,
+        "provider": cite_provider,
+        "short_title": cite_title,
+        "published_at": cite_published,
+        "title": title,
         "source_pdf": str(pdf_path),
         "compress": compress_md,
         "cache_dir": cache,
@@ -404,9 +421,10 @@ def refill_run(run_id: str, *, model: str | None = None) -> dict[str, Any]:
                 log(f"refill: skip no slices report_id={d.get('report_id')}")
                 continue
             cache = alts[0]
+        title = str(d.get("title") or "")
         slug = slug_from_report(
             source_key=str(d.get("source_key") or ""),
-            title=str(d.get("title") or ""),
+            title=title,
         )
         compress = str(d.get("compress_md") or "")
         if not compress:
@@ -417,6 +435,10 @@ def refill_run(run_id: str, *, model: str | None = None) -> dict[str, Any]:
         cards.append(
             {
                 "slug": slug,
+                "provider": short_provider(str(d.get("provider") or "")),
+                "short_title": short_report_title(title),
+                "published_at": format_published_at(d.get("published_at")),
+                "title": title,
                 "source_pdf": str(pdf),
                 "compress": compress,
                 "cache_dir": cache,

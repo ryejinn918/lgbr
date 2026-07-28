@@ -61,6 +61,7 @@ Respond with a single JSON object only (no markdown):
 Language (mandatory):
 - Write topic, framework_summary, fail_reasons, pass_signals, and rationale in Korean.
 - Do not use Chinese. English is allowed only for proper nouns, tickers, and product names.
+- Those Korean fields are read by humans. Never put rpt_id, UUID, file paths, or hashes in them.
 
 Rules:
 - pass MUST be true only if has_coherent_framework AND has_broad_sector_coverage AND scope is "sector".
@@ -281,6 +282,7 @@ def save_quality(
 
 
 def save_unclear(report_id: UUID, *, model: str, error: str) -> None:
+    # Human-facing rationale stays short Korean; raw error goes to error column only.
     save_quality(
         report_id,
         result={
@@ -293,7 +295,7 @@ def save_unclear(report_id: UUID, *, model: str, error: str) -> None:
             "framework_summary": None,
             "fail_reasons": ["extract_or_api_error"],
             "pass_signals": [],
-            "rationale": error,
+            "rationale": "텍스트 추출 또는 감사 API 호출에 실패했습니다.",
         },
         model=model,
         error=error,
@@ -318,9 +320,7 @@ async def _classify_one(
             {
                 "role": "user",
                 "content": (
-                    f"File: {target.file_path.name}\n"
-                    f"Title: {target.title}\n"
-                    f"rpt_id: {target.source_key}\n\n"
+                    f"Title: {target.title}\n\n"
                     f"Report text (extracted from early pages):\n{target.text}"
                 ),
             },

@@ -1,6 +1,14 @@
 import type { ConsensusTheme } from '../types'
 
-export const THEMES: ConsensusTheme[] = ['ai', 'datacenter', 'physical_ai']
+export const THEMES: ConsensusTheme[] = [
+  'ai',
+  'datacenter',
+  'physical_ai',
+  'appliance',
+  'display',
+  'automotive',
+  'petrochemical',
+]
 
 export const DEFAULT_THEME: ConsensusTheme = 'ai'
 

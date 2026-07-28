@@ -1,4 +1,11 @@
-export type ConsensusTheme = 'datacenter' | 'ai' | 'physical_ai'
+export type ConsensusTheme =
+  | 'datacenter'
+  | 'ai'
+  | 'physical_ai'
+  | 'appliance'
+  | 'display'
+  | 'automotive'
+  | 'petrochemical'
 
 export type ConsensusState =
   | 'idle'
@@ -96,6 +103,10 @@ export const THEME_LABEL: Record<ConsensusTheme, string> = {
   datacenter: '데이터센터',
   ai: 'AI',
   physical_ai: '피지컬 AI',
+  appliance: '가전',
+  display: '디스플레이',
+  automotive: '자동차',
+  petrochemical: '석유화학',
 }
 
 export const STATE_CLASS: Record<ConsensusState, string> = {

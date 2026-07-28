@@ -13,6 +13,10 @@ THEME_ABBREV = {
     "datacenter": "dc",
     "ai": "ai",
     "physical_ai": "pai",
+    "appliance": "ap",
+    "display": "dp",
+    "automotive": "am",
+    "petrochemical": "pc",
 }
 
 

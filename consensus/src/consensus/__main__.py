@@ -14,7 +14,18 @@ def main(argv: list[str] | None = None) -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     run_p = sub.add_parser("run", help="Create and/or execute a consensus run")
-    run_p.add_argument("--theme", choices=["datacenter", "ai", "physical_ai"])
+    run_p.add_argument(
+        "--theme",
+        choices=[
+            "datacenter",
+            "ai",
+            "physical_ai",
+            "appliance",
+            "display",
+            "automotive",
+            "petrochemical",
+        ],
+    )
     run_p.add_argument("--run-id", help="Existing run UUID (skip create)")
     run_p.add_argument("--question", default=None)
     run_p.add_argument("--model", default=DEFAULT_MODEL)
