@@ -304,7 +304,6 @@ VALID_MODES = frozenset(
     {
         "auto",
         "adhoc",
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
@@ -315,7 +314,6 @@ VALID_MODES = frozenset(
 )
 LIMITED_MODES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
@@ -335,13 +333,16 @@ def start_crawl(
 ) -> dict[str, Any]:
     # `limit` kept for API compat; search crawls use profile period_months.
     _ = limit
+    # Legacy: datacenter crawl merged into ai (AI/AIDC).
+    if mode == "datacenter":
+        mode = "ai"
     if mode not in VALID_MODES:
         return {
             "ok": False,
             "status": 400,
             "label": "오류",
             "message": (
-                "mode must be one of: auto, adhoc, datacenter, ai, physical_ai, "
+                "mode must be one of: auto, adhoc, ai, physical_ai, "
                 "appliance, display, automotive, petrochemical"
             ),
             "crawl": None,

@@ -12,7 +12,6 @@ from consensus.db import connect
 
 THEMES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
@@ -22,8 +21,7 @@ THEMES = frozenset(
     }
 )
 DEFAULT_QUESTION = {
-    "datacenter": "데이터센터, 지금 뭐 보면 돼?",
-    "ai": "AI, 지금 뭐 보면 돼?",
+    "ai": "AI/AIDC, 지금 뭐 보면 돼?",
     "physical_ai": "피지컬 AI, 지금 뭐 보면 돼?",
     "appliance": "가전, 지금 뭐 보면 돼?",
     "display": "디스플레이, 지금 뭐 보면 돼?",

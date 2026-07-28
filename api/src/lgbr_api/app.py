@@ -134,7 +134,7 @@ async def crawl_events(request: Request) -> JSONResponse:
 
 
 async def crawl_start(request: Request) -> JSONResponse:
-    mode = "datacenter"
+    mode = "ai"
     limit: int | None = None
     debug = False
     try:
@@ -350,7 +350,7 @@ async def consensus_history(request: Request) -> JSONResponse:
 
 
 async def consensus_latest(request: Request) -> JSONResponse:
-    theme = request.query_params.get("theme") or "datacenter"
+    theme = request.query_params.get("theme") or "ai"
     result = get_latest_ended(theme=str(theme))
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
@@ -372,7 +372,7 @@ async def consensus_start(request: Request) -> JSONResponse:
         body = {}
     if not isinstance(body, dict):
         body = {}
-    theme = str(body.get("theme") or "datacenter")
+    theme = str(body.get("theme") or "ai")
     question = body.get("question")
     until_raw = body.get("until")
     until = str(until_raw).strip() if until_raw is not None else None
@@ -417,7 +417,7 @@ async def consensus_stop(_: Request) -> JSONResponse:
 
 
 async def consensus_inputs(request: Request) -> JSONResponse:
-    theme = request.query_params.get("theme") or "datacenter"
+    theme = request.query_params.get("theme") or "ai"
     result = list_inputs(theme=str(theme))
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)

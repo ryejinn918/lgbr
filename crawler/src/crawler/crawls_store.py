@@ -22,7 +22,6 @@ VALID_MODES = frozenset(
     {
         "auto",
         "adhoc",
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
@@ -33,7 +32,6 @@ VALID_MODES = frozenset(
 )
 LIMITED_MODES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",

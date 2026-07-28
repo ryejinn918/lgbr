@@ -18,7 +18,6 @@ SCRIPT = ROOT / "crawler" / "scripts" / "audit_report_quality.py"
 
 VALID_THEMES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
@@ -161,13 +160,15 @@ def start_audit(
 ) -> dict[str, Any]:
     theme_filter: str | None = None
     if theme and theme != "all":
+        if theme == "datacenter":
+            theme = "ai"
         if theme not in VALID_THEMES:
             return {
                 "ok": False,
                 "status": 400,
                 "state": "error",
                 "label": "오류",
-                "message": "테마는 데이터센터, AI, Physical AI 중 하나여야 합니다.",
+                "message": "테마는 AI/AIDC, 피지컬 AI, 가전, 디스플레이, 자동차, 석유화학 중 하나여야 합니다.",
                 "audit": None,
                 "can_start": True,
             }

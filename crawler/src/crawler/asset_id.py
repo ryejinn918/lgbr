@@ -23,6 +23,7 @@ DOWNLOADS_ROOT = _default_downloads_root()
 _SEOUL = ZoneInfo("Asia/Seoul")
 
 MODE_ABBREV = {
+    # Legacy crawl folders (fn-dc-*); not an active search mode.
     "datacenter": "dc",
     "ai": "ai",
     "physical_ai": "pai",
@@ -35,7 +36,6 @@ MODE_ABBREV = {
 }
 LIMITED_MODES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",

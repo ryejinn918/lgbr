@@ -133,7 +133,7 @@ export function useSessionStatus(opts?: {
   }, [historyLimit, historyOffset])
 
   async function startCrawl(
-    mode: CrawlMode = 'datacenter',
+    mode: CrawlMode = 'ai',
     opts?: { debug?: boolean },
   ) {
     setRequestingStart(true)

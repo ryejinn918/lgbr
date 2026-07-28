@@ -15,15 +15,14 @@ from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
 from consensus.runs_store import PERIOD_MONTHS_DEFAULT
 
 CORE_MAX = 10
-AI_POOL_THEMES = ("ai", "datacenter")
+AI_POOL_THEMES = ("ai",)
 COVERAGE_NOTES_MAX = 2500
 
 ROLE_CORE = "selected"
 ROLE_BIBLIO = "fill_extra"
 
 THEME_LABEL_KO = {
-    "datacenter": "데이터센터",
-    "ai": "AI·AIDC",
+    "ai": "AI/AIDC",
     "physical_ai": "피지컬 AI",
     "appliance": "가전",
     "display": "디스플레이",
@@ -34,14 +33,9 @@ THEME_LABEL_KO = {
 # Extra sector cues for the pack LLM (English; output fields stay Korean).
 THEME_SELECT_HINTS = {
     "ai": (
-        "Axes often include power/site, networking, inference infra, demand structure. "
-        "Prefer scarce, structural, mechanism-dense industry analyses over thin macro, "
-        "asset allocation, or notes where AI is only seasoning."
-    ),
-    "datacenter": (
-        "Axes often include power/site/cooling, capacity and demand, operators vs "
-        "equipment/value-chain. Prefer mechanism-dense industry notes over thin "
-        "macro or one-name equity briefs."
+        "Axes often include AIDC power/site/cooling, networking, inference infra, "
+        "and demand structure. Prefer scarce, structural, mechanism-dense industry "
+        "analyses over thin macro, asset allocation, or notes where AI is only seasoning."
     ),
     "physical_ai": (
         "Axes often include robotics, factory automation, sensors/actuators, and "

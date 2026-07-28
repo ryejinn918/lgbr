@@ -8,7 +8,6 @@ from crawler.db import connect
 
 PROFILE_MODES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",

@@ -47,9 +47,10 @@ class SearchProfile:
 
 
 PROFILES: dict[str, SearchProfile] = {
-    "datacenter": SearchProfile(
-        mode="datacenter",
-        keywords=("데이터센터",),
+    "ai": SearchProfile(
+        mode="ai",
+        keywords=("AI", "AIDC", "데이터센터", "AI 반도체"),
+        # Former datacenter profile sectors folded in for AIDC coverage.
         sectors=(
             "에너지",
             "소재",
@@ -59,12 +60,6 @@ PROFILES: dict[str, SearchProfile] = {
             "커뮤니케이션서비스",
             "유틸리티",
         ),
-        theme="datacenter",
-    ),
-    "ai": SearchProfile(
-        mode="ai",
-        keywords=("AI", "AIDC", "데이터센터", "AI 반도체"),
-        sectors=(),
         theme="ai",
     ),
     "physical_ai": SearchProfile(

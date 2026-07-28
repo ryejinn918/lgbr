@@ -1,5 +1,4 @@
 export type ConsensusTheme =
-  | 'datacenter'
   | 'ai'
   | 'physical_ai'
   | 'appliance'
@@ -105,8 +104,7 @@ export type ChatMessage = {
 }
 
 export const THEME_LABEL: Record<ConsensusTheme, string> = {
-  datacenter: '데이터센터',
-  ai: 'AI',
+  ai: 'AI/AIDC',
   physical_ai: '피지컬 AI',
   appliance: '가전',
   display: '디스플레이',

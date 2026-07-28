@@ -24,7 +24,6 @@ _SEOUL = ZoneInfo("Asia/Seoul")
 
 THEMES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
@@ -34,6 +33,7 @@ THEMES = frozenset(
     }
 )
 THEME_ABBREV = {
+    # Legacy asset ids (cs-dc-*); not an active consensus theme.
     "datacenter": "dc",
     "ai": "ai",
     "physical_ai": "pai",
@@ -43,8 +43,7 @@ THEME_ABBREV = {
     "petrochemical": "pc",
 }
 DEFAULT_QUESTION = {
-    "datacenter": "데이터센터, 지금 뭐 보면 돼?",
-    "ai": "AI, 지금 뭐 보면 돼?",
+    "ai": "AI/AIDC, 지금 뭐 보면 돼?",
     "physical_ai": "피지컬 AI, 지금 뭐 보면 돼?",
     "appliance": "가전, 지금 뭐 보면 돼?",
     "display": "디스플레이, 지금 뭐 보면 돼?",
@@ -279,8 +278,15 @@ def get_current_run(
     }
 
 
+def _normalize_theme(theme: str) -> str:
+    """Legacy datacenter slug merges into ai (AI/AIDC)."""
+    return "ai" if theme == "datacenter" else theme
+
+
 def list_history(*, limit: int = 30, theme: str | None = None) -> dict[str, Any]:
     limit = max(1, min(int(limit), 100))
+    if theme is not None:
+        theme = _normalize_theme(theme)
     if theme is not None and theme not in THEMES:
         return {"ok": False, "status": 400, "message": "invalid theme", "items": []}
     with connect() as conn, conn.cursor() as cur:
@@ -313,6 +319,7 @@ def list_history(*, limit: int = 30, theme: str | None = None) -> dict[str, Any]
 
 def get_latest_ended(*, theme: str) -> dict[str, Any]:
     """Latest ended run for a theme, including frame markdown bodies."""
+    theme = _normalize_theme(theme)
     if theme not in THEMES:
         return {"ok": False, "status": 400, "message": "invalid theme", "run": None}
     with connect() as conn, conn.cursor() as cur:
@@ -373,6 +380,7 @@ def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
 
 def list_inputs(*, theme: str) -> dict[str, Any]:
     """List candidate reports for Ops. Pool only (no LLM); select runs at start."""
+    theme = _normalize_theme(theme)
     if theme not in THEMES:
         return {"ok": False, "status": 400, "message": "invalid theme", "items": []}
 
@@ -582,12 +590,13 @@ def start_run(
     until: str | None = None,
 ) -> dict[str, Any]:
     """Start thesis cut; always pauses at awaiting for axis review."""
+    theme = _normalize_theme(theme)
     if theme not in THEMES:
         return {
             "ok": False,
             "status": 400,
             "message": (
-                "theme must be datacenter, ai, physical_ai, "
+                "theme must be ai, physical_ai, "
                 "appliance, display, automotive, or petrochemical"
             ),
             "can_start": False,

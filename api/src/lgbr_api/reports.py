@@ -24,7 +24,6 @@ _UNAUDITABLE_SQL = (
 )
 VALID_THEMES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
@@ -80,6 +79,8 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     provider_s = str(provider).strip() if provider else None
     theme = attrs.get("theme")
     theme_s = str(theme).strip() if theme else None
+    if theme_s == "datacenter":
+        theme_s = "ai"
     if theme_s not in VALID_THEMES:
         theme_s = None
     qp = row.get("quality_pass")
@@ -233,6 +234,8 @@ def list_reports(
 
     theme_filter: str | None = None
     if theme and theme != "all":
+        if theme == "datacenter":
+            theme = "ai"
         if theme not in VALID_THEMES:
             return _error(f"invalid theme: {theme}", sort_key=sort_key)
         theme_filter = theme

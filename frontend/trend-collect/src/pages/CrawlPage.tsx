@@ -52,7 +52,7 @@ export function CrawlPage() {
       ? 'stale'
       : CRAWL_CLASS[crawl.state]
 
-  async function onStart(mode: CrawlMode = 'datacenter') {
+  async function onStart(mode: CrawlMode = 'ai') {
     const searchLabel = crawlModeTypeLabel(mode)
     const isSearchMode = isSearchProfileMode(mode)
     const periodMonths =

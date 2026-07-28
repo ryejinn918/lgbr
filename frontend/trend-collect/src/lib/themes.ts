@@ -1,6 +1,5 @@
 /** FnGuide search-profile / report theme ids (excludes auto/adhoc). */
 export const SEARCH_PROFILE_MODES = [
-  'datacenter',
   'ai',
   'physical_ai',
   'appliance',
@@ -13,8 +12,7 @@ export type SearchProfileMode = (typeof SEARCH_PROFILE_MODES)[number]
 
 export const THEME_LABEL: Record<string, string> = {
   all: '테마전체',
-  datacenter: '데이터센터',
-  ai: 'AI',
+  ai: 'AI/AIDC',
   physical_ai: '피지컬 AI',
   appliance: '가전',
   display: '디스플레이',
@@ -24,8 +22,7 @@ export const THEME_LABEL: Record<string, string> = {
 
 /** Longer labels for profile editor headings. */
 export const PROFILE_MODE_LABEL: Record<SearchProfileMode, string> = {
-  datacenter: '데이터센터',
-  ai: 'AI / AIDC',
+  ai: 'AI/AIDC',
   physical_ai: '피지컬 AI',
   appliance: '가전',
   display: '디스플레이',

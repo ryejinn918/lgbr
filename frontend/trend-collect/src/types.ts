@@ -263,7 +263,6 @@ export type QualityCounts = {
 
 export type ThemeCounts = {
   all: number
-  datacenter: number
   ai: number
   physical_ai: number
   appliance: number

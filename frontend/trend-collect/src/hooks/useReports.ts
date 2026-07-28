@@ -27,7 +27,6 @@ const EMPTY_QUALITY: QualityCounts = {
 
 const EMPTY_THEME: ThemeCounts = {
   all: 0,
-  datacenter: 0,
   ai: 0,
   physical_ai: 0,
   appliance: 0,

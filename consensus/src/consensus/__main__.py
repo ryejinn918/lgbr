@@ -17,7 +17,6 @@ def main(argv: list[str] | None = None) -> None:
     run_p.add_argument(
         "--theme",
         choices=[
-            "datacenter",
             "ai",
             "physical_ai",
             "appliance",

@@ -66,7 +66,7 @@ def main() -> None:
         default=None,
         help=(
             "Limit to attrs.theme "
-            "(datacenter|ai|physical_ai|appliance|display|automotive|petrochemical)"
+            "(ai|physical_ai|appliance|display|automotive|petrochemical)"
         ),
     )
     parser.add_argument(

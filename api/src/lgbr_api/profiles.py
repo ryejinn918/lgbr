@@ -1,4 +1,4 @@
-"""SearchReport filter profile API (datacenter / ai / …)."""
+"""SearchReport filter profile API (ai / physical_ai / …)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from lgbr_api.db import connect
 
 PROFILE_MODES = frozenset(
     {
-        "datacenter",
         "ai",
         "physical_ai",
         "appliance",
