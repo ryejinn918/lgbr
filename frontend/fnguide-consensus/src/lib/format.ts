@@ -24,8 +24,8 @@ export function formatProgress(progress: Record<string, unknown>): string {
 }
 
 const DETAIL_KEYS: { key: string; label: string }[] = [
-  { key: 'core', label: '중심축' },
-  { key: 'bibliography', label: '참고' },
+  { key: 'core', label: '주요' },
+  { key: 'bibliography', label: '보조' },
   { key: 'selected', label: '선별' },
   { key: 'excluded', label: '제외' },
   { key: 'reports', label: '보고서' },

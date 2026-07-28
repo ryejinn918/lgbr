@@ -93,7 +93,7 @@ Language (mandatory):
   only in core[].report_id and bibliography[].report_id.
 
 why (per report; UI already shows title/provider — do not name or cite the report):
-- 1–2 Korean sentences: which locked **주제(topic)** it serves (or why Supporting)
+- 1–2 Korean sentences: which locked **주제(topic)** it serves (or why 보조문헌)
   and what contribution it adds. No report names, no [provider] tags.
 
 coverage_notes (pack summary — naming other reports is OK):
@@ -111,24 +111,24 @@ Sector focus ({sector}):
 - {hint}
 
 Placement goals:
-- For each locked topic, pick **중심축(core) 1–2 reports** that densest cover it;
-  put reinforcing notes in bibliography as **Supporting**.
-- A topic covered uniquely/densely by a single report may still be 중심축
+- For each locked topic, pick **주요문헌(core) 1–2 reports** that densest cover it;
+  put reinforcing notes in bibliography as **보조문헌**.
+- A topic covered uniquely/densely by a single report may still be 주요문헌
   (emerging trend / scarce mechanism) — do not require two hubs.
 - Do not force a hub onto every topic if the pool is thin.
-- why must say which locked topic the report serves (or why Supporting).
+- why must say which locked topic the report serves (or why 보조문헌).
 - Do NOT invent new topic names.
 
 Limits:
-- core (중심축): at most 10 report ids — these drive the consensus skeleton.
-- bibliography (Supporting): useful extras for detail-fill later. May be empty.
+- core (주요문헌): at most 10 report ids — these drive the consensus skeleton.
+- bibliography (보조문헌): useful extras for detail-fill later. May be empty.
 - Only use report_id values from the provided cards. No duplicates across core/bibliography.
 - Do NOT list every omitted report_id. No omitted[] array.
 - Do NOT return pillar_sketch (topics are locked upstream).
 
 coverage_notes (Korean, short paragraphs — readability first):
 1) Opening: restate the locked thesis in one sentence (no broker/report names).
-2) How 중심축 vs Supporting covers the locked topics (counts / balance) —
+2) How 주요문헌 vs 보조문헌 covers the locked topics (counts / balance) —
    no stacked titles.
 3) Omit summary vs the locked tension (duplicate series, off-theme, single-name,
    thin macro). Types and reasons only.
@@ -271,7 +271,7 @@ async def llm_select_pack(
     user = (
         f"Place reports into the locked pack for {sector}. core_max={core_max}.\n"
         "Topics (pillar_sketch) are fixed — do not rename them.\n"
-        "Per topic: 1–2 중심축 (core), rest Supporting (bibliography) when useful.\n"
+        "Per topic: 1–2 주요문헌 (core), rest 보조문헌 (bibliography) when useful.\n"
         "In coverage_notes, name other reports with provider-first square "
         "brackets: `[provider]` if unambiguous, else `[provider, short_title]` or "
         "`[provider, short_title, published_at]`. "

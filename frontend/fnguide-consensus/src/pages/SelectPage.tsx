@@ -235,7 +235,7 @@ export function SelectPage() {
             {packRun && packLabel
               ? `${packLabel} · ${labelRunState(packRun.state)}${
                   selectOnly ? ' · 선별까지만' : ''
-                } · 중심축 ${coreDocs.length} · 참고 ${biblioDocs.length}`
+                } · 주요 ${coreDocs.length} · 보조 ${biblioDocs.length}`
               : '이 섹터 실행 이력이 없습니다. 컨센서스를 시작하면 여기에 선별 결과가 남습니다.'}
           </p>
         </div>
@@ -277,8 +277,8 @@ export function SelectPage() {
         )}
         {packRun && packDocs.length === 0 && !docsError && (
           <p className="section-note">
-            아직 보고서 선별 전입니다. 선별이 끝나면 중심축·참고 목록과 이유가
-            채워집니다.
+            아직 보고서 선별 전입니다. 선별이 끝나면 주요문헌·보조문헌 목록과
+            이유가 채워집니다.
           </p>
         )}
         {packDocs.length > 0 && (
@@ -309,15 +309,15 @@ export function SelectPage() {
                       <tr className={`input-group-row role-${role}`}>
                         <td colSpan={5}>
                           {role === 'core'
-                            ? `중심축 · ${coreDocs.length}건`
-                            : `참고 · ${biblioDocs.length}건`}
+                            ? `주요문헌 · ${coreDocs.length}건`
+                            : `보조문헌 · ${biblioDocs.length}건`}
                         </td>
                       </tr>
                     )}
                     <tr className={`input-row role-${role}`}>
                       <td className="col-role">
                         <span className={`role-badge role-${role}`}>
-                          {role === 'core' ? '중심축' : '참고'}
+                          {role === 'core' ? '주요' : '보조'}
                         </span>
                       </td>
                       <td>
@@ -351,7 +351,7 @@ export function SelectPage() {
             최근 3개월 · 후보 {inputs.length}
             {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
             {packDocs.length > 0
-              ? ` · 위 선별과 동일: 중심축 ${coreDocs.length} · 참고 ${biblioDocs.length}`
+              ? ` · 위 선별과 동일: 주요 ${coreDocs.length} · 보조 ${biblioDocs.length}`
               : ` · 선별은 ${NAV.axes}에서 축 확정 후`}
           </p>
         </div>
@@ -382,9 +382,9 @@ export function SelectPage() {
                       : 'omit'
               const badge =
                 kind === 'core'
-                  ? '중심축'
+                  ? '주요'
                   : kind === 'biblio'
-                    ? '참고'
+                    ? '보조'
                     : kind === 'pool'
                       ? '후보'
                       : '미달'
