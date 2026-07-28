@@ -327,6 +327,11 @@ Absorb filled TARGET SLOTS into Evidence — do **not** copy "추후 보강"
 {HUMAN_CITE_RULE}
 Use each OPEN header's human label in footnotes.
 Keep number units and foreign-term spelling consistent.
+Evidence: when natural, group bullets under 2–3 mechanism branches; if they do
+not group cleanly, leave a flat list — do not invent a taxonomy.
+Claim: if it follows one house, add only a short time-axis/condition phrase
+that appears in OPEN (no new synthesis).
+Players/macros that do not support the Claim: drop or one Watch line.
 Outlook: only if OPEN supports it, note 비관~낙관 distribution with footnotes.
 Players: domestic first; include global/unlisted only when OPEN names them.
 Growth/headwinds: emphasize disagreements and why they diverge.
@@ -375,7 +380,9 @@ Output (section headers exactly as below; Korean body OK for Korean sources):
                 "content": (
                     "Enrich a locked consensus skeleton with opened report slice "
                     "bodies. Keep Executive Summary and 주제 titles. Grow density. "
-                    "No invented facts. Use 주제별 Deep Dive with "
+                    "No invented facts. Prefer grouping Evidence into a few "
+                    "mechanism branches when natural; never invent structure. "
+                    "Use 주제별 Deep Dive with "
                     "주제 역할/Claim/Evidence/전망/플레이어/성장·저해/Watch. "
                     "Never emit per-topic 추후 보강. "
                     "미충족 보강 = only targets not filled from OPEN. "

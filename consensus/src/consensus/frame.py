@@ -71,6 +71,12 @@ Rules:
 - Do NOT merge unrelated fields into one topic (keep separate, or move the weaker
   angle to 범위 밖 주제)
 - Per topic: 선정 근거, agreement vs disagreement, and 추후 보강 slots
+- Per topic, state the disagreement in one line (선정 근거 or 성장·저해).
+  If houses agree, write "갈림 없음" once — do not only list agreements
+- If a topic is effectively supported by a single house, say so in 선정 근거
+  ("단일 출처") or shrink the weak angle into 범위 밖 주제
+- Do not put items listed under 범위 밖 주제 back into that topic's
+  현황/Evidence
 - Do not invent facts absent from the compress views
 - Keep number units and foreign-term spelling consistent within the document
 - Do not write period-over-period change unless compress views explicitly compare

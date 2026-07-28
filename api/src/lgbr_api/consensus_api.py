@@ -239,6 +239,13 @@ def list_events(run_id: str | None = None, *, limit: int = DEFAULT_EVENT_LIMIT) 
 def get_current_run(
     *, run_id: str | None = None, event_limit: int = DEFAULT_EVENT_LIMIT
 ) -> dict[str, Any]:
+    """Status for the open run, or a specific run when ``run_id`` is set.
+
+    Without ``run_id``, only open rows (``ended_at IS NULL``) are current.
+    After a worker finishes, this returns ``state=idle`` / ``run=null`` so the
+    UI does not treat a finished run as still active. Pollers that need the
+    terminal state must pass ``run_id`` (or use ``/latest`` / history).
+    """
     reconcile_stale_runs()
     open_row = _get_open_row()
     if run_id:
