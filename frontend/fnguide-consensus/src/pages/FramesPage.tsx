@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Markdown } from '../components/Markdown'
+import { useConsensusStatus } from '../hooks/useConsensusStatus'
 import { formatTime } from '../lib/format'
-import { FRAME_TAB, NAV, labelDocStatus } from '../lib/labels'
+import {
+  FRAME_TAB,
+  NAV,
+  labelDocStatus,
+  labelRunSlot,
+  labelRunState,
+} from '../lib/labels'
 import { parseTheme, themePath } from '../lib/theme'
-import type { ConsensusRun } from '../types'
 import { THEME_LABEL } from '../types'
 
 type ViewTab = 'filled' | 'consensus' | 'materials'
@@ -22,10 +28,16 @@ type DocRow = {
   select_why?: string | null
 }
 
+function isBusyState(state: string | null | undefined): boolean {
+  return state === 'starting' || state === 'active' || state === 'stopping'
+}
+
 export function FramesPage() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
-  const [run, setRun] = useState<ConsensusRun | null>(null)
+  const [searchParams] = useSearchParams()
+  const runFromUrl = searchParams.get('run')
+  const [packRunId, setPackRunId] = useState<string | null>(runFromUrl)
   const [filled, setFilled] = useState<string | null>(null)
   const [consensus, setConsensus] = useState<string | null>(null)
   const [docs, setDocs] = useState<DocRow[]>([])
@@ -36,48 +48,102 @@ export function FramesPage() {
   const [compressError, setCompressError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const { status, history } = useConsensusStatus(theme)
+
+  const themeHistory = useMemo(
+    () => history.filter((h) => h.theme === theme).slice(0, 2),
+    [history, theme],
+  )
+
+  // status.run falls back to latest ended run when idle — only force-select when busy.
+  const openThemeRun =
+    status.run?.theme === theme && isBusyState(status.run.state)
+      ? status.run
+      : null
+
+  const packRun = useMemo(() => {
+    if (openThemeRun) return openThemeRun
+    if (packRunId) {
+      const hit = themeHistory.find((h) => h.id === packRunId)
+      if (hit) return hit
+    }
+    return themeHistory[0] ?? null
+  }, [openThemeRun, packRunId, themeHistory])
+
+  const packIndex = packRun
+    ? themeHistory.findIndex((h) => h.id === packRun.id)
+    : -1
+  const packLabel =
+    packRun != null
+      ? labelRunSlot(packIndex < 0 ? 0 : packIndex, packRun.state)
+      : null
+
   useEffect(() => {
-    let cancelled = false
-    setError(null)
+    setPackRunId(runFromUrl)
+    setFilled(null)
+    setConsensus(null)
     setDocs([])
     setSelectedDocId(null)
     setCompressMd(null)
     setCompressError(null)
+    setError(null)
     setTab('filled')
-    void fetch(`/api/consensus/latest?theme=${theme}`)
-      .then(async (r) => {
-        const d = await r.json()
-        if (!r.ok || !d.ok) throw new Error(d.message || `HTTP ${r.status}`)
-        if (cancelled) return
-        const latestRun = (d.run as ConsensusRun | null) ?? null
-        setRun(latestRun)
-        setFilled(d.filled_frame ?? null)
-        setConsensus(d.consensus_frame ?? null)
-        if (!latestRun) return
-        const docRes = await fetch(`/api/consensus/runs/${latestRun.id}/docs`)
-        const docData = await docRes.json()
-        if (!docRes.ok || !docData.ok) {
-          throw new Error(docData.message || `docs HTTP ${docRes.status}`)
-        }
-        if (cancelled) return
-        const items = (docData.items ?? []) as DocRow[]
-        setDocs(items)
-        const first = items.find((x) => x.has_compress) ?? items[0] ?? null
-        setSelectedDocId(first?.report_id ?? null)
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setRun(null)
-          setFilled(null)
-          setConsensus(null)
-          setDocs([])
-          setError(e instanceof Error ? e.message : String(e))
-        }
-      })
+  }, [theme, runFromUrl])
+
+  useEffect(() => {
+    const runId = packRun?.id
+    if (!runId) {
+      setFilled(null)
+      setConsensus(null)
+      setDocs([])
+      setSelectedDocId(null)
+      setError(null)
+      return
+    }
+    let cancelled = false
+    const load = () => {
+      void Promise.all([
+        fetch(`/api/consensus/runs/${runId}/outputs`).then(async (r) => {
+          const d = await r.json()
+          if (!r.ok || !d.ok) throw new Error(d.message || `HTTP ${r.status}`)
+          return d
+        }),
+        fetch(`/api/consensus/runs/${runId}/docs`).then(async (r) => {
+          const d = await r.json()
+          if (!r.ok || !d.ok) throw new Error(d.message || `docs HTTP ${r.status}`)
+          return d
+        }),
+      ])
+        .then(([outData, docData]) => {
+          if (cancelled) return
+          setFilled(outData.filled_frame ?? null)
+          setConsensus(outData.consensus_frame ?? null)
+          const items = (docData.items ?? []) as DocRow[]
+          setDocs(items)
+          setSelectedDocId((prev) => {
+            if (prev && items.some((x) => x.report_id === prev)) return prev
+            const first = items.find((x) => x.has_compress) ?? items[0] ?? null
+            return first?.report_id ?? null
+          })
+          setError(null)
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setFilled(null)
+            setConsensus(null)
+            setDocs([])
+            setError(e instanceof Error ? e.message : String(e))
+          }
+        })
+    }
+    load()
+    const busy = isBusyState(packRun.state)
+    const t = busy ? window.setInterval(load, 3_000) : 0
     return () => {
       cancelled = true
+      if (t) window.clearInterval(t)
     }
-  }, [theme])
+  }, [packRun?.id, packRun?.state])
 
   const selectedDocs = useMemo(
     () =>
@@ -106,7 +172,7 @@ export function FramesPage() {
     null
 
   useEffect(() => {
-    if (!run?.id || !selectedDoc) {
+    if (!packRun?.id || !selectedDoc) {
       setCompressMd(null)
       setCompressError(null)
       setCompressLoading(false)
@@ -123,7 +189,7 @@ export function FramesPage() {
     setCompressError(null)
     setCompressMd(null)
     void fetch(
-      `/api/consensus/runs/${run.id}/docs/${selectedDoc.report_id}/compress`,
+      `/api/consensus/runs/${packRun.id}/docs/${selectedDoc.report_id}/compress`,
     )
       .then(async (r) => {
         const d = await r.json()
@@ -143,9 +209,14 @@ export function FramesPage() {
     return () => {
       cancelled = true
     }
-  }, [run?.id, selectedDoc?.report_id, selectedDoc?.has_compress])
+  }, [packRun?.id, selectedDoc?.report_id, selectedDoc?.has_compress])
 
   const frameBody = tab === 'filled' ? filled : tab === 'consensus' ? consensus : null
+  const runTimeNote = packRun
+    ? isBusyState(packRun.state)
+      ? labelRunState(packRun.state)
+      : formatTime(packRun.ended_at)
+    : null
 
   return (
     <>
@@ -156,13 +227,13 @@ export function FramesPage() {
         <p className="lede">
           요약·골격·살 붙인 논지와, 근거로 쓴 보고서 요약을 봅니다.
         </p>
-        {run ? (
+        {packRun && packLabel ? (
           <p className="section-note">
-            최근 실행 · {formatTime(run.ended_at)} · {run.question}
+            {packLabel} · {runTimeNote} · {packRun.question}
           </p>
         ) : (
           <p className="section-note">
-            이 섹터에 완료된 실행이 없습니다.{' '}
+            이 섹터에 실행 이력이 없습니다.{' '}
             <Link className="text-link" to={themePath(theme, 'ops')}>
               {NAV.ops}에서 시작
             </Link>
@@ -172,6 +243,20 @@ export function FramesPage() {
       </header>
 
       <section className="panel">
+        {themeHistory.length > 1 && (
+          <div className="chip-row">
+            {themeHistory.map((h, i) => (
+              <button
+                key={h.id}
+                type="button"
+                className={`chip ${packRun?.id === h.id ? 'active' : ''}`}
+                onClick={() => setPackRunId(h.id)}
+              >
+                {labelRunSlot(i, h.state)}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="chip-row">
           {(
             [

@@ -30,7 +30,14 @@ export function SelectPage() {
     [history, theme],
   )
 
-  const openThemeRun = status.run?.theme === theme ? status.run : null
+  // status.run falls back to latest ended run when idle — only force-select when busy.
+  const openThemeRun =
+    status.run?.theme === theme &&
+    (status.run.state === 'starting' ||
+      status.run.state === 'active' ||
+      status.run.state === 'stopping')
+      ? status.run
+      : null
 
   const packRun = useMemo(() => {
     if (openThemeRun) return openThemeRun

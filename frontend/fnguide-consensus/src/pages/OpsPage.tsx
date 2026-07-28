@@ -209,6 +209,12 @@ export function OpsPage() {
                     >
                       {NAV.select}
                     </Link>{' '}
+                    <Link
+                      className="btn ghost"
+                      to={`${themePath(theme, 'frames')}?run=${h.id}`}
+                    >
+                      {NAV.frames}
+                    </Link>{' '}
                     <button
                       type="button"
                       className="btn ghost"

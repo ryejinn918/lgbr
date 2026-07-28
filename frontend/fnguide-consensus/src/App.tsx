@@ -32,6 +32,15 @@ function LegacyThemeRedirect({ tab }: { tab: AppTab }) {
   return <Navigate to={themePath(theme, tab)} replace />
 }
 
+function LegacyFramesRunRedirect() {
+  const { runId } = useParams()
+  const [params] = useSearchParams()
+  const theme = parseTheme(params.get('theme'))
+  const base = themePath(theme, 'frames')
+  const to = runId ? `${base}?run=${encodeURIComponent(runId)}` : base
+  return <Navigate to={to} replace />
+}
+
 function AppShell() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
@@ -85,10 +94,7 @@ function App() {
         />
         <Route path="/compare" element={<LegacyThemeRedirect tab="compare" />} />
         <Route path="/frames" element={<LegacyThemeRedirect tab="frames" />} />
-        <Route
-          path="/frames/:runId"
-          element={<LegacyThemeRedirect tab="frames" />}
-        />
+        <Route path="/frames/:runId" element={<LegacyFramesRunRedirect />} />
         <Route path="/ops" element={<LegacyThemeRedirect tab="ops" />} />
         <Route path="/select" element={<LegacyThemeRedirect tab="select" />} />
         <Route path="/inputs" element={<LegacyThemeRedirect tab="select" />} />
