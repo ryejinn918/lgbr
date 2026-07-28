@@ -2,12 +2,9 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useCrawlProfiles } from '../hooks/useCrawlProfiles'
 import type { CrawlProfile, CrawlProfileMode } from '../types'
 import { formatTime } from '../lib/format'
+import { PROFILE_MODE_LABEL } from '../lib/themes'
 
-const MODE_LABEL: Record<CrawlProfileMode, string> = {
-  datacenter: '데이터센터',
-  ai: 'AI',
-  physical_ai: 'Physical AI',
-}
+const MODE_LABEL = PROFILE_MODE_LABEL
 
 const SECTOR_OPTIONS = [
   '에너지',
@@ -33,15 +30,26 @@ const PAGE_MIN_OPTIONS = [
 ] as const
 
 type Draft = {
-  keyword: string
+  keywordsText: string
   sectors: string[]
   period_months: number
   page_min_label: string
 }
 
+function keywordsToText(keywords: string[]): string {
+  return keywords.join('\n')
+}
+
+function textToKeywords(text: string): string[] {
+  return text
+    .split(/\n|,/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
 function toDraft(profile: CrawlProfile): Draft {
   return {
-    keyword: profile.keyword,
+    keywordsText: keywordsToText(profile.keywords),
     sectors: [...profile.sectors],
     period_months: profile.period_months,
     page_min_label: profile.page_min_label,
@@ -55,7 +63,12 @@ function ProfileEditor({
 }: {
   profile: CrawlProfile
   saving: boolean
-  onSave: (draft: Draft) => Promise<void>
+  onSave: (draft: {
+    keywords: string[]
+    sectors: string[]
+    period_months: number
+    page_min_label: string
+  }) => Promise<void>
 }) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(profile))
   const [dirty, setDirty] = useState(false)
@@ -92,13 +105,15 @@ function ProfileEditor({
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!draft.keyword.trim()) {
-      window.alert('키워드를 입력하세요.')
+    const keywords = textToKeywords(draft.keywordsText)
+    if (keywords.length === 0) {
+      window.alert('키워드를 한 줄에 하나씩 입력하세요.')
       return
     }
     await onSave({
-      ...draft,
-      keyword: draft.keyword.trim(),
+      keywords,
+      sectors: draft.sectors,
+      period_months: draft.period_months,
       page_min_label: draft.page_min_label.trim() || '10p 이상',
     })
     setDirty(false)
@@ -107,18 +122,22 @@ function ProfileEditor({
   return (
     <form className="panel profile-form" onSubmit={(e) => void submit(e)}>
       <div className="section-head">
-        <h2>{MODE_LABEL[profile.mode]}</h2>
+        <h2>{MODE_LABEL[profile.mode] ?? profile.mode}</h2>
         <span className="section-note mono">{profile.mode}</span>
       </div>
 
       <label className="field-block">
-        <span>키워드</span>
-        <input
-          type="text"
-          value={draft.keyword}
-          onChange={(e) => patch({ keyword: e.target.value })}
+        <span>검색 키워드 (한 줄에 하나)</span>
+        <textarea
+          rows={Math.min(12, Math.max(3, draft.keywordsText.split('\n').length + 1))}
+          value={draft.keywordsText}
+          onChange={(e) => patch({ keywordsText: e.target.value })}
           disabled={saving}
         />
+        <span className="field-hint">
+          키워드마다 검색한 뒤, 아래 기간(기본 3개월) 안 결과를 다운로드합니다.
+          이미 받은 보고서는 다음 키워드에서 건너뜁니다.
+        </span>
       </label>
 
       <label className="field-block">
@@ -196,7 +215,15 @@ export function CrawlTypesPage({ embedded = false }: { embedded?: boolean }) {
   const { items, loading, error, saving, refresh, saveProfile } =
     useCrawlProfiles()
 
-  async function onSave(mode: CrawlProfileMode, draft: Draft) {
+  async function onSave(
+    mode: CrawlProfileMode,
+    draft: {
+      keywords: string[]
+      sectors: string[]
+      period_months: number
+      page_min_label: string
+    },
+  ) {
     try {
       await saveProfile(mode, draft)
     } catch (err) {
@@ -217,8 +244,8 @@ export function CrawlTypesPage({ embedded = false }: { embedded?: boolean }) {
         <header className="monitor-header">
           <h1>리스트 발굴 타입 · 검색</h1>
           <p className="lede">
-            데이터센터·AI·Physical AI 검색 필터 프로파일입니다. 타입 생성/삭제는
-            없고 필터만 수정합니다.
+            섹터별 FnGuide 검색 필터 프로파일입니다. 타입 생성/삭제는 없고
+            필터만 수정합니다.
           </p>
         </header>
       )}

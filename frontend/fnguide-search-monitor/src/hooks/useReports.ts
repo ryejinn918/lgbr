@@ -30,6 +30,10 @@ const EMPTY_THEME: ThemeCounts = {
   datacenter: 0,
   ai: 0,
   physical_ai: 0,
+  appliance: 0,
+  display: 0,
+  automotive: 0,
+  petrochemical: 0,
 }
 
 export type ReportSort = 'published_at' | 'page_count' | 'last_seen_at'

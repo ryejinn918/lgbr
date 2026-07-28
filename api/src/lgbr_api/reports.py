@@ -22,7 +22,17 @@ _UNAUDITABLE_SQL = (
     "quality_pass IS NULL AND NOT "
     "(status = 'downloaded' AND file_path IS NOT NULL)"
 )
-VALID_THEMES = frozenset({"datacenter", "ai", "physical_ai"})
+VALID_THEMES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
 VALID_SORTS = frozenset({"published_at", "page_count", "last_seen_at"})
 SORT_SQL = {
     "published_at": "published_at DESC NULLS LAST, id DESC",

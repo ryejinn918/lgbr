@@ -1,3 +1,5 @@
+import type { SearchProfileMode } from './lib/themes'
+
 export type SessionState =
   | 'logging_in'
   | 'logged_in'
@@ -25,13 +27,13 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
-export type CrawlMode = 'auto' | 'adhoc' | 'datacenter' | 'ai' | 'physical_ai'
+export type CrawlMode = 'auto' | 'adhoc' | SearchProfileMode
 
-export type CrawlProfileMode = 'datacenter' | 'ai' | 'physical_ai'
+export type CrawlProfileMode = SearchProfileMode
 
 export type CrawlProfile = {
   mode: CrawlProfileMode
-  keyword: string
+  keywords: string[]
   sectors: string[]
   period_months: number
   page_min_label: string
@@ -75,6 +77,7 @@ export type CrawlRecord = {
   state: CrawlState
   mode?: CrawlMode | null
   report_limit?: number | null
+  period_months?: number | null
   asset_id?: string | null
   debug?: boolean | null
   progress?: CrawlProgress | null
@@ -261,6 +264,10 @@ export type ThemeCounts = {
   datacenter: number
   ai: number
   physical_ai: number
+  appliance: number
+  display: number
+  automotive: number
+  petrochemical: number
   [key: string]: number
 }
 

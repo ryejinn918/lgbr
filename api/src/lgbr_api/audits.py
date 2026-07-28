@@ -16,7 +16,17 @@ AUDIT_LOG = ROOT / ".crawler" / "audit.log"
 JOB_PATH = ROOT / ".crawler" / "audit_job.json"
 SCRIPT = ROOT / "crawler" / "scripts" / "audit_report_quality.py"
 
-VALID_THEMES = frozenset({"datacenter", "ai", "physical_ai"})
+VALID_THEMES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
 DEFAULT_CONCURRENCY = 8
 MIN_CONCURRENCY = 1
 MAX_CONCURRENCY = 32

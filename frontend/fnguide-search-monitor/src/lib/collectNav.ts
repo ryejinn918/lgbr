@@ -1,3 +1,5 @@
+import { THEME_LABEL } from './themes'
+
 export type CollectSource = 'fnguide' | 'arg'
 export type CollectStage = 'list' | 'body'
 export type ListMeans = 'feed' | 'search'
@@ -108,18 +110,8 @@ export function discoveryTypeLabel(means?: CollectMeans | null): string {
 }
 
 export function crawlModeTypeLabel(mode: string | null | undefined): string {
-  switch (mode) {
-    case 'ai':
-      return 'AI'
-    case 'physical_ai':
-      return 'Physical AI'
-    case 'datacenter':
-      return '데이터센터'
-    case 'adhoc':
-      return '애드혹'
-    case 'auto':
-      return '자동'
-    default:
-      return mode || '—'
-  }
+  if (!mode) return '—'
+  if (mode === 'adhoc') return '애드혹'
+  if (mode === 'auto') return '자동'
+  return THEME_LABEL[mode] ?? mode
 }

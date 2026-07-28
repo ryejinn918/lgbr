@@ -48,12 +48,7 @@ export function formatAuditStats(
   return bits.join(' · ')
 }
 
-export const THEME_LABEL: Record<string, string> = {
-  all: '테마전체',
-  datacenter: '데이터센터',
-  ai: 'AI',
-  physical_ai: 'Physical AI',
-}
+export { THEME_LABEL } from './themes'
 
 export function formatTime(value: string | null | undefined): string {
   if (!value) return '—'
@@ -95,13 +90,19 @@ export function formatProgress(
   const downloaded = progress.downloaded
   const listed = progress.listed
   const limit = progress.limit
+  const periodMonths = progress.period_months
   const skippedBlind = progress.skipped_blind
   const rpt =
     progress.current_rpt_id != null ? String(progress.current_rpt_id) : null
   const bits: string[] = []
   if (stage) bits.push(`stage=${stage}`)
-  if (downloaded != null || limit != null) {
-    bits.push(`downloaded=${downloaded ?? 0}/${limit ?? '?'}`)
+  if (periodMonths != null) bits.push(`period=${periodMonths}m`)
+  if (downloaded != null) {
+    bits.push(
+      limit != null
+        ? `downloaded=${downloaded}/${limit}`
+        : `downloaded=${downloaded}`,
+    )
   }
   if (listed != null) bits.push(`listed=${listed}`)
   if (skippedBlind != null) bits.push(`skipped_blind=${skippedBlind}`)

@@ -300,11 +300,31 @@ def shutdown_open_crawl(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
     }
 
 
-VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai", "physical_ai"})
-LIMITED_MODES = frozenset({"datacenter", "ai", "physical_ai"})
-DEFAULT_REPORT_LIMIT = 5
-MIN_REPORT_LIMIT = 1
-MAX_REPORT_LIMIT = 50
+VALID_MODES = frozenset(
+    {
+        "auto",
+        "adhoc",
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
+LIMITED_MODES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
+DEFAULT_PERIOD_MONTHS = 3
 
 
 def start_crawl(
@@ -313,49 +333,37 @@ def start_crawl(
     limit: int | None = None,
     debug: bool = False,
 ) -> dict[str, Any]:
+    # `limit` kept for API compat; search crawls use profile period_months.
+    _ = limit
     if mode not in VALID_MODES:
         return {
             "ok": False,
             "status": 400,
             "label": "오류",
             "message": (
-                "mode must be 'auto', 'adhoc', 'datacenter', 'ai', or 'physical_ai'"
+                "mode must be one of: auto, adhoc, datacenter, ai, physical_ai, "
+                "appliance, display, automotive, petrochemical"
             ),
             "crawl": None,
             "session": get_current_session(),
             "can_start": False,
         }
 
-    report_limit = DEFAULT_REPORT_LIMIT
+    period_months: int | None = None
     use_debug = bool(debug) and mode in LIMITED_MODES
     if mode in LIMITED_MODES:
-        if limit is None:
-            report_limit = DEFAULT_REPORT_LIMIT
-        else:
+        from lgbr_api.profiles import get_profile
+
+        prof = get_profile(mode)
+        if prof.get("ok") and prof.get("profile"):
             try:
-                report_limit = int(limit)
+                period_months = int(prof["profile"].get("period_months") or DEFAULT_PERIOD_MONTHS)
             except (TypeError, ValueError):
-                return {
-                    "ok": False,
-                    "status": 400,
-                    "label": "오류",
-                    "message": "limit must be an integer",
-                    "crawl": None,
-                    "session": get_current_session(),
-                    "can_start": False,
-                }
-        if report_limit < MIN_REPORT_LIMIT or report_limit > MAX_REPORT_LIMIT:
-            return {
-                "ok": False,
-                "status": 400,
-                "label": "오류",
-                "message": (
-                    f"limit must be between {MIN_REPORT_LIMIT} and {MAX_REPORT_LIMIT}"
-                ),
-                "crawl": None,
-                "session": get_current_session(),
-                "can_start": False,
-            }
+                period_months = DEFAULT_PERIOD_MONTHS
+        else:
+            period_months = DEFAULT_PERIOD_MONTHS
+        if period_months not in (3, 6, 12):
+            period_months = DEFAULT_PERIOD_MONTHS
 
     reconcile_stale_crawls()
     open_crawl = _get_open_row()
@@ -403,8 +411,8 @@ def start_crawl(
 
     try:
         crawl = _create_starting_crawl(
-            mode=mode, report_limit=report_limit, debug=use_debug
-        )
+            mode=mode, period_months=period_months, debug=use_debug
+            )
     except Exception as exc:
         return {
             "ok": False,
@@ -480,24 +488,24 @@ def start_crawl(
 def _create_starting_crawl(
     *,
     mode: str = "auto",
-    report_limit: int = DEFAULT_REPORT_LIMIT,
+    period_months: int | None = None,
     debug: bool = False,
 ) -> dict[str, Any]:
     now = _now()
     asset_id = make_asset_id(
         mode,
-        report_limit=report_limit if mode in LIMITED_MODES else None,
+        period_months=period_months if mode in LIMITED_MODES else None,
     )
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO fnguide_crawls
-                    (started_at, state, mode, report_limit, asset_id, debug)
-                VALUES (%s, 'starting', %s, %s, %s, %s)
+                    (started_at, state, mode, report_limit, period_months, asset_id, debug)
+                VALUES (%s, 'starting', %s, NULL, %s, %s, %s)
                 RETURNING *
                 """,
-                (now, mode, report_limit, asset_id, bool(debug)),
+                (now, mode, period_months, asset_id, bool(debug)),
             )
             row = dict(cur.fetchone())
         conn.commit()

@@ -12,6 +12,12 @@ import {
   formatProgress,
   formatTime,
 } from '../lib/format'
+import {
+  SEARCH_PROFILE_MODES,
+  THEME_LABEL,
+  isSearchProfileMode,
+} from '../lib/themes'
+import { crawlModeTypeLabel } from '../lib/collectNav'
 
 export function CrawlPage() {
   const {
@@ -26,7 +32,6 @@ export function CrawlPage() {
   } = useSessionStatus()
   const timeline = useTimeline({ limit: 10, eventLimit: 30 })
   const profiles = useCrawlProfiles()
-  const [reportLimit, setReportLimit] = useState(5)
   const [debugMode, setDebugMode] = useState(false)
   const resultLine = formatCrawlResult(
     crawl.progress ?? crawl.crawl?.progress ?? undefined,
@@ -48,28 +53,21 @@ export function CrawlPage() {
       : CRAWL_CLASS[crawl.state]
 
   async function onStart(mode: CrawlMode = 'datacenter') {
-    const limit = Math.min(50, Math.max(1, Number(reportLimit) || 5))
-    const searchLabel =
-      mode === 'ai'
-        ? 'AI'
-        : mode === 'physical_ai'
-          ? 'Physical AI'
-          : mode === 'datacenter'
-            ? '데이터센터'
-            : mode
-    const isSearchMode =
-      mode === 'datacenter' || mode === 'ai' || mode === 'physical_ai'
+    const searchLabel = crawlModeTypeLabel(mode)
+    const isSearchMode = isSearchProfileMode(mode)
+    const periodMonths =
+      profiles.items.find((p) => p.mode === mode)?.period_months ?? 3
     const label =
       mode === 'adhoc'
         ? '애드혹 크롤을 시작할까요? (CDP 원격 조작, 로그인 세션 획득)'
         : debugMode
-          ? `${searchLabel} ${limit}건 다운로드 후 debug(adhoc/CDP)로 전환할까요?`
-          : `${searchLabel} 리포트 ${limit}건을 다운로드할까요?`
+          ? `${searchLabel} ${periodMonths}개월치 다운로드 후 debug(adhoc/CDP)로 전환할까요?`
+          : `${searchLabel} ${periodMonths}개월치 리포트를 다운로드할까요?`
     if (!window.confirm(label)) {
       return
     }
     try {
-      await startCrawl(mode, limit, {
+      await startCrawl(mode, {
         debug: isSearchMode ? debugMode : false,
       })
     } catch (err) {
@@ -98,12 +96,9 @@ export function CrawlPage() {
         </p>
         {crawl.crawl?.mode && !fetchError ? (
           <p className="account-line">
-            모드: {crawl.crawl.mode}
-            {(crawl.crawl.mode === 'datacenter' ||
-              crawl.crawl.mode === 'ai' ||
-              crawl.crawl.mode === 'physical_ai') &&
-            crawl.crawl.report_limit
-              ? ` · limit ${crawl.crawl.report_limit}`
+            모드: {crawlModeTypeLabel(crawl.crawl.mode)}
+            {isSearchProfileMode(crawl.crawl.mode) && crawl.crawl.period_months
+              ? ` · ${crawl.crawl.period_months}개월`
               : ''}
             {crawl.crawl.debug ? ' · debug' : ''}
             {crawl.crawl.cdp_port
@@ -153,16 +148,15 @@ export function CrawlPage() {
           <p className="account-line profile-summary">
             필터:{' '}
             {profiles.items
+              .filter((p) => isSearchProfileMode(p.mode))
               .map((p) => {
-                const label =
-                  p.mode === 'ai'
-                    ? 'AI'
-                    : p.mode === 'physical_ai'
-                      ? 'Physical AI'
-                      : '데이터센터'
+                const label = THEME_LABEL[p.mode] ?? p.mode
+                const kw = p.keywords[0] ?? '—'
+                const extra =
+                  p.keywords.length > 1 ? ` 외 ${p.keywords.length - 1}` : ''
                 const sectors =
                   p.sectors.length > 0 ? ` · 섹터 ${p.sectors.length}` : ''
-                return `${label} 「${p.keyword}」 ${p.period_months}개월 · ${p.page_min_label}${sectors}`
+                return `${label} 「${kw}${extra}」 ${p.period_months}개월 · ${p.page_min_label}${sectors}`
               })
               .join(' / ')}{' '}
             <Link to="/collect/fnguide/list/search/types">리스트 발굴 타입</Link>
@@ -170,17 +164,6 @@ export function CrawlPage() {
         ) : null}
 
         <div className="actions">
-          <label className="limit-field">
-            <span>보고서 수</span>
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={reportLimit}
-              disabled={!canStart || requestingStart || !!fetchError}
-              onChange={(e) => setReportLimit(Number(e.target.value))}
-            />
-          </label>
           <label className="limit-field">
             <span>debug</span>
             <input
@@ -190,30 +173,17 @@ export function CrawlPage() {
               onChange={(e) => setDebugMode(e.target.checked)}
             />
           </label>
-          <button
-            type="button"
-            className="run-btn"
-            disabled={!canStart || requestingStart || !!fetchError}
-            onClick={() => void onStart('datacenter')}
-          >
-            {requestingStart ? '시작 중…' : '데이터센터'}
-          </button>
-          <button
-            type="button"
-            className="run-btn"
-            disabled={!canStart || requestingStart || !!fetchError}
-            onClick={() => void onStart('ai')}
-          >
-            {requestingStart ? '시작 중…' : 'AI'}
-          </button>
-          <button
-            type="button"
-            className="run-btn"
-            disabled={!canStart || requestingStart || !!fetchError}
-            onClick={() => void onStart('physical_ai')}
-          >
-            {requestingStart ? '시작 중…' : 'Physical AI'}
-          </button>
+          {SEARCH_PROFILE_MODES.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className="run-btn"
+              disabled={!canStart || requestingStart || !!fetchError}
+              onClick={() => void onStart(mode)}
+            >
+              {requestingStart ? '시작 중…' : THEME_LABEL[mode]}
+            </button>
+          ))}
           <button
             type="button"
             className="run-btn"

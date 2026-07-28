@@ -12,7 +12,7 @@ type ProfilesState = {
     patch: Partial<
       Pick<
         CrawlProfile,
-        'keyword' | 'sectors' | 'period_months' | 'page_min_label'
+        'keywords' | 'sectors' | 'period_months' | 'page_min_label'
       >
     >,
   ) => Promise<CrawlProfile>
@@ -57,7 +57,7 @@ export function useCrawlProfiles(): ProfilesState {
       patch: Partial<
         Pick<
           CrawlProfile,
-          'keyword' | 'sectors' | 'period_months' | 'page_min_label'
+          'keywords' | 'sectors' | 'period_months' | 'page_min_label'
         >
       >,
     ) => {

@@ -12,20 +12,35 @@ MODE_ABBREV = {
     "datacenter": "dc",
     "ai": "ai",
     "physical_ai": "pai",
+    "appliance": "ap",
+    "display": "dp",
+    "automotive": "am",
+    "petrochemical": "pc",
     "adhoc": "ad",
     "auto": "au",
 }
-LIMITED_MODES = frozenset({"datacenter", "ai", "physical_ai"})
+LIMITED_MODES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
 
 
 def make_asset_id(
     mode: str,
     *,
+    period_months: int | None = None,
     report_limit: int | None = None,
     when: datetime | None = None,
     suffix: str | None = None,
 ) -> str:
-    """Build a short folder id: fn-dc-n20-250723-a1b2c3 / fn-ai-n30-…."""
+    """Build a short folder id: fn-dc-m3-250723-a1b2c3 (period) or legacy n{limit}."""
     abbrev = MODE_ABBREV.get(mode)
     if abbrev is None:
         raise ValueError(f"Invalid crawl mode for asset_id: {mode}")
@@ -37,7 +52,9 @@ def make_asset_id(
     day = ts.strftime("%y%m%d")
     token = suffix if suffix is not None else secrets.token_hex(3)
     if mode in LIMITED_MODES:
-        if report_limit is None:
-            raise ValueError(f"report_limit required for {mode} asset_id")
-        return f"fn-{abbrev}-n{int(report_limit)}-{day}-{token}"
+        if period_months is not None:
+            return f"fn-{abbrev}-m{int(period_months)}-{day}-{token}"
+        if report_limit is not None:
+            return f"fn-{abbrev}-n{int(report_limit)}-{day}-{token}"
+        raise ValueError(f"period_months required for {mode} asset_id")
     return f"fn-{abbrev}-{day}-{token}"

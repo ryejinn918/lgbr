@@ -223,10 +223,15 @@ def _run_search_job(
     if download_dir is None:
         raise CrawlStateError(f"{mode} crawl missing download_dir")
 
-    try:
-        limit = int(crawl.get("report_limit") or 5)
-    except (TypeError, ValueError):
-        limit = 5
+    raw_limit = crawl.get("report_limit")
+    limit: int | None
+    if raw_limit is None:
+        limit = None
+    else:
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = None
 
     profile = get_profile(mode)
 

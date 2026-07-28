@@ -1,4 +1,4 @@
-"""SearchReport filter profile API (datacenter / ai)."""
+"""SearchReport filter profile API (datacenter / ai / …)."""
 
 from __future__ import annotations
 
@@ -6,17 +6,30 @@ from typing import Any
 
 from lgbr_api.db import connect
 
-PROFILE_MODES = frozenset({"datacenter", "ai", "physical_ai"})
+PROFILE_MODES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
 PERIOD_MONTHS = frozenset({3, 6, 12})
 
 
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
+    keywords = row.get("keywords") or []
+    if not isinstance(keywords, (list, tuple)):
+        keywords = list(keywords)
     sectors = row.get("sectors") or []
     if not isinstance(sectors, (list, tuple)):
         sectors = list(sectors)
     return {
         "mode": row["mode"],
-        "keyword": row["keyword"],
+        "keywords": [str(k) for k in keywords],
         "sectors": list(sectors),
         "period_months": int(row["period_months"]),
         "page_min_label": row["page_min_label"],
@@ -32,7 +45,7 @@ def list_profiles() -> dict[str, Any]:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT mode, keyword, sectors, period_months,
+                    SELECT mode, keywords, sectors, period_months,
                            page_min_label, updated_at
                     FROM search_profiles
                     ORDER BY mode
@@ -62,7 +75,7 @@ def get_profile(mode: str) -> dict[str, Any]:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT mode, keyword, sectors, period_months,
+                    SELECT mode, keywords, sectors, period_months,
                            page_min_label, updated_at
                     FROM search_profiles
                     WHERE mode = %s
@@ -96,7 +109,7 @@ def update_profile(mode: str, fields: dict[str, Any]) -> dict[str, Any]:
             "status": 400,
         }
 
-    allowed = ("keyword", "sectors", "period_months", "page_min_label")
+    allowed = ("keywords", "sectors", "period_months", "page_min_label")
     updates: dict[str, Any] = {}
     for key in allowed:
         if key in fields:
@@ -105,16 +118,27 @@ def update_profile(mode: str, fields: dict[str, Any]) -> dict[str, Any]:
     if not updates:
         return get_profile(mode)
 
-    if "keyword" in updates:
-        keyword = str(updates["keyword"] or "").strip()
-        if not keyword:
+    if "keywords" in updates:
+        raw = updates["keywords"]
+        if isinstance(raw, str):
+            keywords = [raw.strip()] if raw.strip() else []
+        elif isinstance(raw, (list, tuple)):
+            keywords = [str(k).strip() for k in raw if str(k).strip()]
+        else:
             return {
                 "ok": False,
-                "message": "keyword must not be empty",
+                "message": "keywords must be an array of strings",
                 "profile": None,
                 "status": 400,
             }
-        updates["keyword"] = keyword
+        if not keywords:
+            return {
+                "ok": False,
+                "message": "keywords must not be empty",
+                "profile": None,
+                "status": 400,
+            }
+        updates["keywords"] = keywords
 
     if "period_months" in updates:
         try:
@@ -173,7 +197,7 @@ def update_profile(mode: str, fields: dict[str, Any]) -> dict[str, Any]:
                     UPDATE search_profiles
                     SET {", ".join(set_parts)}
                     WHERE mode = %s
-                    RETURNING mode, keyword, sectors, period_months,
+                    RETURNING mode, keywords, sectors, period_months,
                               page_min_label, updated_at
                     """,
                     values,

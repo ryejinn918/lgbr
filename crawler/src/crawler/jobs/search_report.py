@@ -32,17 +32,24 @@ PERIOD_LABELS = {3: "3개월", 6: "6개월", 12: "12개월"}
 @dataclass(frozen=True)
 class SearchProfile:
     mode: str
-    keyword: str
+    keywords: tuple[str, ...]
     sectors: tuple[str, ...]
     theme: str
     period_months: int = 3
     page_min_label: str = "10p 이상"
 
+    @property
+    def keyword(self) -> str:
+        """Primary keyword used for a single FnGuide search pass."""
+        if not self.keywords:
+            raise ValueError(f"empty keywords for mode: {self.mode}")
+        return self.keywords[0]
+
 
 PROFILES: dict[str, SearchProfile] = {
     "datacenter": SearchProfile(
         mode="datacenter",
-        keyword="데이터센터",
+        keywords=("데이터센터",),
         sectors=(
             "에너지",
             "소재",
@@ -56,17 +63,79 @@ PROFILES: dict[str, SearchProfile] = {
     ),
     "ai": SearchProfile(
         mode="ai",
-        keyword="AI",
+        keywords=("AI", "AIDC", "데이터센터", "AI 반도체"),
         sectors=(),
         theme="ai",
     ),
     "physical_ai": SearchProfile(
         mode="physical_ai",
-        keyword="피지컬",
+        keywords=(
+            "피지컬 AI",
+            "Physical AI",
+            "휴머노이드",
+            "Humanoid",
+            "로보틱스",
+            "로봇",
+            "온디바이스 칩",
+        ),
         sectors=(),
         theme="physical_ai",
         period_months=12,
         page_min_label="10p 이상",
+    ),
+    "appliance": SearchProfile(
+        mode="appliance",
+        keywords=(
+            "가전",
+            "백색가전",
+            "TV",
+            "냉장고",
+            "세탁기",
+            "청소기",
+            "에어컨",
+            "디바이스",
+            "공조",
+            "HVAC",
+        ),
+        sectors=(),
+        theme="appliance",
+    ),
+    "display": SearchProfile(
+        mode="display",
+        keywords=("디스플레이", "패널", "OLED"),
+        sectors=(),
+        theme="display",
+    ),
+    "automotive": SearchProfile(
+        mode="automotive",
+        keywords=(
+            "자동차",
+            "전장",
+            "전기차",
+            "모빌리티",
+            "ESS",
+            "EV",
+            "배터리",
+            "LFP",
+            "NCM",
+            "SDV",
+            "ADV",
+        ),
+        sectors=(),
+        theme="automotive",
+    ),
+    "petrochemical": SearchProfile(
+        mode="petrochemical",
+        keywords=(
+            "석유화학",
+            "석화",
+            "화학",
+            "케미칼",
+            "Chemicals",
+            "납사",
+        ),
+        sectors=(),
+        theme="petrochemical",
     ),
 }
 
@@ -113,9 +182,13 @@ def get_profile(mode: str) -> SearchProfile:
 
     row = profiles_store.get_profile_row(mode)
     if row is not None:
+        raw_kw = row.get("keywords") or ()
+        keywords = tuple(str(k).strip() for k in raw_kw if str(k).strip())
+        if not keywords:
+            raise ValueError(f"empty keywords in profile: {mode}")
         return SearchProfile(
             mode=str(row["mode"]),
-            keyword=str(row["keyword"]),
+            keywords=keywords,
             sectors=tuple(row.get("sectors") or ()),
             theme=str(row["mode"]),
             period_months=int(row.get("period_months") or 3),
@@ -153,7 +226,7 @@ def run_search_report_job(
     page: Page,
     *,
     profile: SearchProfile,
-    limit: int,
+    limit: int | None = None,
     download_dir: Path,
     should_stop: Callable[[], bool] | None = None,
     touch: Callable[[], Any] | None = None,
@@ -161,391 +234,500 @@ def run_search_report_job(
     crawl_id: str | None = None,
     asset_id: str | None = None,
 ) -> SearchJobSummary:
-    """Apply profile filters, upsert list rows, download up to `limit` new PDFs."""
-    if limit < 1:
+    """For each profile keyword: search → download within the period window.
+
+    When ``limit`` is None (default), download every new non-blind hit per keyword
+    (scoped by ``profile.period_months``), up to ``MAX_LIST_PAGES`` list pages
+    per keyword. When set, the cap applies to the crawl-total download count.
+    """
+    if limit is not None and limit < 1:
         raise ValueError("limit must be >= 1")
     download_dir.mkdir(parents=True, exist_ok=True)
     summary = SearchJobSummary()
     stop = should_stop or (lambda: False)
     log = logger
-    keyword = profile.keyword
     theme = profile.theme
+    period_months = int(profile.period_months or 3)
+    keywords = tuple(k.strip() for k in profile.keywords if str(k).strip())
+    if not keywords:
+        raise ValueError(f"empty keywords for mode: {profile.mode}")
 
     already = reports_store.downloaded_keys(SOURCE) | reports_store.disk_rpt_ids(
         root=DOWNLOADS_ROOT
     )
+    seen: set[str] = set()
     if log:
         log.emit(
             level="info",
             stage="download",
             event="existing_loaded",
             count=len(already),
-            keyword=keyword,
+            keyword_total=len(keywords),
             theme=theme,
             mode=profile.mode,
+            period_months=period_months,
+            limit=limit,
         )
         log.set_progress(
             limit=limit,
+            period_months=period_months,
             downloaded=0,
             listed=0,
             skipped_existing=0,
             existing_known=len(already),
             stage="filter",
-            keyword=keyword,
+            keyword_total=len(keywords),
             theme=theme,
             mode=profile.mode,
         )
 
-    try:
-        if log:
-            with log.stage(
-                "filter",
-                keyword=keyword,
-                page_cnt_min=10,
-                theme=theme,
-                mode=profile.mode,
-            ):
-                _apply_filters(page, profile=profile)
-        else:
-            _apply_filters(page, profile=profile)
-    except Exception as exc:
-        snap = capture_filter_failure(page, download_dir, prefix="filter-fail")
-        if log:
-            log.emit(
-                level="error",
-                stage="filter",
-                event="snapshot",
-                error=str(exc),
-                **{
-                    k: v
-                    for k, v in snap.items()
-                    if k
-                    in (
-                        "url",
-                        "title",
-                        "logged_in",
-                        "has_logout",
-                        "has_dropdown_text",
-                        "has_srchKeyword",
-                        "has_srchBtn",
-                        "chrome_exit_type",
-                        "screenshot",
-                        "html",
-                        "diag",
-                        "screenshot_error",
-                        "html_error",
-                    )
-                },
-            )
-        raise
-    if touch:
-        touch()
-    _sort_by_page_count_desc(page)
-    if log:
-        log.emit(level="info", stage="filter", event="sorted", by="page_count_desc")
-
-    seen: set[str] = set()
-    list_page = 0
-    prev_page_keys: tuple[str, ...] | None = None
-    while len(summary.downloaded) < limit and list_page < MAX_LIST_PAGES:
+    for kw_index, keyword in enumerate(keywords):
         if stop():
             summary.stopped = True
             if log:
-                log.emit(level="warn", stage="list", event="stopped", list_page=list_page)
-            break
-        candidates = [
-            c for c in _list_candidates(page) if not _is_short_report(c)
-        ]
-        page_keys = tuple(
-            str(c["rpt_id"]) for c in candidates if c.get("rpt_id")
-        )
-        if prev_page_keys is not None and page_keys and page_keys == prev_page_keys:
-            if log:
                 log.emit(
                     level="warn",
-                    stage="list",
-                    event="page_stuck",
-                    list_page=list_page,
+                    stage="filter",
+                    event="stopped",
+                    keyword=keyword,
+                    keyword_index=kw_index,
                 )
             break
-        prev_page_keys = page_keys
+        if limit is not None and len(summary.downloaded) >= limit:
+            break
 
-        blind_rows = [
-            c for c in candidates if c["blind"] and c["rpt_id"] not in seen
-        ]
-        existing_rows = [
-            c
-            for c in candidates
-            if not c["blind"]
-            and c["rpt_id"] not in seen
-            and c["rpt_id"] in already
-        ]
-        work_rows = [
-            c
-            for c in candidates
-            if not c["blind"]
-            and c["rpt_id"] not in seen
-            and c["rpt_id"] not in already
-        ]
         if log:
             log.emit(
                 level="info",
-                stage="list",
-                event="page",
-                list_page=list_page,
-                total=len(candidates),
-                candidates=len(work_rows),
-                blind=len(blind_rows),
-                existing=len(existing_rows),
+                stage="filter",
+                event="keyword_start",
+                keyword=keyword,
+                keyword_index=kw_index,
+                keyword_total=len(keywords),
             )
             log.set_progress(
-                stage="list",
-                list_page=list_page,
-                candidates=len(work_rows),
-                blind=len(blind_rows),
-                downloaded=len(summary.downloaded),
-                skipped_blind=summary.skipped_blind,
-                skipped_existing=summary.skipped_existing,
-                limit=limit,
+                stage="filter",
                 keyword=keyword,
+                keyword_index=kw_index,
+                keyword_total=len(keywords),
+                period_months=period_months,
+                downloaded=len(summary.downloaded),
+                listed=summary.listed,
                 theme=theme,
+                mode=profile.mode,
             )
 
-        def _attrs_for(cand: dict[str, Any], *, blind: bool) -> dict[str, Any]:
-            attrs = {
-                "rpt_id": cand["rpt_id"],
-                "provider": cand.get("provider"),
-                "stock": cand.get("stock"),
-                "blind": blind,
-                "keyword": keyword,
-                "theme": theme,
-            }
-            if asset_id:
-                attrs["asset_id"] = asset_id
-            return {k: v for k, v in attrs.items() if v is not None}
-
-        for cand in candidates:
-            rpt_id = cand["rpt_id"]
-            if not rpt_id or rpt_id in seen:
-                continue
-            blind = bool(cand["blind"])
-            try:
-                reports_store.upsert_listed(
-                    source=SOURCE,
-                    source_key=rpt_id,
-                    crawl_id=crawl_id,
-                    title=cand.get("title") or rpt_id,
-                    author=cand.get("author"),
-                    published_at=cand.get("published_at"),
-                    page_count=cand.get("page_count"),
-                    status=(
-                        reports_store.STATUS_BLIND
-                        if blind
-                        else reports_store.STATUS_LISTED
-                    ),
-                    attrs=_attrs_for(cand, blind=blind),
+        try:
+            if log:
+                with log.stage(
+                    "filter",
+                    keyword=keyword,
+                    keyword_index=kw_index,
+                    page_cnt_min=10,
+                    theme=theme,
+                    mode=profile.mode,
+                ):
+                    _apply_filters(page, profile=profile, keyword=keyword)
+            else:
+                _apply_filters(page, profile=profile, keyword=keyword)
+        except Exception as exc:
+            snap = capture_filter_failure(
+                page, download_dir, prefix=f"filter-fail-kw{kw_index}"
+            )
+            if log:
+                log.emit(
+                    level="error",
+                    stage="filter",
+                    event="snapshot",
+                    keyword=keyword,
+                    keyword_index=kw_index,
+                    error=str(exc),
+                    **{
+                        k: v
+                        for k, v in snap.items()
+                        if k
+                        in (
+                            "url",
+                            "title",
+                            "logged_in",
+                            "has_logout",
+                            "has_dropdown_text",
+                            "has_srchKeyword",
+                            "has_srchBtn",
+                            "chrome_exit_type",
+                            "screenshot",
+                            "html",
+                            "diag",
+                            "screenshot_error",
+                            "html_error",
+                        )
+                    },
                 )
-                summary.listed += 1
-            except Exception as exc:
-                if log:
-                    log.emit(
-                        level="warn",
-                        stage="list",
-                        event="list_upsert_failed",
-                        rpt_id=rpt_id,
-                        error=str(exc),
-                    )
-
+            raise
+        if touch:
+            touch()
+        _sort_by_page_count_desc(page)
         if log:
-            log.set_progress(
-                stage="list",
-                listed=summary.listed,
-                downloaded=len(summary.downloaded),
-                skipped_blind=summary.skipped_blind,
-                skipped_existing=summary.skipped_existing,
-                limit=limit,
-                list_page=list_page,
+            log.emit(
+                level="info",
+                stage="filter",
+                event="sorted",
+                by="page_count_desc",
                 keyword=keyword,
-                theme=theme,
             )
 
-        for cand in blind_rows:
-            seen.add(cand["rpt_id"])
-            summary.skipped_blind += 1
-
-        for cand in existing_rows:
-            seen.add(cand["rpt_id"])
-            summary.skipped_existing += 1
-
-        if existing_rows and log:
-            log.set_progress(
-                stage="list",
-                listed=summary.listed,
-                skipped_existing=summary.skipped_existing,
-                downloaded=len(summary.downloaded),
-                limit=limit,
-                list_page=list_page,
-            )
-
-        for cand in work_rows:
+        list_page = 0
+        prev_page_keys: tuple[str, ...] | None = None
+        while (
+            (limit is None or len(summary.downloaded) < limit)
+            and list_page < MAX_LIST_PAGES
+        ):
             if stop():
                 summary.stopped = True
                 if log:
                     log.emit(
                         level="warn",
-                        stage="download",
+                        stage="list",
                         event="stopped",
                         list_page=list_page,
+                        keyword=keyword,
                     )
                 break
-            rpt_id = cand["rpt_id"]
-            if rpt_id in seen:
-                continue
-            seen.add(rpt_id)
-            title = cand["title"]
-            if log:
-                log.set_progress(
-                    stage="download",
-                    current_rpt_id=rpt_id,
-                    downloaded=len(summary.downloaded),
-                    skipped_blind=summary.skipped_blind,
-                    skipped_existing=summary.skipped_existing,
-                    limit=limit,
-                    list_page=list_page,
-                )
-            try:
-                path = _download_one(
-                    page,
-                    rpt_id=rpt_id,
-                    title=title,
-                    download_dir=download_dir,
-                    index=len(summary.downloaded) + 1,
-                )
-            except _NoDownloadError as exc:
-                summary.skipped_no_download += 1
-                try:
-                    reports_store.mark_status(
-                        source=SOURCE,
-                        source_key=rpt_id,
-                        status=reports_store.STATUS_NO_DOWNLOAD,
-                        crawl_id=crawl_id,
-                        attrs={
-                            "blind": False,
-                            "no_custom_download": True,
-                            "theme": theme,
-                            "keyword": keyword,
-                        },
-                    )
-                except Exception:
-                    pass
-                if log:
-                    log.emit(
-                        level="info",
-                        stage="download",
-                        event="item_skip",
-                        rpt_id=rpt_id,
-                        title=title,
-                        reason="no_custom_download",
-                        error=str(exc),
-                    )
-                    log.set_progress(
-                        stage="download",
-                        skipped_no_download=summary.skipped_no_download,
-                        downloaded=len(summary.downloaded),
-                        listed=summary.listed,
-                        limit=limit,
-                    )
-                continue
-            except Exception as exc:
-                summary.failed += 1
-                try:
-                    reports_store.mark_status(
-                        source=SOURCE,
-                        source_key=rpt_id,
-                        status=reports_store.STATUS_FAILED,
-                        crawl_id=crawl_id,
-                        attrs={
-                            "error": str(exc)[:500],
-                            "theme": theme,
-                            "keyword": keyword,
-                        },
-                    )
-                except Exception:
-                    pass
-                if log:
-                    log.emit(
-                        level="error",
-                        stage="download",
-                        event="item_fail",
-                        rpt_id=rpt_id,
-                        title=title,
-                        error=str(exc),
-                    )
-                continue
-
-            attrs = _attrs_for(cand, blind=False)
-            try:
-                reports_store.mark_downloaded(
-                    source=SOURCE,
-                    source_key=rpt_id,
-                    crawl_id=crawl_id,
-                    title=title or rpt_id,
-                    author=cand.get("author"),
-                    published_at=cand.get("published_at"),
-                    page_count=cand.get("page_count"),
-                    file_path=str(path),
-                    file_name=path.name,
-                    attrs=attrs,
-                )
-            except Exception as exc:
+            candidates = [
+                c for c in _list_candidates(page) if not _is_short_report(c)
+            ]
+            page_keys = tuple(
+                str(c["rpt_id"]) for c in candidates if c.get("rpt_id")
+            )
+            if prev_page_keys is not None and page_keys and page_keys == prev_page_keys:
                 if log:
                     log.emit(
                         level="warn",
-                        stage="download",
-                        event="report_meta_failed",
-                        rpt_id=rpt_id,
-                        error=str(exc),
+                        stage="list",
+                        event="page_stuck",
+                        list_page=list_page,
+                        keyword=keyword,
                     )
-            already.add(rpt_id)
-            summary.downloaded.append(str(path))
-            if log:
-                log.emit(
-                    level="info",
-                    stage="download",
-                    event="item_ok",
-                    rpt_id=rpt_id,
-                    title=title,
-                    file_name=path.name,
-                )
-                log.set_progress(
-                    stage="download",
-                    downloaded=len(summary.downloaded),
-                    listed=summary.listed,
-                    skipped_blind=summary.skipped_blind,
-                    skipped_existing=summary.skipped_existing,
-                    limit=limit,
-                    current_rpt_id=rpt_id,
-                )
-            if touch:
-                touch()
-            if len(summary.downloaded) >= limit:
                 break
-        if summary.stopped or len(summary.downloaded) >= limit:
-            break
-        next_ok, next_detail = _goto_next_list_page(page)
-        if not next_ok:
+            prev_page_keys = page_keys
+
+            blind_rows = [
+                c for c in candidates if c["blind"] and c["rpt_id"] not in seen
+            ]
+            existing_rows = [
+                c
+                for c in candidates
+                if not c["blind"]
+                and c["rpt_id"] not in seen
+                and c["rpt_id"] in already
+            ]
+            work_rows = [
+                c
+                for c in candidates
+                if not c["blind"]
+                and c["rpt_id"] not in seen
+                and c["rpt_id"] not in already
+            ]
             if log:
                 log.emit(
                     level="info",
                     stage="list",
-                    event="no_more_pages",
+                    event="page",
                     list_page=list_page,
-                    **next_detail,
+                    total=len(candidates),
+                    candidates=len(work_rows),
+                    blind=len(blind_rows),
+                    existing=len(existing_rows),
+                    keyword=keyword,
+                    keyword_index=kw_index,
                 )
+                log.set_progress(
+                    stage="list",
+                    list_page=list_page,
+                    candidates=len(work_rows),
+                    blind=len(blind_rows),
+                    downloaded=len(summary.downloaded),
+                    skipped_blind=summary.skipped_blind,
+                    skipped_existing=summary.skipped_existing,
+                    limit=limit,
+                    keyword=keyword,
+                    keyword_index=kw_index,
+                    keyword_total=len(keywords),
+                    theme=theme,
+                )
+
+            def _attrs_for(
+                cand: dict[str, Any], *, blind: bool, kw: str = keyword
+            ) -> dict[str, Any]:
+                attrs = {
+                    "rpt_id": cand["rpt_id"],
+                    "provider": cand.get("provider"),
+                    "stock": cand.get("stock"),
+                    "blind": blind,
+                    "keyword": kw,
+                    "theme": theme,
+                }
+                if asset_id:
+                    attrs["asset_id"] = asset_id
+                return {k: v for k, v in attrs.items() if v is not None}
+
+            for cand in candidates:
+                rpt_id = cand["rpt_id"]
+                if not rpt_id or rpt_id in seen:
+                    continue
+                blind = bool(cand["blind"])
+                try:
+                    reports_store.upsert_listed(
+                        source=SOURCE,
+                        source_key=rpt_id,
+                        crawl_id=crawl_id,
+                        title=cand.get("title") or rpt_id,
+                        author=cand.get("author"),
+                        published_at=cand.get("published_at"),
+                        page_count=cand.get("page_count"),
+                        status=(
+                            reports_store.STATUS_BLIND
+                            if blind
+                            else reports_store.STATUS_LISTED
+                        ),
+                        attrs=_attrs_for(cand, blind=blind),
+                    )
+                    summary.listed += 1
+                except Exception as exc:
+                    if log:
+                        log.emit(
+                            level="warn",
+                            stage="list",
+                            event="list_upsert_failed",
+                            rpt_id=rpt_id,
+                            keyword=keyword,
+                            error=str(exc),
+                        )
+
+            if log:
+                log.set_progress(
+                    stage="list",
+                    listed=summary.listed,
+                    downloaded=len(summary.downloaded),
+                    skipped_blind=summary.skipped_blind,
+                    skipped_existing=summary.skipped_existing,
+                    limit=limit,
+                    list_page=list_page,
+                    keyword=keyword,
+                    keyword_index=kw_index,
+                    keyword_total=len(keywords),
+                    theme=theme,
+                )
+
+            for cand in blind_rows:
+                seen.add(cand["rpt_id"])
+                summary.skipped_blind += 1
+
+            for cand in existing_rows:
+                seen.add(cand["rpt_id"])
+                summary.skipped_existing += 1
+
+            if existing_rows and log:
+                log.set_progress(
+                    stage="list",
+                    listed=summary.listed,
+                    skipped_existing=summary.skipped_existing,
+                    downloaded=len(summary.downloaded),
+                    limit=limit,
+                    list_page=list_page,
+                    keyword=keyword,
+                )
+
+            for cand in work_rows:
+                if stop():
+                    summary.stopped = True
+                    if log:
+                        log.emit(
+                            level="warn",
+                            stage="download",
+                            event="stopped",
+                            list_page=list_page,
+                            keyword=keyword,
+                        )
+                    break
+                rpt_id = cand["rpt_id"]
+                if rpt_id in seen:
+                    continue
+                seen.add(rpt_id)
+                title = cand["title"]
+                if log:
+                    log.set_progress(
+                        stage="download",
+                        current_rpt_id=rpt_id,
+                        downloaded=len(summary.downloaded),
+                        skipped_blind=summary.skipped_blind,
+                        skipped_existing=summary.skipped_existing,
+                        limit=limit,
+                        list_page=list_page,
+                        keyword=keyword,
+                        keyword_index=kw_index,
+                        keyword_total=len(keywords),
+                    )
+                try:
+                    path = _download_one(
+                        page,
+                        rpt_id=rpt_id,
+                        title=title,
+                        download_dir=download_dir,
+                        index=len(summary.downloaded) + 1,
+                    )
+                except _NoDownloadError as exc:
+                    summary.skipped_no_download += 1
+                    try:
+                        reports_store.mark_status(
+                            source=SOURCE,
+                            source_key=rpt_id,
+                            status=reports_store.STATUS_NO_DOWNLOAD,
+                            crawl_id=crawl_id,
+                            attrs={
+                                "blind": False,
+                                "no_custom_download": True,
+                                "theme": theme,
+                                "keyword": keyword,
+                            },
+                        )
+                    except Exception:
+                        pass
+                    if log:
+                        log.emit(
+                            level="info",
+                            stage="download",
+                            event="item_skip",
+                            rpt_id=rpt_id,
+                            title=title,
+                            reason="no_custom_download",
+                            keyword=keyword,
+                            error=str(exc),
+                        )
+                        log.set_progress(
+                            stage="download",
+                            skipped_no_download=summary.skipped_no_download,
+                            downloaded=len(summary.downloaded),
+                            listed=summary.listed,
+                            limit=limit,
+                            keyword=keyword,
+                        )
+                    continue
+                except Exception as exc:
+                    summary.failed += 1
+                    try:
+                        reports_store.mark_status(
+                            source=SOURCE,
+                            source_key=rpt_id,
+                            status=reports_store.STATUS_FAILED,
+                            crawl_id=crawl_id,
+                            attrs={
+                                "error": str(exc)[:500],
+                                "theme": theme,
+                                "keyword": keyword,
+                            },
+                        )
+                    except Exception:
+                        pass
+                    if log:
+                        log.emit(
+                            level="error",
+                            stage="download",
+                            event="item_fail",
+                            rpt_id=rpt_id,
+                            title=title,
+                            keyword=keyword,
+                            error=str(exc),
+                        )
+                    continue
+
+                attrs = _attrs_for(cand, blind=False)
+                try:
+                    reports_store.mark_downloaded(
+                        source=SOURCE,
+                        source_key=rpt_id,
+                        crawl_id=crawl_id,
+                        title=title or rpt_id,
+                        author=cand.get("author"),
+                        published_at=cand.get("published_at"),
+                        page_count=cand.get("page_count"),
+                        file_path=str(path),
+                        file_name=path.name,
+                        attrs=attrs,
+                    )
+                except Exception as exc:
+                    if log:
+                        log.emit(
+                            level="warn",
+                            stage="download",
+                            event="report_meta_failed",
+                            rpt_id=rpt_id,
+                            keyword=keyword,
+                            error=str(exc),
+                        )
+                already.add(rpt_id)
+                summary.downloaded.append(str(path))
+                if log:
+                    log.emit(
+                        level="info",
+                        stage="download",
+                        event="item_ok",
+                        rpt_id=rpt_id,
+                        title=title,
+                        file_name=path.name,
+                        keyword=keyword,
+                    )
+                    log.set_progress(
+                        stage="download",
+                        downloaded=len(summary.downloaded),
+                        listed=summary.listed,
+                        skipped_blind=summary.skipped_blind,
+                        skipped_existing=summary.skipped_existing,
+                        limit=limit,
+                        current_rpt_id=rpt_id,
+                        keyword=keyword,
+                        keyword_index=kw_index,
+                        keyword_total=len(keywords),
+                    )
+                if touch:
+                    touch()
+                if limit is not None and len(summary.downloaded) >= limit:
+                    break
+            if summary.stopped or (
+                limit is not None and len(summary.downloaded) >= limit
+            ):
+                break
+            next_ok, next_detail = _goto_next_list_page(page)
+            if not next_ok:
+                if log:
+                    log.emit(
+                        level="info",
+                        stage="list",
+                        event="no_more_pages",
+                        list_page=list_page,
+                        keyword=keyword,
+                        **next_detail,
+                    )
+                break
+            list_page += 1
+            if touch:
+                touch()
+
+        if log:
+            log.emit(
+                level="info",
+                stage="filter",
+                event="keyword_end",
+                keyword=keyword,
+                keyword_index=kw_index,
+                keyword_total=len(keywords),
+                downloaded=len(summary.downloaded),
+                listed=summary.listed,
+            )
+        if summary.stopped or (
+            limit is not None and len(summary.downloaded) >= limit
+        ):
             break
-        list_page += 1
-        if touch:
-            touch()
 
     if log:
         detail = summary.as_detail()
@@ -554,12 +736,13 @@ def run_search_report_job(
             stage="download",
             event="crawl_end",
             theme=theme,
-            keyword=keyword,
+            keyword_total=len(keywords),
             **detail,
         )
         log.set_progress(
             stage="done",
             limit=limit,
+            period_months=period_months,
             downloaded=detail["downloaded"],
             listed=detail["listed"],
             skipped_blind=detail["skipped_blind"],
@@ -567,7 +750,7 @@ def run_search_report_job(
             skipped_no_download=detail["skipped_no_download"],
             failed=detail["failed"],
             stopped=detail["stopped"],
-            keyword=keyword,
+            keyword_total=len(keywords),
             theme=theme,
             mode=profile.mode,
         )
@@ -593,7 +776,9 @@ def _wait_search_form(page: Page) -> None:
     )
 
 
-def _apply_filters_once(page: Page, *, profile: SearchProfile) -> None:
+def _apply_filters_once(
+    page: Page, *, profile: SearchProfile, keyword: str
+) -> None:
     page.goto(SEARCH_URL, wait_until="domcontentloaded")
     _wait_search_form(page)
 
@@ -602,7 +787,7 @@ def _apply_filters_once(page: Page, *, profile: SearchProfile) -> None:
     page.locator("li span.item", has_text="제목").first.click()
     page.wait_for_timeout(300)
 
-    page.locator("#srchKeyword").fill(profile.keyword)
+    page.locator("#srchKeyword").fill(keyword)
     page.wait_for_timeout(200)
 
     page.locator("button.select-box.flat-select", has_text="페이지").first.click()
@@ -656,12 +841,14 @@ def _apply_filters_once(page: Page, *, profile: SearchProfile) -> None:
     page.wait_for_timeout(LIST_WAIT_MS)
 
 
-def _apply_filters(page: Page, *, profile: SearchProfile) -> None:
+def _apply_filters(
+    page: Page, *, profile: SearchProfile, keyword: str
+) -> None:
     """Apply SearchReport filters with visible waits and short reload retries."""
     last_exc: BaseException | None = None
     for attempt in range(FILTER_APPLY_RETRIES):
         try:
-            _apply_filters_once(page, profile=profile)
+            _apply_filters_once(page, profile=profile, keyword=keyword)
             return
         except Exception as exc:
             last_exc = exc

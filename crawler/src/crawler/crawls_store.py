@@ -18,33 +18,61 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-VALID_MODES = frozenset({"auto", "adhoc", "datacenter", "ai", "physical_ai"})
-LIMITED_MODES = frozenset({"datacenter", "ai", "physical_ai"})
+VALID_MODES = frozenset(
+    {
+        "auto",
+        "adhoc",
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
+LIMITED_MODES = frozenset(
+    {
+        "datacenter",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
 
 
 def create_crawl(
     *,
     pid: int | None = None,
     mode: str = "auto",
-    report_limit: int = 5,
+    period_months: int | None = None,
+    report_limit: int | None = None,
     debug: bool = False,
 ) -> dict[str, Any]:
     now = _now()
     if mode not in VALID_MODES:
         raise ValueError(f"Invalid crawl mode: {mode}")
-    if report_limit < 1 or report_limit > 50:
+    if report_limit is not None and (report_limit < 1 or report_limit > 50):
         raise ValueError(f"Invalid report_limit: {report_limit}")
+    if period_months is not None and period_months not in (3, 6, 12):
+        raise ValueError(f"Invalid period_months: {period_months}")
+    if mode in LIMITED_MODES and period_months is None and report_limit is None:
+        period_months = 3
     asset_id = make_asset_id(
         mode,
-        report_limit=report_limit if mode in LIMITED_MODES else None,
+        period_months=period_months if mode in LIMITED_MODES else None,
+        report_limit=report_limit if mode in LIMITED_MODES and period_months is None else None,
     )
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO fnguide_crawls
-                    (started_at, pid, state, mode, report_limit, asset_id, debug)
-                VALUES (%s, %s, 'starting', %s, %s, %s, %s)
+                    (started_at, pid, state, mode, report_limit, period_months, asset_id, debug)
+                VALUES (%s, %s, 'starting', %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -52,6 +80,7 @@ def create_crawl(
                     pid if pid is not None else os.getpid(),
                     mode,
                     report_limit,
+                    period_months,
                     asset_id,
                     bool(debug),
                 ),

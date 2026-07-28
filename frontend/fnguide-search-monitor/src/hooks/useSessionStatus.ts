@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isSearchProfileMode } from '../lib/themes'
 import type {
   CrawlMode,
   CrawlResponse,
@@ -41,7 +42,6 @@ export type SessionView = {
   requestingStop: boolean
   startCrawl: (
     mode?: CrawlMode,
-    limit?: number,
     opts?: { debug?: boolean },
   ) => Promise<void>
   requestLogout: () => Promise<void>
@@ -134,19 +134,13 @@ export function useSessionStatus(opts?: {
 
   async function startCrawl(
     mode: CrawlMode = 'datacenter',
-    limit = 5,
     opts?: { debug?: boolean },
   ) {
     setRequestingStart(true)
     try {
-      const body: { mode: CrawlMode; limit?: number; debug?: boolean } = { mode }
-      if (
-        mode === 'datacenter' ||
-        mode === 'ai' ||
-        mode === 'physical_ai'
-      ) {
-        body.limit = limit
-        if (opts?.debug) body.debug = true
+      const body: { mode: CrawlMode; debug?: boolean } = { mode }
+      if (isSearchProfileMode(mode) && opts?.debug) {
+        body.debug = true
       }
       const res = await fetch('/api/crawl/start', {
         method: 'POST',

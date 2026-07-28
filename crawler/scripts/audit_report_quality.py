@@ -64,7 +64,10 @@ def main() -> None:
     parser.add_argument(
         "--theme",
         default=None,
-        help="Limit to attrs.theme (datacenter|ai|physical_ai)",
+        help=(
+            "Limit to attrs.theme "
+            "(datacenter|ai|physical_ai|appliance|display|automotive|petrochemical)"
+        ),
     )
     parser.add_argument(
         "--report-id",

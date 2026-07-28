@@ -27,7 +27,7 @@ SECTORS = get_profile("datacenter").sectors
 def run_datacenter_job(
     page: Page,
     *,
-    limit: int,
+    limit: int | None = None,
     download_dir: Path,
     should_stop: Callable[[], bool] | None = None,
     touch: Callable[[], Any] | None = None,
