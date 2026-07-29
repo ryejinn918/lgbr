@@ -28,6 +28,8 @@ const EMPTY_QUALITY: QualityCounts = {
 const EMPTY_THEME: ThemeCounts = {
   all: 0,
   ai: 0,
+  datacenter: 0,
+  macroeconomy: 0,
   physical_ai: 0,
   appliance: 0,
   display: 0,

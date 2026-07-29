@@ -2,6 +2,8 @@ import type { ConsensusTheme } from '../types'
 
 export const THEMES: ConsensusTheme[] = [
   'ai',
+  'datacenter',
+  'macroeconomy',
   'physical_ai',
   'appliance',
   'display',
@@ -14,8 +16,6 @@ export const DEFAULT_THEME: ConsensusTheme = 'ai'
 export type AppTab = 'axes' | 'frames' | 'eval'
 
 export function parseTheme(raw: string | null | undefined): ConsensusTheme {
-  // Legacy slug: datacenter merged into ai (AI/AIDC).
-  if (raw === 'datacenter') return 'ai'
   if (raw && THEMES.includes(raw as ConsensusTheme)) return raw as ConsensusTheme
   return DEFAULT_THEME
 }

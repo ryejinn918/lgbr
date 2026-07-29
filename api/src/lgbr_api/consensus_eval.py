@@ -36,7 +36,9 @@ WRITE_MAX_TOKENS = 8192
 WRITE_SOURCES_PER_QUERY = 5
 
 THEME_LABEL = {
-    "ai": "AI/AIDC",
+    "ai": "AI",
+    "datacenter": "데이터센터",
+    "macroeconomy": "거시경제",
     "physical_ai": "피지컬 AI",
     "appliance": "가전",
     "display": "디스플레이",

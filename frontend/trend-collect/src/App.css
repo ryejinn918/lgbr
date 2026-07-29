@@ -463,6 +463,18 @@
   text-overflow: ellipsis;
 }
 
+.report-table .theme-chip {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
 .report-table .col-status,
 .report-table .col-quality,
 .report-table .col-provider,

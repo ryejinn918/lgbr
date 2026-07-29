@@ -106,3 +106,24 @@ def test_apply_source_pass_policy_forces_pwc_pass():
     assert out["short_title"] == "종목 노트"
     assert out["framework_summary"] == "요약 유지"
     assert out["topic"] == "개별 종목"
+
+
+def test_normalize_result_themes_multi():
+    out = normalize_result(
+        {
+            "pass": True,
+            "confidence": 0.9,
+            "has_coherent_framework": True,
+            "has_broad_sector_coverage": True,
+            "scope": "sector",
+            "topic": "AIDC",
+            "short_title": "DC 전력",
+            "framework_summary": "요약",
+            "fail_reasons": [],
+            "pass_signals": ["ok"],
+            "rationale": "통과",
+            "themes": ["ai", "datacenter", "bogus", "macroeconomy"],
+        }
+    )
+    assert out["themes"] == ["ai", "datacenter", "macroeconomy"]
+    assert out["pass"] is True

@@ -330,9 +330,6 @@ def start_crawl(
 ) -> dict[str, Any]:
     # `limit` kept for API compat; search crawls use profile period_months.
     _ = limit
-    # Legacy: datacenter crawl merged into ai (AI/AIDC).
-    if mode == "datacenter":
-        mode = "ai"
     if mode not in VALID_MODES:
         return {
             "ok": False,

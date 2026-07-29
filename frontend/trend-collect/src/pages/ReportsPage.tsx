@@ -462,6 +462,16 @@ export function ReportsPage({
                       </td>
                       <td className="col-title report-title" title={item.title}>
                         {item.title}
+                        {(item.themes?.length
+                          ? item.themes
+                          : item.theme
+                            ? [item.theme]
+                            : []
+                        ).map((t) => (
+                          <span key={t} className="theme-chip">
+                            {THEME_LABEL[t] || t}
+                          </span>
+                        ))}
                         {originalUrl ? (
                           <>
                             {' '}

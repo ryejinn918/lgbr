@@ -49,18 +49,25 @@ class SearchProfile:
 PROFILES: dict[str, SearchProfile] = {
     "ai": SearchProfile(
         mode="ai",
-        keywords=("AI", "AIDC", "데이터센터", "AI 반도체"),
-        # Former datacenter profile sectors folded in for AIDC coverage.
+        keywords=("AI", "AI 반도체", "생성형 AI", "LLM"),
+        sectors=(
+            "IT",
+            "커뮤니케이션서비스",
+            "금융",
+        ),
+        theme="ai",
+    ),
+    "datacenter": SearchProfile(
+        mode="datacenter",
+        keywords=("데이터센터", "AIDC", "AI 데이터센터", "전력", "냉각"),
         sectors=(
             "에너지",
             "소재",
             "산업재",
-            "금융",
-            "IT",
-            "커뮤니케이션서비스",
             "유틸리티",
+            "IT",
         ),
-        theme="ai",
+        theme="datacenter",
     ),
     "physical_ai": SearchProfile(
         mode="physical_ai",
@@ -459,7 +466,7 @@ def run_search_report_job(
                     "stock": cand.get("stock"),
                     "blind": blind,
                     "keyword": kw,
-                    "theme": theme,
+                    "crawl_profile": theme,
                 }
                 if asset_id:
                     attrs["asset_id"] = asset_id
@@ -581,7 +588,7 @@ def run_search_report_job(
                             attrs={
                                 "blind": False,
                                 "no_custom_download": True,
-                                "theme": theme,
+                                "crawl_profile": theme,
                                 "keyword": keyword,
                             },
                         )
@@ -617,7 +624,7 @@ def run_search_report_job(
                             crawl_id=crawl_id,
                             attrs={
                                 "error": str(exc)[:500],
-                                "theme": theme,
+                                "crawl_profile": theme,
                                 "keyword": keyword,
                             },
                         )

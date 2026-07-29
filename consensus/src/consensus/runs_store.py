@@ -13,6 +13,8 @@ from consensus.db import connect
 THEMES = frozenset(
     {
         "ai",
+        "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",
@@ -21,7 +23,9 @@ THEMES = frozenset(
     }
 )
 DEFAULT_QUESTION = {
-    "ai": "AI/AIDC, 지금 뭐 보면 돼?",
+    "ai": "AI, 지금 뭐 보면 돼?",
+    "datacenter": "데이터센터, 지금 뭐 보면 돼?",
+    "macroeconomy": "거시경제, 지금 뭐 보면 돼?",
     "physical_ai": "피지컬 AI, 지금 뭐 보면 돼?",
     "appliance": "가전, 지금 뭐 보면 돼?",
     "display": "디스플레이, 지금 뭐 보면 돼?",
@@ -371,24 +375,39 @@ def list_pool_reports(
     themes: tuple[str, ...],
     period_months: int = PERIOD_MONTHS_DEFAULT,
 ) -> list[dict[str, Any]]:
-    """Downloaded reports with attrs.theme in themes (qp first).
+    """Downloaded reports with attrs.themes membership (qp first).
 
-    Only includes rows with published_at within the last ``period_months``
-    calendar months (NULL published_at excluded).
+    Matches ``attrs.themes ?| themes`` or legacy ``attrs.theme`` when themes[]
+    is absent/empty. Only includes rows with published_at within the last
+    ``period_months`` calendar months (NULL published_at excluded).
     """
     if not themes:
         return []
     months = max(1, int(period_months))
+    theme_list = list(themes)
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT id, source_key, title, file_path, file_name, page_count,
                    published_at, quality_pass, quality_scope, quality_json, attrs,
                    attrs->>'provider' AS provider,
-                   attrs->>'theme' AS theme
+                   COALESCE(
+                     attrs->'themes'->>0,
+                     attrs->>'theme'
+                   ) AS theme
             FROM reports
             WHERE status = 'downloaded'
-              AND attrs->>'theme' = ANY(%s)
+              AND (
+                attrs->'themes' ?| %s::text[]
+                OR (
+                  (
+                    NOT (attrs ? 'themes')
+                    OR jsonb_typeof(attrs->'themes') <> 'array'
+                    OR jsonb_array_length(attrs->'themes') = 0
+                  )
+                  AND attrs->>'theme' = ANY(%s)
+                )
+              )
               AND coalesce(file_path, '') <> ''
               AND published_at IS NOT NULL
               AND published_at >= (CURRENT_DATE - make_interval(months => %s))
@@ -397,7 +416,7 @@ def list_pool_reports(
               published_at DESC NULLS LAST,
               page_count DESC NULLS LAST
             """,
-            (list(themes), months),
+            (theme_list, theme_list, months),
         )
         return [dict(r) for r in cur.fetchall()]
 

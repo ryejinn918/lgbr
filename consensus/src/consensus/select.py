@@ -22,7 +22,9 @@ ROLE_CORE = "selected"
 ROLE_BIBLIO = "fill_extra"
 
 THEME_LABEL_KO = {
-    "ai": "AI/AIDC",
+    "ai": "AI",
+    "datacenter": "데이터센터",
+    "macroeconomy": "거시경제",
     "physical_ai": "피지컬 AI",
     "appliance": "가전",
     "display": "디스플레이",
@@ -33,9 +35,20 @@ THEME_LABEL_KO = {
 # Extra sector cues for the pack LLM (English; output fields stay Korean).
 THEME_SELECT_HINTS = {
     "ai": (
-        "Axes often include AIDC power/site/cooling, networking, inference infra, "
-        "and demand structure. Prefer scarce, structural, mechanism-dense industry "
-        "analyses over thin macro, asset allocation, or notes where AI is only seasoning."
+        "Axes often include models/LLM, AI semiconductors, inference software, "
+        "and AI demand structure. Prefer mechanism-dense industry analyses; "
+        "exclude pure data-center/power/cooling notes (those belong to datacenter) "
+        "and thin macro/asset-allocation pieces."
+    ),
+    "datacenter": (
+        "Axes often include AIDC power/site/cooling, networking, colo capacity, "
+        "and infra bottlenecks. Prefer scarce structural industry analyses over "
+        "thin equity-only or generic AI hype notes."
+    ),
+    "macroeconomy": (
+        "Axes often include growth/inflation, rates/FX, credit cycles, and "
+        "cross-asset implications. Prefer structural macro frameworks over "
+        "single-sector or single-name notes."
     ),
     "physical_ai": (
         "Axes often include robotics, factory automation, sensors/actuators, and "
@@ -66,6 +79,7 @@ THEME_SELECT_HINTS = {
 
 
 def pool_themes_for(theme: str) -> tuple[str, ...]:
+    """Pool membership themes for a consensus tab (ai is ai-only)."""
     if theme == "ai":
         return AI_POOL_THEMES
     return (theme,)

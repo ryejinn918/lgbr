@@ -18,6 +18,7 @@ import httpx
 from psycopg.types.json import Jsonb
 
 from crawler.db import connect, load_database_env
+from crawler.report_themes import REPORT_THEMES, THEME_LABEL_KO
 from crawler.reports_store import SOURCE_FNGUIDE
 
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
@@ -25,6 +26,11 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MAX_CHARS = 7000
 PDF_PAGES = 5
 DEFAULT_CONCURRENCY = 8
+VALID_THEMES = REPORT_THEMES
+_THEME_IDS = ", ".join(sorted(VALID_THEMES))
+_THEME_LABEL_LINES = "\n".join(
+    f"- {tid}: {THEME_LABEL_KO.get(tid, tid)}" for tid in sorted(VALID_THEMES)
+)
 
 _WATERMARK_RE = re.compile(
     r"DB Copyright © FnGuide Inc\.\s*\([^)]*\)\s*",
@@ -47,17 +53,18 @@ Stock mentions / Top picks are OK only as appendix or examples when the core is 
 
 Respond with a single JSON object only (no markdown):
 {
-  "pass": boolean,
-  "confidence": number,
-  "has_coherent_framework": boolean,
-  "has_broad_sector_coverage": boolean,
-  "scope": "sector" | "company" | "unclear",
-  "topic": string,
-  "short_title": string,
-  "framework_summary": string | null,
-  "fail_reasons": string[],
-  "pass_signals": string[],
-  "rationale": string
+    "pass": boolean,
+    "confidence": number,
+    "has_coherent_framework": boolean,
+    "has_broad_sector_coverage": boolean,
+    "scope": "sector" | "company" | "unclear",
+    "topic": string,
+    "short_title": string,
+    "framework_summary": string | null,
+    "fail_reasons": string[],
+    "pass_signals": string[],
+    "rationale": string,
+    "themes": string[]
 }
 
 Language (mandatory):
@@ -70,6 +77,15 @@ short_title (citation label — always fill, pass or fail):
 - About 8–22 characters. Not a sentence. No broker/provider name inside
   (provider is attached separately as [KB, short_title]).
 - Prefer series / period / core theme; do not paste the full original title.
+
+themes (content topics — always fill, pass or fail):
+- Zero or more ids from this allowlist only: """ + _THEME_IDS + """
+- Labels:
+""" + _THEME_LABEL_LINES + """
+- Multi-label OK when the note clearly covers more than one (e.g. AI + datacenter).
+- Prefer precise labels: pure AIDC/power/cooling → datacenter; model/LLM/AI chip → ai;
+  rates/inflation/FX/growth → macroeconomy. Do not dump every sector.
+- Empty array only when truly off-list / unreadable.
 
 Rules:
 - pass MUST be true only if has_coherent_framework AND has_broad_sector_coverage AND scope is "sector".
@@ -180,6 +196,16 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
     if len(short_title) > 28:
         short_title = short_title[:27].rstrip() + "…"
 
+    themes_raw = raw.get("themes")
+    themes: list[str] = []
+    if isinstance(themes_raw, list):
+        for item in themes_raw:
+            s = str(item).strip()
+            if s in VALID_THEMES:
+                themes.append(s)
+    elif isinstance(themes_raw, str) and themes_raw.strip() in VALID_THEMES:
+        themes = [themes_raw.strip()]
+
     return {
         "pass": passed,
         "confidence": confidence,
@@ -192,6 +218,7 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
         "fail_reasons": [str(x)[:200] for x in fail_reasons][:20],
         "pass_signals": [str(x)[:200] for x in pass_signals][:20],
         "rationale": str(raw.get("rationale") or "")[:2000],
+        "themes": themes,
     }
 
 
@@ -215,8 +242,18 @@ def fetch_targets(
         if not force:
             where.append("quality_at IS NULL")
         if theme:
-            where.append("attrs->>'theme' = %s")
-            params.append(str(theme))
+            where.append(
+                "("
+                "attrs->'themes' ? %s"
+                " OR ("
+                "  (NOT (attrs ? 'themes')"
+                "   OR jsonb_typeof(attrs->'themes') <> 'array'"
+                "   OR jsonb_array_length(attrs->'themes') = 0)"
+                "  AND attrs->>'theme' = %s"
+                ")"
+                ")"
+            )
+            params.extend([str(theme), str(theme)])
     where_sql = " AND ".join(where)
     sql = f"""
         SELECT id, source, source_key, title, file_path
@@ -281,29 +318,59 @@ def save_quality(
     payload = dict(result)
     if error:
         payload["error"] = error
+    themes = result.get("themes")
+    if not isinstance(themes, list):
+        themes = []
+    themes = [str(t) for t in themes if str(t) in VALID_THEMES]
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE reports
-                SET quality_pass = %s,
-                    quality_confidence = %s,
-                    quality_scope = %s,
-                    quality_model = %s,
-                    quality_at = %s,
-                    quality_json = %s
-                WHERE id = %s
-                """,
-                [
-                    result.get("pass") if error is None else False,
-                    result.get("confidence"),
-                    result.get("scope") or ("unclear" if error else None),
-                    model,
-                    _now(),
-                    Jsonb(payload),
-                    report_id,
-                ],
-            )
+            if error is None:
+                cur.execute(
+                    """
+                    UPDATE reports
+                    SET quality_pass = %s,
+                        quality_confidence = %s,
+                        quality_scope = %s,
+                        quality_model = %s,
+                        quality_at = %s,
+                        quality_json = %s,
+                        attrs = COALESCE(attrs, '{}'::jsonb)
+                            || jsonb_build_object('themes', %s::jsonb)
+                    WHERE id = %s
+                    """,
+                    [
+                        result.get("pass"),
+                        result.get("confidence"),
+                        result.get("scope"),
+                        model,
+                        _now(),
+                        Jsonb(payload),
+                        Jsonb(themes),
+                        report_id,
+                    ],
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE reports
+                    SET quality_pass = %s,
+                        quality_confidence = %s,
+                        quality_scope = %s,
+                        quality_model = %s,
+                        quality_at = %s,
+                        quality_json = %s
+                    WHERE id = %s
+                    """,
+                    [
+                        False,
+                        result.get("confidence"),
+                        result.get("scope") or "unclear",
+                        model,
+                        _now(),
+                        Jsonb(payload),
+                        report_id,
+                    ],
+                )
         conn.commit()
 
 
@@ -323,6 +390,7 @@ def save_unclear(report_id: UUID, *, model: str, error: str) -> None:
             "fail_reasons": ["extract_or_api_error"],
             "pass_signals": [],
             "rationale": "텍스트 추출 또는 감사 API 호출에 실패했습니다.",
+            "themes": [],
         },
         model=model,
         error=error,

@@ -1,4 +1,4 @@
-import { THEME_LABEL, isSearchProfileMode } from './themes'
+import { PROFILE_MODE_LABEL, isSearchProfileMode } from './themes'
 import {
   MEDIA_SOURCES,
   getMediaSource,
@@ -224,7 +224,7 @@ export function crawlModeTypeLabel(mode: string | null | undefined): string {
   if (mode === 'auto') return '자동'
   const media = getMediaSource(mode)
   if (media) return `${media.label} 애드혹`
-  return THEME_LABEL[mode] ?? mode
+  return PROFILE_MODE_LABEL[mode as keyof typeof PROFILE_MODE_LABEL] ?? mode
 }
 
 export function mediaHasSearch(source: CollectSource): boolean {

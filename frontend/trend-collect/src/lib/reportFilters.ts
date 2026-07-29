@@ -1,5 +1,5 @@
 import type { ReportSort } from '../hooks/useReports'
-import { SEARCH_PROFILE_MODES } from './themes'
+import { REPORT_THEMES } from './themes'
 
 export const STATUS_FILTERS = [
   'all',
@@ -18,7 +18,7 @@ export const QUALITY_FILTERS = [
   'unauditable',
 ] as const
 
-export const THEME_FILTERS = ['all', ...SEARCH_PROFILE_MODES] as const
+export const THEME_FILTERS = ['all', ...REPORT_THEMES] as const
 
 export type StatusFilter = (typeof STATUS_FILTERS)[number]
 export type QualityFilter = (typeof QUALITY_FILTERS)[number]

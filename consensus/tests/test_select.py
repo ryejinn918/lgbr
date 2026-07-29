@@ -14,6 +14,8 @@ from consensus.select import (
 def test_select_system_requires_korean_and_omit_summary():
     for theme in (
         "ai",
+        "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",
@@ -33,6 +35,8 @@ def test_select_system_requires_korean_and_omit_summary():
 
 def test_pool_themes_ai_is_ai_only():
     assert pool_themes_for("ai") == ("ai",)
+    assert pool_themes_for("datacenter") == ("datacenter",)
+    assert pool_themes_for("macroeconomy") == ("macroeconomy",)
     assert pool_themes_for("physical_ai") == ("physical_ai",)
     assert pool_themes_for("appliance") == ("appliance",)
     assert pool_themes_for("display") == ("display",)

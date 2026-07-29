@@ -134,6 +134,8 @@ _UNAUDITABLE_SQL = (
 VALID_THEMES = frozenset(
     {
         "ai",
+        "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",
@@ -179,6 +181,23 @@ def _quality_label(row: dict[str, Any]) -> str:
     return "unauditable"
 
 
+def _themes_from_attrs(attrs: dict[str, Any]) -> list[str]:
+    raw = attrs.get("themes")
+    out: list[str] = []
+    if isinstance(raw, list):
+        for item in raw:
+            s = str(item).strip()
+            if s in VALID_THEMES:
+                out.append(s)
+    if out:
+        return out
+    legacy = attrs.get("theme")
+    if legacy is None:
+        return []
+    s = str(legacy).strip()
+    return [s] if s in VALID_THEMES else []
+
+
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     pub = row.get("published_at")
     attrs = row.get("attrs") or {}
@@ -186,12 +205,12 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         attrs = {}
     provider = attrs.get("provider")
     provider_s = str(provider).strip() if provider else None
-    theme = attrs.get("theme")
-    theme_s = str(theme).strip() if theme else None
-    if theme_s == "datacenter":
-        theme_s = "ai"
-    if theme_s not in VALID_THEMES:
-        theme_s = None
+    themes = _themes_from_attrs(attrs)
+    theme_s = themes[0] if themes else None
+    crawl_raw = attrs.get("crawl_profile")
+    crawl_s = str(crawl_raw).strip() if crawl_raw else None
+    if not crawl_s:
+        crawl_s = None
     qp = row.get("quality_pass")
     quality = _quality_label(row)
     raw_url = attrs.get("url")
@@ -214,6 +233,8 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         "published_at": pub.isoformat() if pub else None,
         "provider": provider_s or None,
         "theme": theme_s,
+        "themes": themes,
+        "crawl_profile": crawl_s,
         "url": public_url,
         "page_count": row.get("page_count"),
         "crawl_id": str(row["crawl_id"]) if row.get("crawl_id") else None,
@@ -238,8 +259,19 @@ def _list_where(
         clauses.append("source = %s")
         params.append(source)
     if theme:
-        clauses.append("attrs->>'theme' = %s")
-        params.append(theme)
+        # Membership in attrs.themes[], with legacy attrs.theme fallback.
+        clauses.append(
+            "("
+            "attrs->'themes' ? %s"
+            " OR ("
+            "  (NOT (attrs ? 'themes')"
+            "   OR jsonb_typeof(attrs->'themes') <> 'array'"
+            "   OR jsonb_array_length(attrs->'themes') = 0)"
+            "  AND attrs->>'theme' = %s"
+            ")"
+            ")"
+        )
+        params.extend([theme, theme])
     if not clauses:
         return "", []
     return " WHERE " + " AND ".join(clauses), params
@@ -297,25 +329,66 @@ def _quality_counts(
 
 def _theme_counts(cur: Any, *, source: str | None = None) -> dict[str, int]:
     where_sql, params = _list_where(source=source)
-    extra = " AND attrs->>'theme' IS NOT NULL" if where_sql else " WHERE attrs->>'theme' IS NOT NULL"
+    base = "FROM reports" + (where_sql or "")
     cur.execute(
         f"""
-        SELECT attrs->>'theme' AS theme, count(*)::int AS n
-        FROM reports
-        {where_sql}{extra}
-        GROUP BY attrs->>'theme'
+        WITH keyed AS (
+          SELECT id, jsonb_array_elements_text(attrs->'themes') AS theme
+          {base}
+            {"AND" if where_sql else "WHERE"}
+            attrs ? 'themes'
+            AND jsonb_typeof(attrs->'themes') = 'array'
+            AND jsonb_array_length(attrs->'themes') > 0
+          UNION ALL
+          SELECT id, attrs->>'theme' AS theme
+          {base}
+            {"AND" if where_sql else "WHERE"}
+            (
+              NOT (attrs ? 'themes')
+              OR jsonb_typeof(attrs->'themes') <> 'array'
+              OR jsonb_array_length(attrs->'themes') = 0
+            )
+            AND attrs->>'theme' IS NOT NULL
+        )
+        SELECT theme, count(*)::int AS n
+        FROM keyed
+        WHERE theme IS NOT NULL AND theme <> ''
+        GROUP BY theme
         """,
-        params,
+        params + params,
     )
     counts = {t: 0 for t in VALID_THEMES}
-    total = 0
     for row in cur.fetchall():
         theme = str(row["theme"] or "")
         n = int(row["n"])
         if theme in counts:
             counts[theme] = n
-        total += n
-    counts["all"] = total
+    cur.execute(
+        f"""
+        WITH keyed AS (
+          SELECT id
+          {base}
+            {"AND" if where_sql else "WHERE"}
+            attrs ? 'themes'
+            AND jsonb_typeof(attrs->'themes') = 'array'
+            AND jsonb_array_length(attrs->'themes') > 0
+          UNION
+          SELECT id
+          {base}
+            {"AND" if where_sql else "WHERE"}
+            (
+              NOT (attrs ? 'themes')
+              OR jsonb_typeof(attrs->'themes') <> 'array'
+              OR jsonb_array_length(attrs->'themes') = 0
+            )
+            AND attrs->>'theme' IS NOT NULL
+        )
+        SELECT count(*)::int AS n FROM keyed
+        """,
+        params + params,
+    )
+    row = cur.fetchone() or {}
+    counts["all"] = int(row.get("n") or 0)
     return counts
 
 

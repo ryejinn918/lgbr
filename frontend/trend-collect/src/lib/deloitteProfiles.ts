@@ -8,9 +8,15 @@ export const DELOITTE_PROFILES = [
   },
   {
     id: 'ai',
-    label: 'AI/AIDC',
+    label: 'AI',
     periodMonths: 3,
-    queries: ['AI', 'AIDC', 'data center', 'AI semiconductor'],
+    queries: ['AI', 'AI semiconductor', 'generative AI', 'LLM'],
+  },
+  {
+    id: 'datacenter',
+    label: '데이터센터',
+    periodMonths: 3,
+    queries: ['data center', 'AIDC', 'power', 'cooling'],
   },
   {
     id: 'physical_ai',

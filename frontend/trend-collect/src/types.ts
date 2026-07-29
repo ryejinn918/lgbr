@@ -206,6 +206,8 @@ export type ReportRecord = {
   published_at?: string | null
   provider?: string | null
   theme?: string | null
+  themes?: string[]
+  crawl_profile?: string | null
   /** Public detail-page URL when stored (e.g. PwC); not set for FnGuide. */
   url?: string | null
   page_count?: number | null
@@ -268,6 +270,8 @@ export type QualityCounts = {
 export type ThemeCounts = {
   all: number
   ai: number
+  datacenter: number
+  macroeconomy: number
   physical_ai: number
   appliance: number
   display: number

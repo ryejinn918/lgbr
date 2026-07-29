@@ -293,6 +293,7 @@ def _process_item(
         "profile": profile_id,
         "query": query,
         "provider": "Deloitte",
+        "crawl_profile": profile_id,
     }
     if item.category:
         attrs["category"] = item.category

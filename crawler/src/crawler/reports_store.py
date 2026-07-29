@@ -130,7 +130,8 @@ def upsert_listed(
                     author = COALESCE(EXCLUDED.author, reports.author),
                     published_at = COALESCE(EXCLUDED.published_at, reports.published_at),
                     page_count = COALESCE(EXCLUDED.page_count, reports.page_count),
-                    attrs = COALESCE(reports.attrs, '{}'::jsonb) || EXCLUDED.attrs,
+                    attrs = COALESCE(reports.attrs, '{}'::jsonb)
+                        || (EXCLUDED.attrs - 'themes'),
                     last_seen_at = now(),
                     status = CASE
                         WHEN reports.file_path IS NOT NULL
@@ -196,7 +197,8 @@ def mark_downloaded(
                     file_path = COALESCE(EXCLUDED.file_path, reports.file_path),
                     file_name = COALESCE(EXCLUDED.file_name, reports.file_name),
                     status = 'downloaded',
-                    attrs = COALESCE(reports.attrs, '{}'::jsonb) || EXCLUDED.attrs,
+                    attrs = COALESCE(reports.attrs, '{}'::jsonb)
+                        || (EXCLUDED.attrs - 'themes'),
                     last_seen_at = now(),
                     downloaded_at = COALESCE(reports.downloaded_at, now())
                 RETURNING id
@@ -256,7 +258,8 @@ def mark_status(
                         THEN reports.status
                         ELSE EXCLUDED.status
                     END,
-                    attrs = COALESCE(reports.attrs, '{}'::jsonb) || EXCLUDED.attrs,
+                    attrs = COALESCE(reports.attrs, '{}'::jsonb)
+                        || (EXCLUDED.attrs - 'themes'),
                     last_seen_at = now()
                 RETURNING id
                 """,

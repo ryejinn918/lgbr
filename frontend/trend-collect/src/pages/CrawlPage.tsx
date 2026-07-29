@@ -11,8 +11,8 @@ import {
   formatTime,
 } from '../lib/format'
 import {
+  PROFILE_MODE_LABEL,
   SEARCH_PROFILE_MODES,
-  THEME_LABEL,
   isSearchProfileMode,
 } from '../lib/themes'
 import { crawlModeTypeLabel, isFnguideCrawlMode } from '../lib/collectNav'
@@ -59,7 +59,7 @@ export function CrawlPage() {
       ? profiles.items
           .filter((p) => isSearchProfileMode(p.mode))
           .map((p) => {
-            const label = THEME_LABEL[p.mode] ?? p.mode
+            const label = PROFILE_MODE_LABEL[p.mode] ?? p.mode
             const kw = p.keywords[0] ?? '—'
             const extra =
               p.keywords.length > 1 ? ` 외 ${p.keywords.length - 1}` : ''
@@ -232,7 +232,7 @@ export function CrawlPage() {
               disabled={!canStart || requestingStart || !!fetchError}
               onClick={() => void onStart(mode)}
             >
-              {requestingStart ? '시작 중…' : THEME_LABEL[mode]}
+              {requestingStart ? '시작 중…' : PROFILE_MODE_LABEL[mode]}
             </button>
           ))}
           <button

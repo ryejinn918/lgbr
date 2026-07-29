@@ -1,4 +1,4 @@
-"""Legacy datacenter crawl wrapper — redirects to ai (AI/AIDC) profile."""
+"""Datacenter (AIDC) FnGuide search crawl — thin wrapper over search_report."""
 
 from __future__ import annotations
 
@@ -18,10 +18,9 @@ from crawler.jobs.search_report import (
     viewer_url,
 )
 
-# Re-exports for older imports / tests
 DatacenterJobSummary = SearchJobSummary
 KEYWORD = "데이터센터"
-SECTORS = get_profile("ai").sectors
+SECTORS = get_profile("datacenter").sectors
 
 
 def run_datacenter_job(
@@ -37,7 +36,7 @@ def run_datacenter_job(
 ) -> SearchJobSummary:
     return run_search_report_job(
         page,
-        profile=get_profile("ai"),
+        profile=get_profile("datacenter"),
         limit=limit,
         download_dir=download_dir,
         should_stop=should_stop,

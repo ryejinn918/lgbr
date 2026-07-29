@@ -12,7 +12,6 @@ def _mode_abbrev() -> dict[str, str]:
     from lgbr_api.source_registry import source_mode_abbrev
 
     base = {
-        # Legacy crawl folders (fn-dc-*); not an active search mode.
         "datacenter": "dc",
         "ai": "ai",
         "physical_ai": "pai",
@@ -31,6 +30,7 @@ MODE_ABBREV = _mode_abbrev()
 LIMITED_MODES = frozenset(
     {
         "ai",
+        "datacenter",
         "physical_ai",
         "appliance",
         "display",

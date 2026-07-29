@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 _SEOUL = ZoneInfo("Asia/Seoul")
 
 THEME_ABBREV = {
-    # Legacy asset ids (cs-dc-*); not an active consensus theme.
     "datacenter": "dc",
     "ai": "ai",
+    "macroeconomy": "me",
     "physical_ai": "pai",
     "appliance": "ap",
     "display": "dp",

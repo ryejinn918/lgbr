@@ -317,6 +317,7 @@ DELOITTE_PROFILES = frozenset(
     {
         "report",
         "ai",
+        "datacenter",
         "physical_ai",
         "appliance",
         "display",

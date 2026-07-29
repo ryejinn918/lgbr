@@ -77,8 +77,13 @@ PROFILES: dict[str, DeloitteProfile] = {
     ),
     "ai": DeloitteProfile(
         id="ai",
-        label="AI/AIDC",
-        queries=("AI", "AIDC", "data center", "AI semiconductor"),
+        label="AI",
+        queries=("AI", "AI semiconductor", "generative AI", "LLM"),
+    ),
+    "datacenter": DeloitteProfile(
+        id="datacenter",
+        label="데이터센터",
+        queries=("data center", "AIDC", "power", "cooling"),
     ),
     "physical_ai": DeloitteProfile(
         id="physical_ai",
