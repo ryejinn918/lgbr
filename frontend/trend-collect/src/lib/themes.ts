@@ -35,6 +35,7 @@ export const THEME_LABEL: Record<string, string> = {
   display: '디스플레이',
   automotive: '자동차',
   petrochemical: '석유화학',
+  other: '기타',
 }
 
 /** Crawl-profile labels for Run / profile editor. */

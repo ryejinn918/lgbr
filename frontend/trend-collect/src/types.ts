@@ -277,6 +277,7 @@ export type ThemeCounts = {
   display: number
   automotive: number
   petrochemical: number
+  other: number
   [key: string]: number
 }
 

@@ -10,6 +10,7 @@ from uuid import UUID
 
 from crawler import collection_jobs_store, reports_store
 from crawler.asset_id import DOWNLOADS_ROOT, downloads_dir, make_asset_id
+from crawler.report_themes import REPORT_THEMES
 from crawler.jobs.media_pace import (
     DEFAULT_ITEM_DELAY_SECONDS,
     clamp_item_delay_seconds,
@@ -295,6 +296,8 @@ def _process_item(
         "provider": "Deloitte",
         "crawl_profile": profile_id,
     }
+    if profile_id in REPORT_THEMES:
+        attrs["themes"] = [profile_id]
     if item.category:
         attrs["category"] = item.category
     published_at = item.published_at

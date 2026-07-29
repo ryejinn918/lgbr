@@ -28,6 +28,7 @@ VALID_THEMES = frozenset(
         "petrochemical",
     }
 )
+THEME_OTHER = "other"
 DEFAULT_CONCURRENCY = 8
 MIN_CONCURRENCY = 1
 MAX_CONCURRENCY = 32
@@ -162,7 +163,7 @@ def start_audit(
 ) -> dict[str, Any]:
     theme_filter: str | None = None
     if theme and theme != "all":
-        if theme not in VALID_THEMES:
+        if theme != THEME_OTHER and theme not in VALID_THEMES:
             return {
                 "ok": False,
                 "status": 400,
@@ -170,7 +171,7 @@ def start_audit(
                 "label": "오류",
                 "message": (
                     "주제는 AI, 데이터센터, 거시경제, 피지컬 AI, 가전, "
-                    "디스플레이, 자동차, 석유화학 중 하나여야 합니다."
+                    "디스플레이, 자동차, 석유화학, 기타 중 하나여야 합니다."
                 ),
                 "audit": None,
                 "can_start": True,

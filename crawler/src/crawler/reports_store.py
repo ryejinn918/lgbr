@@ -32,6 +32,26 @@ VALID_STATUSES = frozenset(
     }
 )
 
+# Merge crawl attrs but protect classified themes; fill themes only when empty.
+_ATTRS_MERGE_SQL = """
+COALESCE(reports.attrs, '{}'::jsonb)
+    || (EXCLUDED.attrs - 'themes')
+|| CASE
+    WHEN (
+        NOT (COALESCE(reports.attrs, '{}'::jsonb) ? 'themes')
+        OR jsonb_typeof(COALESCE(reports.attrs, '{}'::jsonb)->'themes')
+            <> 'array'
+        OR jsonb_array_length(
+            COALESCE(reports.attrs, '{}'::jsonb)->'themes'
+        ) = 0
+    )
+    AND EXCLUDED.attrs ? 'themes'
+    AND jsonb_typeof(EXCLUDED.attrs->'themes') = 'array'
+    AND jsonb_array_length(EXCLUDED.attrs->'themes') > 0
+    THEN jsonb_build_object('themes', EXCLUDED.attrs->'themes')
+    ELSE '{}'::jsonb
+END
+"""
 
 def existing_keys(source: str = SOURCE_FNGUIDE) -> set[str]:
     """All known source_keys (listed or downloaded). Prefer downloaded_keys for skip."""
@@ -114,7 +134,7 @@ def upsert_listed(
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 INSERT INTO reports (
                     source, source_key, crawl_id, title, author, published_at,
                     page_count, status, attrs, first_seen_at, last_seen_at,
@@ -130,8 +150,7 @@ def upsert_listed(
                     author = COALESCE(EXCLUDED.author, reports.author),
                     published_at = COALESCE(EXCLUDED.published_at, reports.published_at),
                     page_count = COALESCE(EXCLUDED.page_count, reports.page_count),
-                    attrs = COALESCE(reports.attrs, '{}'::jsonb)
-                        || (EXCLUDED.attrs - 'themes'),
+                    attrs = {_ATTRS_MERGE_SQL},
                     last_seen_at = now(),
                     status = CASE
                         WHEN reports.file_path IS NOT NULL
@@ -178,7 +197,7 @@ def mark_downloaded(
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 INSERT INTO reports (
                     source, source_key, crawl_id, title, author, published_at,
                     page_count, file_path, file_name, status, attrs,
@@ -197,8 +216,7 @@ def mark_downloaded(
                     file_path = COALESCE(EXCLUDED.file_path, reports.file_path),
                     file_name = COALESCE(EXCLUDED.file_name, reports.file_name),
                     status = 'downloaded',
-                    attrs = COALESCE(reports.attrs, '{}'::jsonb)
-                        || (EXCLUDED.attrs - 'themes'),
+                    attrs = {_ATTRS_MERGE_SQL},
                     last_seen_at = now(),
                     downloaded_at = COALESCE(reports.downloaded_at, now())
                 RETURNING id
@@ -244,7 +262,7 @@ def mark_status(
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 INSERT INTO reports (
                     source, source_key, crawl_id, title, status, attrs,
                     first_seen_at, last_seen_at, downloaded_at
@@ -258,8 +276,7 @@ def mark_status(
                         THEN reports.status
                         ELSE EXCLUDED.status
                     END,
-                    attrs = COALESCE(reports.attrs, '{}'::jsonb)
-                        || (EXCLUDED.attrs - 'themes'),
+                    attrs = {_ATTRS_MERGE_SQL},
                     last_seen_at = now()
                 RETURNING id
                 """,

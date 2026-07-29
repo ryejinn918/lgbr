@@ -14,6 +14,7 @@ from patchright.sync_api import Page
 from crawler import reports_store
 from crawler.asset_id import DOWNLOADS_ROOT
 from crawler.crawl_log import CrawlLogger
+from crawler.report_themes import REPORT_THEMES
 from crawler.session import capture_filter_failure
 
 SEARCH_URL = "https://www.fnguide.com/Research/SearchReport"
@@ -460,7 +461,7 @@ def run_search_report_job(
             def _attrs_for(
                 cand: dict[str, Any], *, blind: bool, kw: str = keyword
             ) -> dict[str, Any]:
-                attrs = {
+                attrs: dict[str, Any] = {
                     "rpt_id": cand["rpt_id"],
                     "provider": cand.get("provider"),
                     "stock": cand.get("stock"),
@@ -468,6 +469,8 @@ def run_search_report_job(
                     "keyword": kw,
                     "crawl_profile": theme,
                 }
+                if theme in REPORT_THEMES:
+                    attrs["themes"] = [theme]
                 if asset_id:
                     attrs["asset_id"] = asset_id
                 return {k: v for k, v in attrs.items() if v is not None}
@@ -590,6 +593,11 @@ def run_search_report_job(
                                 "no_custom_download": True,
                                 "crawl_profile": theme,
                                 "keyword": keyword,
+                                **(
+                                    {"themes": [theme]}
+                                    if theme in REPORT_THEMES
+                                    else {}
+                                ),
                             },
                         )
                     except Exception:
@@ -626,6 +634,11 @@ def run_search_report_job(
                                 "error": str(exc)[:500],
                                 "crawl_profile": theme,
                                 "keyword": keyword,
+                                **(
+                                    {"themes": [theme]}
+                                    if theme in REPORT_THEMES
+                                    else {}
+                                ),
                             },
                         )
                     except Exception:

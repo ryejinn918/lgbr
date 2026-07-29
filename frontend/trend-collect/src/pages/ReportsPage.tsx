@@ -336,6 +336,7 @@ export function ReportsPage({
               {THEME_LABEL[key]} {reports.themeCounts[key] ?? 0}
             </button>
           ))}
+          <span className="filter-row-note">(중복가능)</span>
         </div>
         <div className="filter-row">
           {QUALITY_FILTERS.map((key) => (
@@ -466,7 +467,9 @@ export function ReportsPage({
                           ? item.themes
                           : item.theme
                             ? [item.theme]
-                            : []
+                            : item.crawl_profile
+                              ? [item.crawl_profile]
+                              : ['other']
                         ).map((t) => (
                           <span key={t} className="theme-chip">
                             {THEME_LABEL[t] || t}

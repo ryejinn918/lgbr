@@ -250,18 +250,41 @@ def fetch_targets(
         if not force:
             where.append("quality_at IS NULL")
         if theme:
-            where.append(
-                "("
-                "attrs->'themes' ? %s"
-                " OR ("
-                "  (NOT (attrs ? 'themes')"
-                "   OR jsonb_typeof(attrs->'themes') <> 'array'"
-                "   OR jsonb_array_length(attrs->'themes') = 0)"
-                "  AND attrs->>'theme' = %s"
-                ")"
-                ")"
-            )
-            params.extend([str(theme), str(theme)])
+            if str(theme) == "other":
+                valid = sorted(REPORT_THEMES)
+                where.append(
+                    "("
+                    "NOT ("
+                    "COALESCE(attrs->'themes', '[]'::jsonb) ?| %s::text[]"
+                    " OR ("
+                    "  (NOT (attrs ? 'themes')"
+                    "   OR jsonb_typeof(attrs->'themes') <> 'array'"
+                    "   OR jsonb_array_length(attrs->'themes') = 0)"
+                    "  AND ("
+                    "    COALESCE(attrs->>'theme', '') = ANY(%s)"
+                    "    OR COALESCE(attrs->>'crawl_profile', '') = ANY(%s)"
+                    "  )"
+                    ")"
+                    ")"
+                    ")"
+                )
+                params.extend([valid, valid, valid])
+            else:
+                where.append(
+                    "("
+                    "attrs->'themes' ? %s"
+                    " OR ("
+                    "  (NOT (attrs ? 'themes')"
+                    "   OR jsonb_typeof(attrs->'themes') <> 'array'"
+                    "   OR jsonb_array_length(attrs->'themes') = 0)"
+                    "  AND ("
+                    "    attrs->>'theme' = %s"
+                    "    OR attrs->>'crawl_profile' = %s"
+                    "  )"
+                    ")"
+                    ")"
+                )
+                params.extend([str(theme), str(theme), str(theme)])
     where_sql = " AND ".join(where)
     sql = f"""
         SELECT id, source, source_key, title, file_path

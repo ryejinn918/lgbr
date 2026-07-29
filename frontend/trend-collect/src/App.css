@@ -572,6 +572,15 @@ a.report-original-link {
   flex-wrap: wrap;
   gap: 0.4rem;
   margin-bottom: 0.85rem;
+  align-items: center;
+}
+
+.filter-row-note {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1;
+  user-select: none;
 }
 
 .filter-chip {

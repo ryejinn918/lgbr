@@ -143,6 +143,7 @@ VALID_THEMES = frozenset(
         "petrochemical",
     }
 )
+THEME_OTHER = "other"
 VALID_SORTS = frozenset({"published_at", "page_count", "last_seen_at"})
 SORT_SQL = {
     "published_at": "published_at DESC NULLS LAST, id DESC",
@@ -192,10 +193,16 @@ def _themes_from_attrs(attrs: dict[str, Any]) -> list[str]:
     if out:
         return out
     legacy = attrs.get("theme")
-    if legacy is None:
-        return []
-    s = str(legacy).strip()
-    return [s] if s in VALID_THEMES else []
+    if legacy is not None:
+        s = str(legacy).strip()
+        if s in VALID_THEMES:
+            return [s]
+    crawl = attrs.get("crawl_profile")
+    if crawl is not None:
+        s = str(crawl).strip()
+        if s in VALID_THEMES:
+            return [s]
+    return []
 
 
 def _serialize(row: dict[str, Any]) -> dict[str, Any]:
@@ -248,6 +255,52 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# themes[] membership; if empty, match legacy theme or crawl_profile.
+_THEME_MEMBER_SQL = (
+    "("
+    "attrs->'themes' ? %s"
+    " OR ("
+    "  (NOT (attrs ? 'themes')"
+    "   OR jsonb_typeof(attrs->'themes') <> 'array'"
+    "   OR jsonb_array_length(attrs->'themes') = 0)"
+    "  AND ("
+    "    attrs->>'theme' = %s"
+    "    OR attrs->>'crawl_profile' = %s"
+    "  )"
+    ")"
+    ")"
+)
+
+# Has at least one allowlisted sector theme (themes[] / legacy / crawl_profile).
+_HAS_VALID_THEME_SQL = (
+    "("
+    "COALESCE(attrs->'themes', '[]'::jsonb) ?| %s::text[]"
+    " OR ("
+    "  (NOT (attrs ? 'themes')"
+    "   OR jsonb_typeof(attrs->'themes') <> 'array'"
+    "   OR jsonb_array_length(attrs->'themes') = 0)"
+    "  AND ("
+    "    COALESCE(attrs->>'theme', '') = ANY(%s)"
+    "    OR COALESCE(attrs->>'crawl_profile', '') = ANY(%s)"
+    "  )"
+    ")"
+    ")"
+)
+
+_VALID_THEME_LIST = sorted(VALID_THEMES)
+
+
+def _theme_clause(theme: str) -> tuple[str, list[Any]]:
+    """Return (sql, params) for a theme filter including virtual 'other'."""
+    if theme == THEME_OTHER:
+        return f"(NOT {_HAS_VALID_THEME_SQL})", [
+            _VALID_THEME_LIST,
+            _VALID_THEME_LIST,
+            _VALID_THEME_LIST,
+        ]
+    return _THEME_MEMBER_SQL, [theme, theme, theme]
+
+
 def _list_where(
     *,
     source: str | None = None,
@@ -259,19 +312,9 @@ def _list_where(
         clauses.append("source = %s")
         params.append(source)
     if theme:
-        # Membership in attrs.themes[], with legacy attrs.theme fallback.
-        clauses.append(
-            "("
-            "attrs->'themes' ? %s"
-            " OR ("
-            "  (NOT (attrs ? 'themes')"
-            "   OR jsonb_typeof(attrs->'themes') <> 'array'"
-            "   OR jsonb_array_length(attrs->'themes') = 0)"
-            "  AND attrs->>'theme' = %s"
-            ")"
-            ")"
-        )
-        params.extend([theme, theme])
+        sql, tparams = _theme_clause(theme)
+        clauses.append(sql)
+        params.extend(tparams)
     if not clauses:
         return "", []
     return " WHERE " + " AND ".join(clauses), params
@@ -340,7 +383,10 @@ def _theme_counts(cur: Any, *, source: str | None = None) -> dict[str, int]:
             AND jsonb_typeof(attrs->'themes') = 'array'
             AND jsonb_array_length(attrs->'themes') > 0
           UNION ALL
-          SELECT id, attrs->>'theme' AS theme
+          SELECT id, COALESCE(
+            NULLIF(attrs->>'theme', ''),
+            NULLIF(attrs->>'crawl_profile', '')
+          ) AS theme
           {base}
             {"AND" if where_sql else "WHERE"}
             (
@@ -348,7 +394,13 @@ def _theme_counts(cur: Any, *, source: str | None = None) -> dict[str, int]:
               OR jsonb_typeof(attrs->'themes') <> 'array'
               OR jsonb_array_length(attrs->'themes') = 0
             )
-            AND attrs->>'theme' IS NOT NULL
+            AND (
+              (attrs->>'theme' IS NOT NULL AND attrs->>'theme' <> '')
+              OR (
+                attrs->>'crawl_profile' IS NOT NULL
+                AND attrs->>'crawl_profile' <> ''
+              )
+            )
         )
         SELECT theme, count(*)::int AS n
         FROM keyed
@@ -381,14 +433,34 @@ def _theme_counts(cur: Any, *, source: str | None = None) -> dict[str, int]:
               OR jsonb_typeof(attrs->'themes') <> 'array'
               OR jsonb_array_length(attrs->'themes') = 0
             )
-            AND attrs->>'theme' IS NOT NULL
+            AND (
+              (attrs->>'theme' IS NOT NULL AND attrs->>'theme' <> '')
+              OR (
+                attrs->>'crawl_profile' IS NOT NULL
+                AND attrs->>'crawl_profile' <> ''
+              )
+            )
         )
         SELECT count(*)::int AS n FROM keyed
         """,
         params + params,
     )
     row = cur.fetchone() or {}
-    counts["all"] = int(row.get("n") or 0)
+    themed = int(row.get("n") or 0)
+    cur.execute(
+        f"""
+        SELECT count(*)::int AS n
+        FROM reports
+        {where_sql or ""}
+        {"AND" if where_sql else "WHERE"}
+        NOT {_HAS_VALID_THEME_SQL}
+        """,
+        [*params, _VALID_THEME_LIST, _VALID_THEME_LIST, _VALID_THEME_LIST],
+    )
+    other_row = cur.fetchone() or {}
+    other_n = int(other_row.get("n") or 0)
+    counts[THEME_OTHER] = other_n
+    counts["all"] = themed + other_n
     return counts
 
 
@@ -441,9 +513,7 @@ def list_reports(
 
     theme_filter: str | None = None
     if theme and theme != "all":
-        if theme == "datacenter":
-            theme = "ai"
-        if theme not in VALID_THEMES:
+        if theme != THEME_OTHER and theme not in VALID_THEMES:
             return _error(f"invalid theme: {theme}", sort_key=sort_key)
         theme_filter = theme
 
@@ -476,8 +546,9 @@ def list_reports(
     elif quality_filter == "unauditable":
         where.append(_UNAUDITABLE_SQL)
     if theme_filter:
-        where.append("attrs->>'theme' = %s")
-        params.append(theme_filter)
+        sql, tparams = _theme_clause(theme_filter)
+        where.append(sql)
+        params.extend(tparams)
     if crawl_uuid:
         where.append("crawl_id = %s")
         params.append(crawl_uuid)

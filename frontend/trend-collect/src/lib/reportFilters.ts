@@ -18,7 +18,7 @@ export const QUALITY_FILTERS = [
   'unauditable',
 ] as const
 
-export const THEME_FILTERS = ['all', ...REPORT_THEMES] as const
+export const THEME_FILTERS = ['all', ...REPORT_THEMES, 'other'] as const
 
 export type StatusFilter = (typeof STATUS_FILTERS)[number]
 export type QualityFilter = (typeof QUALITY_FILTERS)[number]
