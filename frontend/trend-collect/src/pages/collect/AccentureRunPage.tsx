@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useCollectionJob } from '../../hooks/useCollectionJob'
 import { useSessionStatus } from '../../hooks/useSessionStatus'
 import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
-import { crawlModeTypeLabel } from '../../lib/collectNav'
 import { getMediaSource } from '../../lib/mediaSources'
 
 const PERIOD_OPTIONS = [3, 6, 12] as const
@@ -62,6 +61,17 @@ export function AccentureRunPage() {
   )
   const isAccentureAdhoc = crawl.crawl?.mode === 'accenture'
   const cdpPort = crawl.crawl?.cdp_port
+  const badgeValue = session.fetchError || collection.fetchError
+    ? 'API Offline'
+    : searchBusy
+      ? `Accenture · 검색 · ${job.label}`
+      : isAccentureAdhoc
+        ? `Accenture · 애드혹 · ${crawl.label}`
+        : crawlBusy
+          ? 'Accenture · 대기 (다른 세션이 브라우저 사용 중)'
+          : job.job
+            ? `Accenture · ${job.label}`
+            : 'Accenture · 유휴'
 
   async function onStartAdhoc() {
     if (!window.confirm(`Accenture US 애드혹을 시작할까요?\n${HUB}`)) return
@@ -125,13 +135,7 @@ export function AccentureRunPage() {
   return (
     <section className={`panel badge-panel state-${badgeState}`}>
       <p className="badge-label">검색 · 실행</p>
-      <p className="badge-value">
-        {session.fetchError || collection.fetchError
-          ? 'API Offline'
-          : searchBusy
-            ? `Accenture · 검색 · ${job.label}`
-            : `Accenture · ${crawlModeTypeLabel(crawl.crawl?.mode)} · ${crawl.label}`}
-      </p>
+      <p className="badge-value">{badgeValue}</p>
       <p className="account-line">
         US Insights Index에서 Research Report를 최신순으로 돌며 PDF를 받습니다.
         애드혹은 허브 분석용 Chrome+CDP입니다.

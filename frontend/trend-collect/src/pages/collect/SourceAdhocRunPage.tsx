@@ -1,7 +1,7 @@
 import { Link, useOutletContext } from 'react-router-dom'
 import { useSessionStatus } from '../../hooks/useSessionStatus'
 import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
-import { crawlModeTypeLabel, type CollectSource } from '../../lib/collectNav'
+import type { CollectSource } from '../../lib/collectNav'
 import { getMediaSource } from '../../lib/mediaSources'
 import type { CrawlMode } from '../../types'
 
@@ -28,6 +28,13 @@ export function SourceAdhocRunPage() {
   const cdpPort = crawl.crawl?.cdp_port
   const label = meta?.label ?? source
   const hubUrl = meta?.hubUrl ?? ''
+  const badgeValue = session.fetchError
+    ? 'API Offline'
+    : isThisSource
+      ? `${label} · 애드혹 · ${crawl.label}`
+      : crawlBusy
+        ? `${label} · 대기 (다른 세션이 브라우저 사용 중)`
+        : `${label} · 유휴`
 
   async function onStart() {
     if (!window.confirm(`${label} 애드혹을 시작할까요?\n${hubUrl}`)) {
@@ -60,11 +67,7 @@ export function SourceAdhocRunPage() {
   return (
     <section className={`panel badge-panel state-${badgeState}`}>
       <p className="badge-label">애드혹 · 실행</p>
-      <p className="badge-value">
-        {session.fetchError
-          ? 'API Offline'
-          : `${label} · ${crawlModeTypeLabel(crawl.crawl?.mode)} · ${crawl.label}`}
-      </p>
+      <p className="badge-value">{badgeValue}</p>
       <p className="account-line">
         허브를 Chrome+CDP로 엽니다. 목록/PDF 자동 수집은 아직 없습니다. 허브:{' '}
         <a href={hubUrl} target="_blank" rel="noreferrer">

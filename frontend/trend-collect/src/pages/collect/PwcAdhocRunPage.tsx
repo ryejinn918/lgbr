@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useCollectionJob } from '../../hooks/useCollectionJob'
 import { useSessionStatus } from '../../hooks/useSessionStatus'
 import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
-import { crawlModeTypeLabel } from '../../lib/collectNav'
 import {
   DEFAULT_PWC_CATALOG,
   PWC_CATALOGS,
@@ -66,6 +65,17 @@ export function PwcAdhocRunPage() {
   )
   const isPwcAdhoc = crawl.crawl?.mode === 'pwc'
   const cdpPort = crawl.crawl?.cdp_port
+  const badgeValue = session.fetchError || collection.fetchError
+    ? 'API Offline'
+    : searchBusy
+      ? `PwC · 검색 · ${job.label}`
+      : isPwcAdhoc
+        ? `PwC · 애드혹 · ${crawl.label}`
+        : crawlBusy
+          ? 'PwC · 대기 (다른 세션이 브라우저 사용 중)'
+          : job.job
+            ? `PwC · ${job.label}`
+            : 'PwC · 유휴'
 
   async function onStartAdhoc() {
     if (
@@ -135,13 +145,7 @@ export function PwcAdhocRunPage() {
   return (
     <section className={`panel badge-panel state-${badgeState}`}>
       <p className="badge-label">검색 · 실행</p>
-      <p className="badge-value">
-        {session.fetchError || collection.fetchError
-          ? 'API Offline'
-          : searchBusy
-            ? `PwC · 검색 · ${job.label}`
-            : `PwC · ${crawlModeTypeLabel(crawl.crawl?.mode)} · ${crawl.label}`}
-      </p>
+      <p className="badge-value">{badgeValue}</p>
       <p className="account-line">
         검색 한 번에 목록과 PDF를 함께 받습니다.
       </p>
