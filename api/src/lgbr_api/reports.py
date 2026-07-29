@@ -85,6 +85,9 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         theme_s = None
     qp = row.get("quality_pass")
     quality = _quality_label(row)
+    raw_url = attrs.get("url")
+    url_s = str(raw_url).strip() if raw_url else ""
+    public_url = url_s if url_s.startswith(("http://", "https://")) else None
     return {
         "id": str(row["id"]),
         "source": row.get("source"),
@@ -102,6 +105,7 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
         "published_at": pub.isoformat() if pub else None,
         "provider": provider_s or None,
         "theme": theme_s,
+        "url": public_url,
         "page_count": row.get("page_count"),
         "crawl_id": str(row["crawl_id"]) if row.get("crawl_id") else None,
         "quality": quality,

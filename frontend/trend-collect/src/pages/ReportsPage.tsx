@@ -19,6 +19,7 @@ import {
   formatRelative,
   formatTime,
 } from '../lib/format'
+import { reportPublicOriginalUrl } from '../lib/publicOriginalUrl'
 import {
   QUALITY_FILTERS,
   STATUS_FILTERS,
@@ -46,7 +47,7 @@ function stringList(value: unknown): string[] {
 }
 
 const SOURCE_LABEL: Record<string, string> = {
-  all: '보고서',
+  all: '보고서 통합',
   fnguide: 'FnGuide',
   pwc: 'PwC',
 }
@@ -190,13 +191,18 @@ export function ReportsPage({
   const qj: QualityJson = detail?.quality_json || {}
   const failReasons = stringList(qj.fail_reasons)
   const passSignals = stringList(qj.pass_signals)
+  const detailOriginalUrl = reportPublicOriginalUrl(
+    detail?.source,
+    detail?.url,
+  )
   const sourceKey = source || 'all'
   const isAll = sourceKey === 'all'
+  const showProvider = sourceKey !== 'pwc'
   const sourceTitle = SOURCE_LABEL[sourceKey] ?? sourceKey
   const sourceLede = isAll
     ? '매체별 보고서를 한곳에서 봅니다. FnGuide·PwC 탭으로 나눌 수도 있습니다.'
     : sourceKey === 'pwc'
-      ? 'PwC 인사이트·리포트 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
+      ? '삼일PwC Insights 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
       : '증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가 함께 표시됩니다.'
   const collectHref = isAll
     ? '/collect'
@@ -335,7 +341,9 @@ export function ReportsPage({
         <form className="search-row" onSubmit={onSearch}>
           <input
             type="search"
-            placeholder="제목, 인용 제목, 증권사, rpt_id"
+            placeholder={
+              showProvider ? '제목, 인용 제목, 증권사' : '제목, 인용 제목'
+            }
             value={qDraft}
             onChange={(e) => setQDraft(e.target.value)}
           />
@@ -372,7 +380,9 @@ export function ReportsPage({
                   <th className="col-status">상태</th>
                   <th className="col-quality">판정</th>
                   <th className="col-title">제목</th>
-                  <th className="col-provider">증권사</th>
+                  {showProvider ? (
+                    <th className="col-provider">증권사</th>
+                  ) : null}
                   <th className="col-published">
                     <button
                       type="button"
@@ -412,6 +422,10 @@ export function ReportsPage({
                 {reports.items.map((item) => {
                   const q = item.quality || 'pending'
                   const selected = selectedId === item.id
+                  const originalUrl = reportPublicOriginalUrl(
+                    item.source,
+                    item.url,
+                  )
                   return (
                     <tr
                       key={item.id}
@@ -430,14 +444,28 @@ export function ReportsPage({
                         </span>
                       </td>
                       <td className="col-title report-title" title={item.title}>
-                        {item.title}
+                        {originalUrl ? (
+                          <a
+                            className="report-file-link"
+                            href={originalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={onFileClick}
+                          >
+                            {item.title}
+                          </a>
+                        ) : (
+                          item.title
+                        )}
                       </td>
-                      <td
-                        className="col-provider"
-                        title={item.provider || undefined}
-                      >
-                        {item.provider || '—'}
-                      </td>
+                      {showProvider ? (
+                        <td
+                          className="col-provider"
+                          title={item.provider || undefined}
+                        >
+                          {item.provider || '—'}
+                        </td>
+                      ) : null}
                       <td className="col-published mono">
                         {formatPublishedAt(item.published_at)}
                       </td>
@@ -515,6 +543,17 @@ export function ReportsPage({
           <div className="section-head">
             <h2>품질 감사 결과</h2>
             <div className="audit-actions">
+              {detailOriginalUrl ? (
+                <a
+                  className="run-btn"
+                  href={detailOriginalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={onFileClick}
+                >
+                  원문 열기
+                </a>
+              ) : null}
               <button
                 type="button"
                 className="run-btn"

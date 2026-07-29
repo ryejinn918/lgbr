@@ -27,8 +27,9 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
 /** PwC list/search: adhoc CDP browser + automated list-while-download. */
 export function PwcAdhocRunPage() {
   const [periodMonths, setPeriodMonths] = useState(3)
-  const [maxPages, setMaxPages] = useState(5)
-  const [limit, setLimit] = useState(5)
+  const [maxPages, setMaxPages] = useState(20)
+  /** Empty = no download cap (full period). */
+  const [limit, setLimit] = useState('')
   const session = useSessionStatus()
   const collection = useCollectionJob({ source: 'pwc', capability: 'search' })
 
@@ -72,16 +73,21 @@ export function PwcAdhocRunPage() {
   }
 
   async function onStartSearch() {
-    const pages = Math.min(50, Math.max(1, Number(maxPages) || 5))
+    const pages = Math.min(50, Math.max(1, Number(maxPages) || 20))
     const months = PERIOD_OPTIONS.includes(
       periodMonths as (typeof PERIOD_OPTIONS)[number],
     )
       ? periodMonths
       : 3
-    const lim = Math.min(200, Math.max(1, Number(limit) || 5))
+    const limRaw = String(limit).trim()
+    const lim =
+      limRaw === ''
+        ? undefined
+        : Math.min(200, Math.max(1, Number(limRaw) || 0)) || undefined
+    const limLabel = lim == null ? '제한 없음' : String(lim)
     if (
       !window.confirm(
-        `PwC 검색(list-while-download)을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${lim}`,
+        `PwC 검색(list-while-download)을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel}`,
       )
     ) {
       return
@@ -90,7 +96,7 @@ export function PwcAdhocRunPage() {
       await collection.startSearch({
         maxPages: pages,
         periodMonths: months,
-        limit: lim,
+        ...(lim != null ? { limit: lim } : {}),
       })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '시작 실패')
@@ -162,9 +168,10 @@ export function PwcAdhocRunPage() {
             type="number"
             min={1}
             max={200}
+            placeholder="없음"
             value={limit}
             disabled={searchBusy}
-            onChange={(e) => setLimit(Number(e.target.value))}
+            onChange={(e) => setLimit(e.target.value)}
           />
         </label>
       </div>

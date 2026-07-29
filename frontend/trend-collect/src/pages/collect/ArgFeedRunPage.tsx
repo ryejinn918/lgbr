@@ -93,7 +93,7 @@ export function ArgFeedRunPage() {
         <Link to="/collect/arg/list/feed/types">전체</Link>
         {' · '}
         결과 문서:{' '}
-        <Link to="/docs/articles">기사</Link>
+        <Link to="/docs/articles">기사 통합</Link>
       </p>
 
       <div className="actions">

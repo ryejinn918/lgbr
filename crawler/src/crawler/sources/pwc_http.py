@@ -1,17 +1,10 @@
-"""PwC research-insights HTTP helpers (from adhoc CDP analysis 2026-07-29).
+"""삼일PwC (kr/ko) Insights HTTP helpers.
 
-Findings (via ``mode=pwc`` CDP session, not IDE browser):
-
-- List hub: ``https://www.pwc.com/gx/en/research-insights.html``
-  (also insights-library.html). Cards: ``a.collection__item-link``.
-  Paging control: ``button.collection__load-more`` (page size 8).
+- List hub: ``https://www.pwc.com/kr/ko/insights.html``
 - List JSON (no login)::
-    ``{COLLECTION_PATH}.filter-dynamic.html?currentPagePath=...&list={}&page={offset}&searchText=&defaultImagePath=...``
-  ``page`` is an offset (0, 8, 16, …); response has ``numberHits`` + ``elements``.
-- Detail pages are often HTML-only; PDF when present is a normal ``a[href*=".pdf"]``
-  (hosts ``www.pwc.com`` / ``assets.pwc.com``). Downloadable via plain HTTP GET.
-- Cookie banner / region redirect may appear in browser; HTTP list/PDF calls worked
-  without a session cookie from KR.
+    ``{COLLECTION_PATH}.filter-dynamic.html?currentPagePath=...&list={}&page={offset}&…``
+  ``page`` is an offset (0, 16, 32, …); response has ``numberHits`` + ``elements``.
+- Detail PDF when present: ``a[href*=".pdf"]`` on the detail HTML.
 """
 
 from __future__ import annotations
@@ -27,13 +20,14 @@ from urllib.request import Request, urlopen
 
 SOURCE = "pwc"
 BASE = "https://www.pwc.com"
+# Main feed on https://www.pwc.com/kr/ko/insights.html
 COLLECTION_PATH = (
-    "/content/pwc/gx/en/research-insights/jcr:content/root/container/"
-    "content-free-container-1/section_906117957/collection_v2_copy"
+    "/content/pwc/kr/ko/insights/jcr:content/root/container/"
+    "dynamic-content/collection_v2_copy"
 )
 COLLECTION_URL = f"{BASE}{COLLECTION_PATH}.filter-dynamic.html"
 DEFAULT_IMAGE_PATH = "/content/dam/pwc/network/collection-fallback-images"
-PAGE_SIZE = 8
+PAGE_SIZE = 16
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -54,11 +48,17 @@ _MONTHS = {
     "november": 11,
     "december": 12,
 }
-_PUB_RE = re.compile(
+_PUB_DAY_RE = re.compile(
     r"(January|February|March|April|May|June|July|August|September|"
     r"October|November|December)\s+(\d{1,2}),\s+(\d{4})",
     re.I,
 )
+_PUB_MONTH_RE = re.compile(
+    r"^(January|February|March|April|May|June|July|August|September|"
+    r"October|November|December)\s+(\d{4})$",
+    re.I,
+)
+_PUB_DMY_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})$")
 
 
 @dataclass(frozen=True)
@@ -74,11 +74,25 @@ class PwcListItem:
 def parse_publish_date(raw: str | None) -> date | None:
     if not raw:
         return None
-    m = _PUB_RE.search(raw.strip())
-    if not m:
-        return None
-    month = _MONTHS[m.group(1).lower()]
-    return date(int(m.group(3)), month, int(m.group(2)))
+    text = raw.strip()
+    m = _PUB_DAY_RE.search(text)
+    if m:
+        month = _MONTHS[m.group(1).lower()]
+        return date(int(m.group(3)), month, int(m.group(2)))
+    m = _PUB_MONTH_RE.match(text)
+    if m:
+        month = _MONTHS[m.group(1).lower()]
+        return date(int(m.group(2)), month, 1)
+    m = _PUB_DMY_RE.match(text)
+    if m:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if year < 100:
+            year += 2000
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+    return None
 
 
 def source_key_from_url(url: str) -> str:
@@ -94,7 +108,7 @@ def fetch_list_page(
     *,
     timeout: float = 30.0,
 ) -> tuple[list[PwcListItem], int]:
-    """Return (items, number_hits) for one list page (offset multiples of 8)."""
+    """Return (items, number_hits) for one list page (offset multiples of PAGE_SIZE)."""
     if page_offset < 0:
         raise ValueError("page_offset must be >= 0")
     qs = urlencode(
@@ -232,12 +246,14 @@ class _PdfHrefParser(HTMLParser):
 
 
 def months_ago_cutoff(months: int, *, now: datetime | None = None) -> date:
-    from calendar import monthrange
+    """Earliest publish date to keep (inclusive).
 
+    Uses the first day of the cutoff month so month-only dates like
+    ``July 2026`` (stored as the 1st) are not dropped mid-month.
+    """
     ref = now or datetime.now()
     y, m = ref.year, ref.month - int(months)
     while m <= 0:
         m += 12
         y -= 1
-    day = min(ref.day, monthrange(y, m)[1])
-    return date(y, m, day)
+    return date(y, m, 1)

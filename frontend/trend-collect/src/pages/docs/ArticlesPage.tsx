@@ -10,6 +10,7 @@ import {
   formatRelative,
   formatTime,
 } from '../../lib/format'
+import { articlePublicOriginalUrl } from '../../lib/publicOriginalUrl'
 
 const SOURCE_LABEL: Record<string, string> = {
   arg: 'ARG',
@@ -67,10 +68,12 @@ export function ArticlesPage() {
     e.stopPropagation()
   }
 
+  const selectedOriginalUrl = articlePublicOriginalUrl(selected?.url)
+
   return (
     <>
       <div className="section-head" style={{ marginBottom: '0.75rem' }}>
-        <h2>기사</h2>
+        <h2>기사 통합</h2>
         <p className="section-note">
           매체 공통 기사 리스트 ·{' '}
           <Link to="/collect/arg/list/feed">ARG 피드</Link>
@@ -140,14 +143,13 @@ export function ArticlesPage() {
                 <th className="col-provider">섹션</th>
                 <th className="col-title">제목</th>
                 <th className="col-status">본문</th>
-                <th className="col-rpt">키</th>
                 <th className="col-seen">최근</th>
               </tr>
             </thead>
             <tbody>
               {articles.items.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={6}>
                     {articles.loading
                       ? '불러오는 중…'
                       : '아직 기사가 없습니다. 수집에서 리스트 발굴을 실행하세요.'}
@@ -157,6 +159,7 @@ export function ArticlesPage() {
                 articles.items.map((item) => {
                   const selectedRow = selectedId === item.id
                   const hasBody = Boolean(item.has_body)
+                  const originalUrl = articlePublicOriginalUrl(item.url)
                   return (
                     <tr
                       key={item.id}
@@ -174,7 +177,19 @@ export function ArticlesPage() {
                         {item.section || item.publisher || '—'}
                       </td>
                       <td className="col-title report-title" title={item.title}>
-                        {item.title}
+                        {originalUrl ? (
+                          <a
+                            className="report-file-link"
+                            href={originalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={onLinkClick}
+                          >
+                            {item.title}
+                          </a>
+                        ) : (
+                          item.title
+                        )}
                       </td>
                       <td className="col-status">
                         <span
@@ -188,7 +203,6 @@ export function ArticlesPage() {
                           {hasBody ? '수집됨' : '미수집'}
                         </span>
                       </td>
-                      <td className="col-rpt mono">{item.source_key}</td>
                       <td
                         className="col-seen"
                         title={item.last_seen_at || undefined}
@@ -238,10 +252,10 @@ export function ArticlesPage() {
           <div className="section-head">
             <h2>기사 상세</h2>
             <div className="audit-actions">
-              {selected?.url ? (
+              {selectedOriginalUrl ? (
                 <a
                   className="run-btn"
-                  href={selected.url}
+                  href={selectedOriginalUrl}
                   target="_blank"
                   rel="noreferrer"
                   onClick={onLinkClick}

@@ -17,7 +17,7 @@ DEFAULT_TTL_SECONDS = int(os.environ.get("PWC_SESSION_TTL_SECONDS", "28800"))
 DEFAULT_IDLE_SECONDS = int(os.environ.get("PWC_SESSION_IDLE_SECONDS", "3600"))
 DEFAULT_START_URL = os.environ.get(
     "PWC_START_URL",
-    "https://www.pwc.com/gx/en/research-insights.html",
+    "https://www.pwc.com/kr/ko/insights.html",
 )
 PROFILE_DIR = Path(".crawler/browser-profile-pwc")
 

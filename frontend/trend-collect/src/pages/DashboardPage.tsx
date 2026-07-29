@@ -260,7 +260,7 @@ export function DashboardPage() {
               {' · '}
               <Link to="/collect/arg/body/fetch">본문 채우기</Link>
               {' · '}
-              <Link to="/docs/articles">기사</Link>
+              <Link to="/docs/articles">기사 통합</Link>
             </p>
             {argBusy ? (
               <div className="actions">
