@@ -32,6 +32,13 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hasSearch: true,
     hasCatalogs: false,
   },
+  {
+    id: 'ey',
+    label: 'EY',
+    hubUrl: 'https://www.ey.com/en_us/insights',
+    hasSearch: true,
+    hasCatalogs: false,
+  },
 ]
 
 export type MediaSourceId = (typeof MEDIA_SOURCES)[number]['id']

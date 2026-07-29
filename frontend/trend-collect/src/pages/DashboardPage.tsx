@@ -19,6 +19,7 @@ const SOURCE_LABEL: Record<string, string> = {
   pwc: 'PwC',
   accenture: 'Accenture',
   kpmg: 'KPMG',
+  ey: 'EY',
 }
 
 function sourceLabel(source: string | null | undefined) {
@@ -143,6 +144,10 @@ export function DashboardPage() {
     source: 'kpmg',
     capability: 'search',
   })
+  const eySearch = useCollectionJob({
+    source: 'ey',
+    capability: 'search',
+  })
 
   const crawlMode = crawl.crawl?.mode ?? null
   const fnguideOwned =
@@ -153,6 +158,7 @@ export function DashboardPage() {
     isBusy(crawl.state) && crawlMode === 'accenture'
   const kpmgAdhoc =
     isBusy(crawl.state) && crawlMode === 'kpmg'
+  const eyAdhoc = isBusy(crawl.state) && crawlMode === 'ey'
 
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
@@ -160,9 +166,11 @@ export function DashboardPage() {
   const pwcSearchBusy = isBusy(pwcSearch.status.state)
   const accentureSearchBusy = isBusy(accentureSearch.status.state)
   const kpmgSearchBusy = isBusy(kpmgSearch.status.state)
+  const eySearchBusy = isBusy(eySearch.status.state)
   const pwcBusy = pwcSearchBusy || pwcAdhoc
   const accentureBusy = accentureSearchBusy || accentureAdhoc
   const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
+  const eyBusy = eySearchBusy || eyAdhoc
 
   const crawlProgress = crawl.progress ?? {}
   const pwcProgress = (pwcSearch.status.progress ??
@@ -173,6 +181,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const kpmgProgress = (kpmgSearch.status.progress ??
     kpmgSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const eyProgress = (eySearch.status.progress ??
+    eySearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const argProgress = (argView.status.progress ??
     argView.status.job?.progress ??
@@ -208,6 +219,12 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsEy = useReports({
+    source: 'ey',
+    limit: 1,
+    offset: 0,
+    poll: true,
+  })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -235,6 +252,11 @@ export function DashboardPage() {
     kpmgBusy,
     kpmgSearchBusy ? kpmgSearch.status.state : crawl.state,
   )
+  const eyBadge = jobBadgeClass(
+    !!(eySearch.fetchError || (eyAdhoc && fetchError)),
+    eyBusy,
+    eySearchBusy ? eySearch.status.state : crawl.state,
+  )
 
   async function onStopFnguide() {
     if (!window.confirm('FnGuide 크롤을 종료하고 로그아웃할까요?')) return
@@ -257,7 +279,7 @@ export function DashboardPage() {
   }
 
   async function onStopMedia(
-    source: 'pwc' | 'accenture' | 'kpmg',
+    source: 'pwc' | 'accenture' | 'kpmg' | 'ey',
     searchBusy: boolean,
     adhoc: boolean,
     stopSearch?: () => Promise<unknown>,
@@ -318,6 +340,16 @@ export function DashboardPage() {
         ? crawl.label
         : kpmgSearch.status.job
           ? kpmgSearch.status.label
+          : '유휴'
+
+  const eyValue = eySearch.fetchError
+    ? 'API Offline'
+    : eySearchBusy
+      ? eySearch.status.label
+      : eyAdhoc
+        ? crawl.label
+        : eySearch.status.job
+          ? eySearch.status.label
           : '유휴'
 
   return (
@@ -642,6 +674,75 @@ export function DashboardPage() {
               </div>
             ) : null}
           </article>
+
+          <article className={`job-card state-${eyBadge}`}>
+            <p className="badge-label">
+              EY · 검색
+              {eyAdhoc ? ' · 애드혹' : ''}
+            </p>
+            <p className="badge-value">{eyValue}</p>
+            {eySearchBusy && eySearch.status.job?.started_at ? (
+              <p className="account-line">
+                {formatTime(eySearch.status.job.started_at)}
+                {eySearch.status.job.ended_at
+                  ? ` · ${formatTime(eySearch.status.job.ended_at)}`
+                  : ''}
+              </p>
+            ) : null}
+            {eyAdhoc && crawl.crawl?.started_at ? (
+              <p className="account-line">
+                {formatTime(crawl.crawl.started_at)}
+                {crawl.crawl.cdp_port
+                  ? ` · CDP ${crawl.crawl.cdp_port}`
+                  : ''}
+              </p>
+            ) : null}
+            {eySearchBusy ? (
+              <p className="account-line">
+                {formatSearchProgress(eyProgress) ||
+                  eySearch.status.job?.message ||
+                  '…'}
+              </p>
+            ) : null}
+            {eyAdhoc && !eySearchBusy ? (
+              <p className="account-line">
+                {typeof crawlProgress.url === 'string'
+                  ? crawlProgress.url
+                  : formatProgress(crawlProgress)}
+              </p>
+            ) : null}
+            <p className="account-line">
+              <Link to="/collect/ey/list/search">검색 실행</Link>
+              {' · '}
+              <Link to="/docs/reports/ey">보고서</Link>
+            </p>
+            {eyBusy ? (
+              <div className="actions">
+                <button
+                  type="button"
+                  disabled={
+                    eySearchBusy
+                      ? eySearch.requestingStop
+                      : requestingStop || !!fetchError
+                  }
+                  onClick={() =>
+                    void onStopMedia(
+                      'ey',
+                      eySearchBusy,
+                      eyAdhoc,
+                      () => eySearch.stopFeed(),
+                    )
+                  }
+                >
+                  {(eySearchBusy ? eySearch.requestingStop : requestingStop)
+                    ? '요청 중…'
+                    : eySearchBusy
+                      ? '검색 중단'
+                      : '애드혹 종료'}
+                </button>
+              </div>
+            ) : null}
+          </article>
         </div>
       </section>
 
@@ -746,6 +847,14 @@ export function DashboardPage() {
             keys={COUNT_KEYS_MEDIA}
             error={countsKp.error}
             total={countsKp.counts.all ?? 0}
+          />
+          <CountRow
+            label="EY"
+            source="ey"
+            counts={countsEy.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsEy.error}
+            total={countsEy.counts.all ?? 0}
           />
         </div>
       </section>

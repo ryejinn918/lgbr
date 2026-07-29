@@ -18,8 +18,9 @@ COVERAGE_SOURCES: tuple[tuple[str, str], ...] = (
     ("pwc", "PwC"),
     ("accenture", "Accenture"),
     ("kpmg", "KPMG"),
+    ("ey", "EY"),
 )
-_REPORT_COVERAGE_SOURCES = ("fnguide", "pwc", "accenture", "kpmg")
+_REPORT_COVERAGE_SOURCES = ("fnguide", "pwc", "accenture", "kpmg", "ey")
 
 
 def _monday_on_or_before(d: date) -> date:

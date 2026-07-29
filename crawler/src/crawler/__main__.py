@@ -30,6 +30,7 @@ from crawler.fetch_body_job import (
     run_fetch_body_job,
 )
 from crawler.jobs.accenture_report import run_accenture_search_job
+from crawler.jobs.ey_report import run_ey_search_job
 from crawler.jobs.kpmg_report import run_kpmg_search_job
 from crawler.jobs.pwc_report import (
     DEFAULT_MAX_PAGES as PWC_DEFAULT_MAX_PAGES,
@@ -494,10 +495,15 @@ def main() -> None:
                     runner = run_accenture_search_job
                 elif source == "kpmg":
                     runner = run_kpmg_search_job
+                elif source == "ey":
+                    runner = run_ey_search_job
                 else:
                     runner = run_pwc_search_job
                 catalog = args.catalog
-                if source in ("accenture", "kpmg") and catalog in ("kr", "gx"):
+                if source in ("accenture", "kpmg", "ey") and catalog in (
+                    "kr",
+                    "gx",
+                ):
                     catalog = "us"
                 result = runner(
                     args.job_id,

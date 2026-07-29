@@ -10,6 +10,7 @@ import { ArgFeedRunPage } from './ArgFeedRunPage'
 import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
 import { getMediaSource } from '../../lib/mediaSources'
 import { AccentureRunPage } from './AccentureRunPage'
+import { EyRunPage } from './EyRunPage'
 import { KpmgRunPage } from './KpmgRunPage'
 import { PwcAdhocRunPage } from './PwcAdhocRunPage'
 import { SourceAdhocRunPage } from './SourceAdhocRunPage'
@@ -48,6 +49,9 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'kpmg' && ctx.stage === 'list' && ctx.means === 'search') {
     return <KpmgRunPage />
+  }
+  if (ctx.source === 'ey' && ctx.stage === 'list' && ctx.means === 'search') {
+    return <EyRunPage />
   }
   const media = getMediaSource(ctx.source)
   if (

@@ -79,6 +79,10 @@ function App() {
             path="reports/kpmg"
             element={<ReportsPage embedded source="kpmg" />}
           />
+          <Route
+            path="reports/ey"
+            element={<ReportsPage embedded source="ey" />}
+          />
           {/* legacy docs paths */}
           <Route
             path="fnguide"
