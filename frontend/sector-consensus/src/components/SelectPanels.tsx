@@ -1,7 +1,12 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useConsensusStatusContext } from '../hooks/ConsensusStatusContext'
-import { BLOCKED_BY_OPEN_RUN, labelRunSlot, labelRunState } from '../lib/labels'
+import {
+  BLOCKED_BY_OPEN_RUN,
+  labelRunSlot,
+  labelRunState,
+  labelThemes,
+} from '../lib/labels'
 import { isLiveState, openRunForTheme } from '../lib/runState'
 import { parseTheme } from '../lib/theme'
 import type { InputReport, RunDoc, SelectCriteria } from '../types'
@@ -314,7 +319,7 @@ export function SelectPanels() {
             <tr>
               <th className="col-role">구분</th>
               <th>제목</th>
-              <th>출처</th>
+              <th>주제</th>
               <th>증권사</th>
               <th>일자</th>
               <th>쪽</th>
@@ -350,6 +355,13 @@ export function SelectPanels() {
                     : kind === 'pool'
                       ? 'input-row'
                       : 'input-row role-omit'
+              const themeLabels = labelThemes(
+                r.themes?.length
+                  ? r.themes
+                  : r.theme_tag
+                    ? [r.theme_tag]
+                    : [],
+              )
               return (
                 <tr key={r.id} className={rowClass}>
                   <td className="col-role">
@@ -365,7 +377,7 @@ export function SelectPanels() {
                       {r.title}
                     </a>
                   </td>
-                  <td>{r.theme_tag ?? '—'}</td>
+                  <td title={themeLabels}>{themeLabels}</td>
                   <td>{r.provider ?? '—'}</td>
                   <td>{r.published_at ?? '—'}</td>
                   <td>{r.page_count ?? '—'}</td>

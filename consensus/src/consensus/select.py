@@ -47,8 +47,9 @@ THEME_SELECT_HINTS = {
     ),
     "macroeconomy": (
         "Axes often include growth/inflation, rates/FX, credit cycles, and "
-        "cross-asset implications. Prefer structural macro frameworks over "
-        "single-sector or single-name notes."
+        "cross-asset implications. Prefer structural macro / asset-allocation "
+        "frameworks. Exclude AI-industry or AIDC notes where macro is only backdrop; "
+        "exclude single-sector or single-name notes."
     ),
     "physical_ai": (
         "Axes often include robotics, factory automation, sensors/actuators, and "

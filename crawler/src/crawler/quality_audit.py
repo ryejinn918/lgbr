@@ -82,9 +82,17 @@ themes (content topics — always fill, pass or fail):
 - Zero or more ids from this allowlist only: """ + _THEME_IDS + """
 - Labels:
 """ + _THEME_LABEL_LINES + """
-- Multi-label OK when the note clearly covers more than one (e.g. AI + datacenter).
-- Prefer precise labels: pure AIDC/power/cooling → datacenter; model/LLM/AI chip → ai;
-  rates/inflation/FX/growth → macroeconomy. Do not dump every sector.
+- Order matters: themes[0] is the PRIMARY topic (desk that owns the note).
+- Prefer exactly one theme. Add a second only when BOTH are core analytical frames
+  of the note (not seasoning, examples, or one paragraph).
+- Disambiguation (mandatory):
+  - Pure AIDC / power / site / cooling / colo → datacenter (not ai).
+  - Model / LLM / AI chip / AI software demand → ai (not datacenter).
+  - Growth / inflation / rates / FX / credit / asset allocation as the frame
+    → macroeconomy. If AI is only the narrative hook or one sleeve, do NOT add ai.
+  - AI industry / AI-capex / AI semiconductors as the frame → ai (or datacenter).
+    Do NOT add macroeconomy just because the note mentions rates, GDP, or allocation.
+  - Single-sector industry note (auto, chem, …) → that sector only; not macroeconomy.
 - Empty array only when truly off-list / unreadable.
 
 Rules:

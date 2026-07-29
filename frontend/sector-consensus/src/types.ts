@@ -92,7 +92,9 @@ export type InputReport = {
   published_at?: string | null
   quality_pass?: boolean | null
   quality_scope?: string | null
+  /** @deprecated prefer themes */
   theme_tag?: string | null
+  themes?: string[]
   will_select: boolean
   will_fill_extra?: boolean
   select_role?: string | null

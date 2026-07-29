@@ -248,6 +248,15 @@ input {
   width: 100%;
 }
 
+textarea:read-only,
+textarea:disabled,
+input:read-only,
+input:disabled {
+  background: color-mix(in srgb, var(--panel) 85%, var(--line));
+  color: var(--muted);
+  cursor: default;
+}
+
 .select-review {
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--panel) 70%, white);

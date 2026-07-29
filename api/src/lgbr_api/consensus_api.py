@@ -406,8 +406,29 @@ def get_latest_ended(*, theme: str) -> dict[str, Any]:
     }
 
 
+def _themes_for_input(r: dict[str, Any]) -> list[str]:
+    attrs = r.get("attrs") or {}
+    if not isinstance(attrs, dict):
+        attrs = {}
+    raw = attrs.get("themes")
+    out: list[str] = []
+    if isinstance(raw, list):
+        for item in raw:
+            s = str(item).strip()
+            if s and s in THEMES:
+                out.append(s)
+    if out:
+        return out
+    legacy = attrs.get("theme") or r.get("theme")
+    if legacy is None:
+        return []
+    s = str(legacy).strip()
+    return [s] if s in THEMES else []
+
+
 def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
     pub = r.get("published_at")
+    themes = _themes_for_input(r)
     return {
         "id": str(r["id"]),
         "source_key": r.get("source_key"),
@@ -417,7 +438,9 @@ def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "published_at": pub.isoformat() if pub is not None else None,
         "quality_pass": r.get("quality_pass"),
         "quality_scope": r.get("quality_scope"),
-        "theme_tag": r.get("theme"),
+        # theme_tag kept for older clients; prefer themes[].
+        "theme_tag": themes[0] if themes else r.get("theme"),
+        "themes": themes,
         "will_select": False,
         "will_fill_extra": False,
         "select_role": None,

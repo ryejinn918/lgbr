@@ -370,16 +370,22 @@ def list_theme_reports(theme: str) -> list[dict[str, Any]]:
     return list_pool_reports(themes=(theme,))
 
 
+# Consensus pack / ops pool: sell-side notes only (exclude Big4 HTTP media).
+POOL_SOURCE = "fnguide"
+
+
 def list_pool_reports(
     *,
     themes: tuple[str, ...],
     period_months: int = PERIOD_MONTHS_DEFAULT,
 ) -> list[dict[str, Any]]:
-    """Downloaded reports with attrs.themes membership (qp first).
+    """Downloaded FnGuide reports whose PRIMARY theme is in ``themes`` (qp first).
 
-    Matches ``attrs.themes ?| themes`` or legacy ``attrs.theme`` when themes[]
-    is absent/empty. Only includes rows with published_at within the last
-    ``period_months`` calendar months (NULL published_at excluded).
+    Primary = ``attrs.themes[0]`` when the array is non-empty; otherwise legacy
+    ``attrs.theme``. Secondary multi-labels are kept for display but do not put
+    a note into another tab's pool. Only includes rows with published_at within
+    the last ``period_months`` calendar months (NULL published_at excluded).
+    Non-FnGuide sources (PwC, Deloitte, …) are excluded.
     """
     if not themes:
         return []
@@ -388,7 +394,7 @@ def list_pool_reports(
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, source_key, title, file_path, file_name, page_count,
+            SELECT id, source, source_key, title, file_path, file_name, page_count,
                    published_at, quality_pass, quality_scope, quality_json, attrs,
                    attrs->>'provider' AS provider,
                    COALESCE(
@@ -396,9 +402,15 @@ def list_pool_reports(
                      attrs->>'theme'
                    ) AS theme
             FROM reports
-            WHERE status = 'downloaded'
+            WHERE source = %s
+              AND status = 'downloaded'
               AND (
-                attrs->'themes' ?| %s::text[]
+                (
+                  attrs ? 'themes'
+                  AND jsonb_typeof(attrs->'themes') = 'array'
+                  AND jsonb_array_length(attrs->'themes') > 0
+                  AND attrs->'themes'->>0 = ANY(%s)
+                )
                 OR (
                   (
                     NOT (attrs ? 'themes')
@@ -416,7 +428,7 @@ def list_pool_reports(
               published_at DESC NULLS LAST,
               page_count DESC NULLS LAST
             """,
-            (theme_list, theme_list, months),
+            (POOL_SOURCE, theme_list, theme_list, months),
         )
         return [dict(r) for r in cur.fetchall()]
 

@@ -11,6 +11,19 @@ export function labelThemeSector(theme: ConsensusTheme | string): string {
   return `${name} 섹터`
 }
 
+/** Content theme id → short Korean label (unknown ids pass through). */
+export function labelTheme(theme: string | null | undefined): string {
+  if (!theme) return '—'
+  return THEME_LABEL[theme as ConsensusTheme] ?? theme
+}
+
+export function labelThemes(themes: string[] | null | undefined): string {
+  if (!themes?.length) return '—'
+  if (themes.length === 1) return labelTheme(themes[0])
+  const [primary, ...rest] = themes
+  return `${labelTheme(primary)} · ${rest.map(labelTheme).join(', ')}`
+}
+
 /** Nav labels; display order: axes → frames → eval. */
 export const NAV = {
   axes: '분석 축',

@@ -35,6 +35,35 @@ function parsePillars(text: string): string[] {
     .filter(Boolean)
 }
 
+function AxesReview({
+  thesis,
+  cutLogic,
+  pillars,
+}: {
+  thesis: string
+  cutLogic?: string | null
+  pillars: string[]
+}) {
+  return (
+    <>
+      <p className="section-note">긴장</p>
+      <p className="select-review-body">{thesis}</p>
+      {cutLogic ? (
+        <>
+          <p className="section-note">분리 이유</p>
+          <p className="select-review-body">{cutLogic}</p>
+        </>
+      ) : null}
+      <p className="section-note">분석 축</p>
+      <ul className="select-review-list">
+        {pillars.map((p, i) => (
+          <li key={`${i}-${p}`}>{p}</li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
 export function AxesPage() {
   const { theme: raw } = useParams()
   const theme = parseTheme(raw)
@@ -139,8 +168,13 @@ export function AxesPage() {
 
   const canEdit = Boolean(awaiting && openRun?.id)
   const hasCut = Boolean(thesis.trim() && parsePillars(pillars).length >= 2)
-  const axesLocked = hasCut
-  const cuttingAxes = Boolean(busy && !axesLocked)
+  const serverHasCut = Boolean(
+    serverAxes.thesis.trim() && parsePillars(serverAxes.pillars).length >= 2,
+  )
+  // Live worker, thesis not yet on server → cutting in progress.
+  const cuttingAxes = Boolean(busy && !serverHasCut)
+  // Live after continue (or thesis already locked on server while not awaiting).
+  const runningLocked = Boolean(openRun && busy && serverHasCut)
   const showWorkForm = Boolean(openRun)
   const showLastAxes = Boolean(
     !openRun &&
@@ -222,91 +256,110 @@ export function AxesPage() {
           <div className="section-head">
             <h2>긴장 · 분석 축</h2>
           </div>
-          {cuttingAxes && (
+          {cuttingAxes ? (
             <p className="section-note">분석 축 잡는 중…</p>
-          )}
-          <label className="section-note" htmlFor="thesis">
-            긴장 (한 줄)
-          </label>
-          <textarea
-            id="thesis"
-            className="mono"
-            rows={2}
-            value={thesis}
-            readOnly={!canEdit}
-            placeholder={cuttingAxes ? '생성 중…' : ''}
-            onChange={(e) => {
-              const v = e.target.value
-              setThesis(() => v)
-              persistDraft({ thesis: v, cutLogic, pillars })
-            }}
-            style={{ width: '100%', marginBottom: '0.75rem' }}
-          />
-          <label className="section-note" htmlFor="cut_logic">
-            분리 이유
-          </label>
-          <textarea
-            id="cut_logic"
-            className="mono"
-            rows={4}
-            value={cutLogic}
-            readOnly={!canEdit}
-            placeholder={cuttingAxes ? '생성 중…' : ''}
-            onChange={(e) => {
-              const v = e.target.value
-              setCutLogic(() => v)
-              persistDraft({ thesis, cutLogic: v, pillars })
-            }}
-            style={{ width: '100%', marginBottom: '0.75rem' }}
-          />
-          <label className="section-note" htmlFor="pillars">
-            분석 축 (줄마다 하나, 2–4개)
-          </label>
-          <textarea
-            id="pillars"
-            className="mono"
-            rows={5}
-            value={pillars}
-            readOnly={!canEdit}
-            placeholder={cuttingAxes ? '생성 중…' : ''}
-            onChange={(e) => {
-              const v = e.target.value
-              setPillars(() => v)
-              persistDraft({ thesis, cutLogic, pillars: v })
-            }}
-            style={{ width: '100%', marginBottom: '0.75rem' }}
-          />
-          {draftSaved && (
-            <div className="section-note" role="status">
-              <span>
-                {draftConflict
-                  ? '서버의 분석 축이 바뀌었지만 이 브라우저의 편집 초안을 유지하고 있습니다.'
-                  : '편집 초안이 이 브라우저에 저장되었습니다.'}
-              </span>{' '}
-              <button type="button" className="text-link" onClick={resetDraft}>
-                서버 축으로 되돌리기
-              </button>
-            </div>
-          )}
-          {awaiting && (
-            <div className="chip-row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="btn"
-                disabled={!hasCut || continuing}
-                onClick={() => void onContinue(true)}
+          ) : runningLocked ? (
+            <>
+              <p className="section-note">분석 진행 중 · 축은 잠겨 있습니다.</p>
+              <AxesReview
+                thesis={serverAxes.thesis}
+                cutLogic={serverAxes.cutLogic}
+                pillars={parsePillars(serverAxes.pillars)}
+              />
+            </>
+          ) : canEdit ? (
+            <>
+              <label className="section-note" htmlFor="thesis">
+                긴장 (한 줄)
+              </label>
+              <textarea
+                id="thesis"
+                className="mono"
+                rows={2}
+                value={thesis}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setThesis(() => v)
+                  persistDraft({ thesis: v, cutLogic, pillars })
+                }}
+                style={{ width: '100%', marginBottom: '0.75rem' }}
+              />
+              <label className="section-note" htmlFor="cut_logic">
+                분리 이유
+              </label>
+              <textarea
+                id="cut_logic"
+                className="mono"
+                rows={4}
+                value={cutLogic}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setCutLogic(() => v)
+                  persistDraft({ thesis, cutLogic: v, pillars })
+                }}
+                style={{ width: '100%', marginBottom: '0.75rem' }}
+              />
+              <label className="section-note" htmlFor="pillars">
+                분석 축 (줄마다 하나, 2–4개)
+              </label>
+              <textarea
+                id="pillars"
+                className="mono"
+                rows={5}
+                value={pillars}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setPillars(() => v)
+                  persistDraft({ thesis, cutLogic, pillars: v })
+                }}
+                style={{ width: '100%', marginBottom: '0.75rem' }}
+              />
+              {draftSaved && (
+                <div className="section-note" role="status">
+                  <span>
+                    {draftConflict
+                      ? '서버의 분석 축이 바뀌었지만 이 브라우저의 편집 초안을 유지하고 있습니다.'
+                      : '편집 초안이 이 브라우저에 저장되었습니다.'}
+                  </span>{' '}
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={resetDraft}
+                  >
+                    서버 축으로 되돌리기
+                  </button>
+                </div>
+              )}
+              <div
+                className="chip-row"
+                style={{ gap: '0.5rem', flexWrap: 'wrap' }}
               >
-                {continuing ? '진행 중…' : '이 축으로 선별만'}
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={!hasCut || continuing}
-                onClick={() => void onContinue(false)}
-              >
-                {continuing ? '진행 중…' : '이 축으로 전체 계속'}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!hasCut || continuing}
+                  onClick={() => void onContinue(true)}
+                >
+                  {continuing ? '진행 중…' : '이 축으로 선별만'}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!hasCut || continuing}
+                  onClick={() => void onContinue(false)}
+                >
+                  {continuing ? '진행 중…' : '이 축으로 전체 계속'}
+                </button>
+              </div>
+            </>
+          ) : serverHasCut ? (
+            <AxesReview
+              thesis={serverAxes.thesis}
+              cutLogic={serverAxes.cutLogic}
+              pillars={parsePillars(serverAxes.pillars)}
+            />
+          ) : (
+            <p className="section-note">분석 축을 기다리는 중…</p>
           )}
         </section>
       )}
@@ -316,20 +369,11 @@ export function AxesPage() {
           <div className="section-head">
             <h2>최근 분석 축</h2>
           </div>
-          <p className="section-note">긴장</p>
-          <p className="select-review-body">{lastCriteria.thesis}</p>
-          {lastCriteria.cut_logic ? (
-            <>
-              <p className="section-note">분리 이유</p>
-              <p className="select-review-body">{lastCriteria.cut_logic}</p>
-            </>
-          ) : null}
-          <p className="section-note">분석 축</p>
-          <ul className="select-review-list">
-            {(lastCriteria.pillar_sketch || []).map((p, i) => (
-              <li key={`${i}-${p}`}>{p}</li>
-            ))}
-          </ul>
+          <AxesReview
+            thesis={String(lastCriteria.thesis || '')}
+            cutLogic={lastCriteria.cut_logic}
+            pillars={lastCriteria.pillar_sketch || []}
+          />
           <p className="section-note">
             <Link className="text-link" to={themePath(theme, 'frames')}>
               {NAV.frames}

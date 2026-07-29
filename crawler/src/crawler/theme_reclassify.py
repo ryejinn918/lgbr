@@ -38,9 +38,17 @@ themes:
 - Zero or more ids from this allowlist only: {_THEME_IDS}
 - Labels:
 {_THEME_LABEL_LINES}
-- Multi-label OK when the note clearly covers more than one (e.g. AI + datacenter).
-- Prefer precise labels: pure AIDC/power/cooling → datacenter; model/LLM/AI chip → ai;
-  rates/inflation/FX/growth → macroeconomy. Do not dump every sector.
+- Order matters: themes[0] is the PRIMARY topic (desk that owns the note).
+- Prefer exactly one theme. Add a second only when BOTH are core analytical frames
+  of the note (not seasoning, examples, or one paragraph).
+- Disambiguation (mandatory):
+  - Pure AIDC / power / site / cooling / colo → datacenter (not ai).
+  - Model / LLM / AI chip / AI software demand → ai (not datacenter).
+  - Growth / inflation / rates / FX / credit / asset allocation as the frame
+    → macroeconomy. If AI is only the narrative hook or one sleeve, do NOT add ai.
+  - AI industry / AI-capex / AI semiconductors as the frame → ai (or datacenter).
+    Do NOT add macroeconomy just because the note mentions rates, GDP, or allocation.
+  - Single-sector industry note (auto, chem, …) → that sector only; not macroeconomy.
 - Empty array only when truly off-list / unreadable.
 
 Do NOT judge quality pass/fail. Themes only.
@@ -52,6 +60,7 @@ def fetch_reclassify_targets(
     limit: int | None = None,
     report_id: UUID | str | None = None,
     missing_themes_only: bool = False,
+    require_themes: tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
     where = [
         "status = 'downloaded'",
@@ -62,14 +71,18 @@ def fetch_reclassify_targets(
         rid = report_id if isinstance(report_id, UUID) else UUID(str(report_id))
         where.append("id = %s")
         params.append(rid)
-    elif missing_themes_only:
-        where.append(
-            "("
-            "NOT (attrs ? 'themes')"
-            " OR jsonb_typeof(attrs->'themes') <> 'array'"
-            " OR jsonb_array_length(attrs->'themes') = 0"
-            ")"
-        )
+    else:
+        if missing_themes_only:
+            where.append(
+                "("
+                "NOT (attrs ? 'themes')"
+                " OR jsonb_typeof(attrs->'themes') <> 'array'"
+                " OR jsonb_array_length(attrs->'themes') = 0"
+                ")"
+            )
+        if require_themes:
+            where.append("attrs->'themes' ?& %s::text[]")
+            params.append(list(require_themes))
     where_sql = " AND ".join(where)
     sql = f"""
         SELECT id, source, source_key, title, file_path, attrs,
@@ -185,17 +198,19 @@ async def run_reclassify(
     model: str = DEFAULT_MODEL,
     report_id: UUID | str | None = None,
     missing_themes_only: bool = False,
+    require_themes: tuple[str, ...] | None = None,
     dry_run: bool = False,
 ) -> dict[str, int]:
     rows = fetch_reclassify_targets(
         limit=limit,
         report_id=report_id,
         missing_themes_only=missing_themes_only,
+        require_themes=require_themes,
     )
     before = {str(r["id"]): _quality_snapshot(r) for r in rows}
     print(
         f"candidates={len(rows)} missing_only={missing_themes_only} "
-        f"dry_run={dry_run} concurrency={concurrency}"
+        f"require={require_themes} dry_run={dry_run} concurrency={concurrency}"
     )
     targets, extract_failures = prepare_targets(rows)
     stats = {
