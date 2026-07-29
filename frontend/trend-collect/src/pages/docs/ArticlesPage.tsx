@@ -176,11 +176,15 @@ export function ArticlesPage() {
                       <td className="col-provider">
                         {item.section || item.publisher || '—'}
                       </td>
-                      <td className="col-title report-title" title={item.title}>
-                        {item.title}
-                        {originalUrl ? (
-                          <>
-                            {' '}
+                      <td className="col-title report-title">
+                        <div className="report-title-inner">
+                          <span
+                            className="report-title-text"
+                            title={item.title}
+                          >
+                            {item.title}
+                          </span>
+                          {originalUrl ? (
                             <a
                               className="report-file-link report-original-link"
                               href={originalUrl}
@@ -190,8 +194,8 @@ export function ArticlesPage() {
                             >
                               원문
                             </a>
-                          </>
-                        ) : null}
+                          ) : null}
+                        </div>
                       </td>
                       <td className="col-status">
                         <span

@@ -410,6 +410,11 @@
   width: 3.2rem;
 }
 
+/* longest label: Accenture — keep tight under table-layout:fixed */
+.report-table .col-source {
+  width: 5.8rem;
+}
+
 .report-table .col-rpt {
   width: 5rem;
 }
@@ -458,14 +463,39 @@
 .report-table .col-title {
   font-weight: 500;
   color: var(--ink);
-  white-space: nowrap;
+}
+
+.report-table td.report-title {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.report-table .report-title-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* shrink only — do not grow, or short titles leave a gap before chips/link */
+.report-table .report-title-text {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-table .report-title-meta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .report-table .theme-chip {
   display: inline-block;
-  margin-left: 0.4rem;
   padding: 0.05rem 0.35rem;
   font-size: 0.72rem;
   font-weight: 500;
@@ -473,11 +503,13 @@
   border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
   border-radius: 3px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .report-table .col-status,
 .report-table .col-quality,
 .report-table .col-provider,
+.report-table .col-source,
 .report-table .col-file,
 .report-table .col-seen,
 .report-table .col-qat,
@@ -509,9 +541,11 @@
 
 a.report-original-link {
   display: inline;
-  margin-left: 0.35rem;
+  flex: 0 0 auto;
+  margin-left: 0;
   font-size: 0.85em;
   white-space: nowrap;
+  overflow: visible;
 }
 
 .report-table td.mono,

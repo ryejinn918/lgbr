@@ -201,12 +201,8 @@ export function ReportsPage({
   )
   const sourceKey = source || 'all'
   const isAll = sourceKey === 'all'
-  const showProvider =
-    sourceKey !== 'pwc' &&
-    sourceKey !== 'accenture' &&
-    sourceKey !== 'kpmg' &&
-    sourceKey !== 'ey' &&
-    sourceKey !== 'deloitte'
+  // 증권사 열은 FnGuide 단독 탭만. 통합 보기·Big4에는 숨김.
+  const showProvider = sourceKey === 'fnguide'
   const sourceTitle = SOURCE_LABEL[sourceKey] ?? sourceKey
   const sourceLede = isAll
     ? '매체별 보고서를 한곳에서 봅니다. FnGuide·PwC·Accenture·KPMG·EY·Deloitte 탭으로 나눌 수도 있습니다.'
@@ -461,23 +457,29 @@ export function ReportsPage({
                           {QUALITY_LABEL[q] || q}
                         </span>
                       </td>
-                      <td className="col-title report-title" title={item.title}>
-                        {item.title}
-                        {(item.themes?.length
-                          ? item.themes
-                          : item.theme
-                            ? [item.theme]
-                            : item.crawl_profile
-                              ? [item.crawl_profile]
-                              : ['other']
-                        ).map((t) => (
-                          <span key={t} className="theme-chip">
-                            {THEME_LABEL[t] || t}
+                      <td className="col-title report-title">
+                        <div className="report-title-inner">
+                          <span
+                            className="report-title-text"
+                            title={item.title}
+                          >
+                            {item.title}
                           </span>
-                        ))}
-                        {originalUrl ? (
-                          <>
-                            {' '}
+                          <span className="report-title-meta">
+                            {(item.themes?.length
+                              ? item.themes
+                              : item.theme
+                                ? [item.theme]
+                                : item.crawl_profile
+                                  ? [item.crawl_profile]
+                                  : ['other']
+                            ).map((t) => (
+                              <span key={t} className="theme-chip">
+                                {THEME_LABEL[t] || t}
+                              </span>
+                            ))}
+                          </span>
+                          {originalUrl ? (
                             <a
                               className="report-file-link report-original-link"
                               href={originalUrl}
@@ -487,8 +489,8 @@ export function ReportsPage({
                             >
                               원문
                             </a>
-                          </>
-                        ) : null}
+                          ) : null}
+                        </div>
                       </td>
                       {showProvider ? (
                         <td
