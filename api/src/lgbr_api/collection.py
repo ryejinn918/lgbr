@@ -30,7 +30,7 @@ JOB_STATE_LABELS = {
 }
 
 FEED_ALLOWLIST = frozenset({"arg"})
-SEARCH_ALLOWLIST = frozenset({"pwc"})
+SEARCH_ALLOWLIST = frozenset({"pwc", "accenture"})
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
 CAPABILITY_LABELS = {
     "feed": "리스트 발굴",
@@ -302,6 +302,16 @@ DEFAULT_SEARCH_LIMIT: int | None = None
 
 PWC_CATALOGS = frozenset({"kr", "gx"})
 DEFAULT_PWC_CATALOG = "kr"
+ACCENTURE_CATALOGS = frozenset({"us"})
+DEFAULT_ACCENTURE_CATALOG = "us"
+SOURCE_DEFAULT_CATALOG = {
+    "pwc": DEFAULT_PWC_CATALOG,
+    "accenture": DEFAULT_ACCENTURE_CATALOG,
+}
+SOURCE_CATALOGS = {
+    "pwc": PWC_CATALOGS,
+    "accenture": ACCENTURE_CATALOGS,
+}
 
 
 def start_search(
@@ -312,7 +322,7 @@ def start_search(
     limit: int | None = None,
     catalog: str | None = None,
 ) -> dict[str, Any]:
-    """Start list-while-download search job (PwC)."""
+    """Start list-while-download search job (PwC / Accenture)."""
     source_s = (source or "").strip().lower()
     if source_s not in SEARCH_ALLOWLIST:
         return {
@@ -327,19 +337,20 @@ def start_search(
             "can_start": False,
         }
 
+    allowed = SOURCE_CATALOGS[source_s]
+    default_cat = SOURCE_DEFAULT_CATALOG[source_s]
     catalog_s = (
-        DEFAULT_PWC_CATALOG
+        default_cat
         if catalog is None or str(catalog).strip() == ""
         else str(catalog).strip().lower()
     )
-    if catalog_s not in PWC_CATALOGS:
+    if catalog_s not in allowed:
         return {
             "ok": False,
             "status": 400,
             "label": "오류",
             "message": (
-                "catalog must be one of: "
-                + ", ".join(sorted(PWC_CATALOGS))
+                f"catalog must be one of: {', '.join(sorted(allowed))}"
             ),
             "job": None,
             "can_start": False,

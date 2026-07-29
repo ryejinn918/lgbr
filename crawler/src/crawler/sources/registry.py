@@ -32,7 +32,7 @@ SOURCES: dict[str, SourceDef] = {
         label="Accenture",
         abbrev="ac",
         hub_url="https://www.accenture.com/us-en/insights",
-        has_search=False,
+        has_search=True,
     ),
 }
 

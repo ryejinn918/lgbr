@@ -9,6 +9,7 @@ import { CrawlPage } from '../CrawlPage'
 import { ArgFeedRunPage } from './ArgFeedRunPage'
 import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
 import { getMediaSource } from '../../lib/mediaSources'
+import { AccentureRunPage } from './AccentureRunPage'
 import { PwcAdhocRunPage } from './PwcAdhocRunPage'
 import { SourceAdhocRunPage } from './SourceAdhocRunPage'
 
@@ -36,6 +37,13 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'pwc' && ctx.stage === 'list' && ctx.means === 'search') {
     return <PwcAdhocRunPage />
+  }
+  if (
+    ctx.source === 'accenture' &&
+    ctx.stage === 'list' &&
+    ctx.means === 'search'
+  ) {
+    return <AccentureRunPage />
   }
   const media = getMediaSource(ctx.source)
   if (

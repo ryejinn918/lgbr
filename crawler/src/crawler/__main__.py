@@ -29,6 +29,7 @@ from crawler.fetch_body_job import (
     MIN_LIMIT as FETCH_BODY_MIN_LIMIT,
     run_fetch_body_job,
 )
+from crawler.jobs.accenture_report import run_accenture_search_job
 from crawler.jobs.pwc_report import (
     DEFAULT_MAX_PAGES as PWC_DEFAULT_MAX_PAGES,
     DEFAULT_PERIOD_MONTHS as PWC_DEFAULT_PERIOD_MONTHS,
@@ -486,9 +487,19 @@ def main() -> None:
             return
         if search_command == "run":
             try:
-                result = run_pwc_search_job(
+                preview = collection_jobs_store.get_job(args.job_id)
+                source = str((preview or {}).get("source") or "pwc").lower()
+                runner = (
+                    run_accenture_search_job
+                    if source == "accenture"
+                    else run_pwc_search_job
+                )
+                catalog = args.catalog
+                if source == "accenture" and catalog in ("kr", "gx"):
+                    catalog = "us"
+                result = runner(
                     args.job_id,
-                    catalog=args.catalog,
+                    catalog=catalog,
                     max_pages=args.max_pages,
                     period_months=args.period_months,
                     limit=args.limit,

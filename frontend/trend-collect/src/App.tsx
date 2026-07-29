@@ -71,6 +71,10 @@ function App() {
             path="reports/pwc"
             element={<ReportsPage embedded source="pwc" />}
           />
+          <Route
+            path="reports/accenture"
+            element={<ReportsPage embedded source="accenture" />}
+          />
           {/* legacy docs paths */}
           <Route
             path="fnguide"

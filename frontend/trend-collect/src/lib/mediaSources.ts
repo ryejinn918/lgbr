@@ -22,7 +22,7 @@ export const MEDIA_SOURCES: MediaSource[] = [
     id: 'accenture',
     label: 'Accenture',
     hubUrl: 'https://www.accenture.com/us-en/insights',
-    hasSearch: false,
+    hasSearch: true,
     hasCatalogs: false,
   },
 ]

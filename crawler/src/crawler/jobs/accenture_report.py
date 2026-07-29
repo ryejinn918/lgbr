@@ -1,0 +1,311 @@
+"""Accenture US list-while-download job (filtercard list + detail PDF)."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+from uuid import UUID
+
+from crawler import collection_jobs_store, reports_store
+from crawler.asset_id import DOWNLOADS_ROOT, downloads_dir, make_asset_id
+from crawler.sources.accenture_http import (
+    DEFAULT_CATALOG,
+    AccentureListItem,
+    SOURCE,
+    download_pdf,
+    fetch_detail_meta,
+    fetch_list_page,
+    get_catalog,
+    months_ago_cutoff,
+    pdf_page_count,
+)
+
+DEFAULT_PERIOD_MONTHS = 3
+MIN_PERIOD_MONTHS = 1
+MAX_PERIOD_MONTHS = 24
+DEFAULT_MAX_PAGES = 20
+MAX_MAX_PAGES = 50
+
+
+@dataclass
+class AccentureJobSummary:
+    listed: int = 0
+    downloaded: list[str] = field(default_factory=list)
+    skipped_existing: int = 0
+    skipped_no_download: int = 0
+    skipped_old: int = 0
+    failed: int = 0
+    pages_done: int = 0
+    stopped: bool = False
+
+    def as_message(self) -> str:
+        return (
+            f"downloaded={len(self.downloaded)} listed={self.listed} "
+            f"existing={self.skipped_existing} no_dl={self.skipped_no_download} "
+            f"old={self.skipped_old} failed={self.failed} pages={self.pages_done}"
+        )
+
+
+def run_accenture_search_job(
+    job_id: UUID | str,
+    *,
+    catalog: str = DEFAULT_CATALOG,
+    period_months: int = DEFAULT_PERIOD_MONTHS,
+    max_pages: int = DEFAULT_MAX_PAGES,
+    limit: int | None = None,
+    download_root: Path | None = None,
+) -> dict[str, Any]:
+    job = collection_jobs_store.claim_job(job_id)
+    source = str(job.get("source") or "")
+    capability = str(job.get("capability") or "")
+    if capability != "search":
+        return collection_jobs_store.end_job(
+            job_id,
+            error=True,
+            message=f"expected capability=search, got {capability!r}",
+        )
+    if source != SOURCE:
+        return collection_jobs_store.end_job(
+            job_id,
+            error=True,
+            message=f"source {source!r} is not accenture",
+        )
+
+    try:
+        cat = get_catalog(catalog)
+    except ValueError as exc:
+        return collection_jobs_store.end_job(
+            job_id,
+            error=True,
+            message=str(exc),
+        )
+
+    period_months = max(MIN_PERIOD_MONTHS, min(int(period_months), MAX_PERIOD_MONTHS))
+    max_pages = max(1, min(int(max_pages), MAX_MAX_PAGES))
+    if limit is not None and limit < 1:
+        limit = None
+
+    asset_id = make_asset_id("accenture")
+    download_dir = downloads_dir(asset_id, root=download_root or DOWNLOADS_ROOT)
+    download_dir.mkdir(parents=True, exist_ok=True)
+    cutoff = months_ago_cutoff(period_months)
+    already = reports_store.downloaded_keys(SOURCE)
+    summary = AccentureJobSummary()
+    page_size = cat.page_size
+
+    progress: dict[str, Any] = {
+        "stage": "list_download",
+        "source": SOURCE,
+        "capability": "search",
+        "catalog": cat.id,
+        "catalog_label": cat.label,
+        "period_months": period_months,
+        "cutoff": cutoff.isoformat(),
+        "asset_id": asset_id,
+        "page_offset": 0,
+        "page_size": page_size,
+        "listed": 0,
+        "downloaded": 0,
+        "skipped_existing": 0,
+        "skipped_no_download": 0,
+        "skipped_old": 0,
+        "failed": 0,
+        "pages_done": 0,
+    }
+    collection_jobs_store.set_progress(job_id, progress)
+    collection_jobs_store.set_message(
+        job_id,
+        f"accenture search 시작 ({cat.label}, 최근 {period_months}개월, "
+        f"max_pages={max_pages})",
+    )
+
+    def stop() -> bool:
+        return bool(collection_jobs_store.stop_requested(job_id))
+
+    try:
+        for page_idx in range(max_pages):
+            if stop():
+                summary.stopped = True
+                break
+            if limit is not None and len(summary.downloaded) >= limit:
+                break
+
+            page_offset = page_idx * page_size
+            progress["stage"] = "list"
+            progress["page_offset"] = page_offset
+            collection_jobs_store.set_progress(job_id, progress)
+
+            items, has_more = fetch_list_page(page_offset, catalog=cat)
+            if not items:
+                progress["stop_reason"] = "empty_page"
+                break
+
+            older_than_cutoff = 0
+            dated_on_page = 0
+            for item in items:
+                if stop():
+                    summary.stopped = True
+                    break
+                if limit is not None and len(summary.downloaded) >= limit:
+                    break
+
+                outcome = _process_item(
+                    item,
+                    catalog_id=cat.id,
+                    cutoff=cutoff,
+                    summary=summary,
+                    already=already,
+                    download_dir=download_dir,
+                    progress=progress,
+                    job_id=job_id,
+                )
+                if outcome == "old":
+                    older_than_cutoff += 1
+                    dated_on_page += 1
+                elif outcome == "ok":
+                    dated_on_page += 1
+
+            summary.pages_done += 1
+            progress["pages_done"] = summary.pages_done
+            progress["listed"] = summary.listed
+            progress["downloaded"] = len(summary.downloaded)
+            collection_jobs_store.set_progress(job_id, progress)
+
+            # List is date-desc; stop when every dated item on the page is old.
+            if dated_on_page > 0 and older_than_cutoff == dated_on_page:
+                progress["stop_reason"] = "period_cutoff"
+                break
+            if not has_more:
+                progress["stop_reason"] = "end_of_list"
+                break
+
+        if summary.stopped:
+            progress["stop_reason"] = "manual"
+        progress["stage"] = "done"
+        collection_jobs_store.set_progress(job_id, progress)
+        return collection_jobs_store.end_job(
+            job_id,
+            error=False,
+            message=summary.as_message(),
+        )
+    except Exception as exc:
+        return collection_jobs_store.end_job(
+            job_id,
+            error=True,
+            message=str(exc),
+        )
+
+
+def _process_item(
+    item: AccentureListItem,
+    *,
+    catalog_id: str,
+    cutoff,
+    summary: AccentureJobSummary,
+    already: set[str],
+    download_dir: Path,
+    progress: dict[str, Any],
+    job_id: UUID | str,
+) -> str:
+    """Return 'ok' | 'old' | 'skip' for paging cutoffs."""
+    attrs: dict[str, Any] = {
+        "url": item.url,
+        "catalog": catalog_id,
+        "content_type": item.content_type,
+        "cf_id": item.cf_id,
+        "provider": "Accenture",
+    }
+    reports_store.upsert_listed(
+        source=SOURCE,
+        source_key=item.source_key,
+        title=item.title,
+        published_at=None,
+        attrs=attrs,
+    )
+    summary.listed += 1
+    progress["listed"] = summary.listed
+    progress["current_title"] = item.title
+    progress["current_url"] = item.url
+    collection_jobs_store.set_progress(job_id, progress)
+
+    if item.source_key in already:
+        summary.skipped_existing += 1
+        progress["skipped_existing"] = summary.skipped_existing
+        return "skip"
+
+    try:
+        pdf_url, published_at = fetch_detail_meta(item.url)
+    except Exception as exc:
+        summary.failed += 1
+        progress["failed"] = summary.failed
+        reports_store.mark_status(
+            source=SOURCE,
+            source_key=item.source_key,
+            status=reports_store.STATUS_FAILED,
+            attrs={**attrs, "error": f"detail_fetch: {exc}"},
+        )
+        return "skip"
+
+    if published_at is not None:
+        attrs["publish_date"] = published_at.isoformat()
+        reports_store.upsert_listed(
+            source=SOURCE,
+            source_key=item.source_key,
+            title=item.title,
+            published_at=published_at,
+            attrs=attrs,
+        )
+        if published_at < cutoff:
+            summary.skipped_old += 1
+            progress["skipped_old"] = summary.skipped_old
+            return "old"
+
+    if not pdf_url:
+        summary.skipped_no_download += 1
+        progress["skipped_no_download"] = summary.skipped_no_download
+        reports_store.mark_status(
+            source=SOURCE,
+            source_key=item.source_key,
+            status=reports_store.STATUS_NO_DOWNLOAD,
+            attrs={**attrs, "no_pdf": True},
+        )
+        return "ok" if published_at else "skip"
+
+    safe = _safe_filename(item.source_key)
+    dest = download_dir / f"{safe}.pdf"
+    try:
+        size = download_pdf(pdf_url, dest)
+        pages = pdf_page_count(dest)
+        reports_store.mark_downloaded(
+            source=SOURCE,
+            source_key=item.source_key,
+            title=item.title,
+            published_at=published_at,
+            page_count=pages,
+            file_path=str(dest),
+            file_name=dest.name,
+            attrs={**attrs, "pdf_url": pdf_url, "bytes": size},
+        )
+        already.add(item.source_key)
+        summary.downloaded.append(str(dest))
+        progress["downloaded"] = len(summary.downloaded)
+        progress["last_pdf"] = pdf_url
+        return "ok" if published_at else "skip"
+    except Exception as exc:
+        summary.failed += 1
+        progress["failed"] = summary.failed
+        reports_store.mark_status(
+            source=SOURCE,
+            source_key=item.source_key,
+            status=reports_store.STATUS_FAILED,
+            attrs={**attrs, "pdf_url": pdf_url, "error": f"download: {exc}"},
+        )
+        return "skip"
+
+
+def _safe_filename(key: str) -> str:
+    base = key.replace("/", "__")
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
+    return base[:180] or "accenture_report"
