@@ -18,6 +18,7 @@ const SOURCE_LABEL: Record<string, string> = {
   fnguide: 'FnGuide',
   pwc: 'PwC',
   accenture: 'Accenture',
+  kpmg: 'KPMG',
 }
 
 function sourceLabel(source: string | null | undefined) {
@@ -138,6 +139,10 @@ export function DashboardPage() {
     source: 'accenture',
     capability: 'search',
   })
+  const kpmgSearch = useCollectionJob({
+    source: 'kpmg',
+    capability: 'search',
+  })
 
   const crawlMode = crawl.crawl?.mode ?? null
   const fnguideOwned =
@@ -146,14 +151,18 @@ export function DashboardPage() {
     isBusy(crawl.state) && crawlMode === 'pwc'
   const accentureAdhoc =
     isBusy(crawl.state) && crawlMode === 'accenture'
+  const kpmgAdhoc =
+    isBusy(crawl.state) && crawlMode === 'kpmg'
 
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
   const argBusy = isBusy(argView.status.state)
   const pwcSearchBusy = isBusy(pwcSearch.status.state)
   const accentureSearchBusy = isBusy(accentureSearch.status.state)
+  const kpmgSearchBusy = isBusy(kpmgSearch.status.state)
   const pwcBusy = pwcSearchBusy || pwcAdhoc
   const accentureBusy = accentureSearchBusy || accentureAdhoc
+  const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
 
   const crawlProgress = crawl.progress ?? {}
   const pwcProgress = (pwcSearch.status.progress ??
@@ -161,6 +170,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const accentureProgress = (accentureSearch.status.progress ??
     accentureSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const kpmgProgress = (kpmgSearch.status.progress ??
+    kpmgSearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const argProgress = (argView.status.progress ??
     argView.status.job?.progress ??
@@ -190,6 +202,12 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsKp = useReports({
+    source: 'kpmg',
+    limit: 1,
+    offset: 0,
+    poll: true,
+  })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -211,6 +229,11 @@ export function DashboardPage() {
     !!(accentureSearch.fetchError || (accentureAdhoc && fetchError)),
     accentureBusy,
     accentureSearchBusy ? accentureSearch.status.state : crawl.state,
+  )
+  const kpmgBadge = jobBadgeClass(
+    !!(kpmgSearch.fetchError || (kpmgAdhoc && fetchError)),
+    kpmgBusy,
+    kpmgSearchBusy ? kpmgSearch.status.state : crawl.state,
   )
 
   async function onStopFnguide() {
@@ -234,12 +257,13 @@ export function DashboardPage() {
   }
 
   async function onStopMedia(
-    source: 'pwc' | 'accenture',
+    source: 'pwc' | 'accenture' | 'kpmg',
     searchBusy: boolean,
     adhoc: boolean,
-    stopSearch: () => Promise<unknown>,
+    stopSearch?: () => Promise<unknown>,
   ) {
     if (searchBusy) {
+      if (!stopSearch) return
       if (!window.confirm(`${source} 검색 작업을 중단할까요?`)) return
       try {
         await stopSearch()
@@ -286,6 +310,16 @@ export function DashboardPage() {
           ? accentureSearch.status.label
           : '유휴'
 
+  const kpmgValue = kpmgSearch.fetchError
+    ? 'API Offline'
+    : kpmgSearchBusy
+      ? kpmgSearch.status.label
+      : kpmgAdhoc
+        ? crawl.label
+        : kpmgSearch.status.job
+          ? kpmgSearch.status.label
+          : '유휴'
+
   return (
     <>
       <header className="monitor-header">
@@ -298,7 +332,9 @@ export function DashboardPage() {
       <section className="panel">
         <div className="section-head">
           <h2>수집 작업</h2>
-          <span className="section-note">FnGuide · ARG · PwC · Accenture</span>
+          <span className="section-note">
+            FnGuide · ARG · PwC · Accenture · KPMG
+          </span>
         </div>
         <div className="job-board">
           <article className={`job-card state-${fnguideBadge}`}>
@@ -535,6 +571,77 @@ export function DashboardPage() {
               </div>
             ) : null}
           </article>
+
+          <article className={`job-card state-${kpmgBadge}`}>
+            <p className="badge-label">
+              KPMG · 검색
+              {kpmgAdhoc ? ' · 애드혹' : ''}
+            </p>
+            <p className="badge-value">{kpmgValue}</p>
+            {kpmgSearchBusy && kpmgSearch.status.job?.started_at ? (
+              <p className="account-line">
+                {formatTime(kpmgSearch.status.job.started_at)}
+                {kpmgSearch.status.job.ended_at
+                  ? ` · ${formatTime(kpmgSearch.status.job.ended_at)}`
+                  : ''}
+              </p>
+            ) : null}
+            {kpmgAdhoc && crawl.crawl?.started_at ? (
+              <p className="account-line">
+                {formatTime(crawl.crawl.started_at)}
+                {crawl.crawl.cdp_port
+                  ? ` · CDP ${crawl.crawl.cdp_port}`
+                  : ''}
+              </p>
+            ) : null}
+            {kpmgSearchBusy ? (
+              <p className="account-line">
+                {formatSearchProgress(kpmgProgress) ||
+                  kpmgSearch.status.job?.message ||
+                  '…'}
+              </p>
+            ) : null}
+            {kpmgAdhoc && !kpmgSearchBusy ? (
+              <p className="account-line">
+                {typeof crawlProgress.url === 'string'
+                  ? crawlProgress.url
+                  : formatProgress(crawlProgress)}
+              </p>
+            ) : null}
+            <p className="account-line">
+              <Link to="/collect/kpmg/list/search">검색 실행</Link>
+              {' · '}
+              <Link to="/docs/reports/kpmg">보고서</Link>
+            </p>
+            {kpmgBusy ? (
+              <div className="actions">
+                <button
+                  type="button"
+                  disabled={
+                    kpmgSearchBusy
+                      ? kpmgSearch.requestingStop
+                      : requestingStop || !!fetchError
+                  }
+                  onClick={() =>
+                    void onStopMedia(
+                      'kpmg',
+                      kpmgSearchBusy,
+                      kpmgAdhoc,
+                      () => kpmgSearch.stopFeed(),
+                    )
+                  }
+                >
+                  {(kpmgSearchBusy
+                    ? kpmgSearch.requestingStop
+                    : requestingStop)
+                    ? '요청 중…'
+                    : kpmgSearchBusy
+                      ? '검색 중단'
+                      : '애드혹 종료'}
+                </button>
+              </div>
+            ) : null}
+          </article>
         </div>
       </section>
 
@@ -631,6 +738,14 @@ export function DashboardPage() {
             keys={COUNT_KEYS_MEDIA}
             error={countsAc.error}
             total={countsAc.counts.all ?? 0}
+          />
+          <CountRow
+            label="KPMG"
+            source="kpmg"
+            counts={countsKp.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsKp.error}
+            total={countsKp.counts.all ?? 0}
           />
         </div>
       </section>

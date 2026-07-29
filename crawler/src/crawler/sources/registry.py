@@ -34,6 +34,13 @@ SOURCES: dict[str, SourceDef] = {
         hub_url="https://www.accenture.com/us-en/insights",
         has_search=True,
     ),
+    "kpmg": SourceDef(
+        id="kpmg",
+        label="KPMG",
+        abbrev="kp",
+        hub_url="https://kpmg.com/us/en/insights-and-resources.html",
+        has_search=True,
+    ),
 }
 
 

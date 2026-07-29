@@ -75,6 +75,10 @@ function App() {
             path="reports/accenture"
             element={<ReportsPage embedded source="accenture" />}
           />
+          <Route
+            path="reports/kpmg"
+            element={<ReportsPage embedded source="kpmg" />}
+          />
           {/* legacy docs paths */}
           <Route
             path="fnguide"

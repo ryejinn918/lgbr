@@ -25,6 +25,13 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hasSearch: true,
     hasCatalogs: false,
   },
+  {
+    id: 'kpmg',
+    label: 'KPMG',
+    hubUrl: 'https://kpmg.com/us/en/insights-and-resources.html',
+    hasSearch: true,
+    hasCatalogs: false,
+  },
 ]
 
 export type MediaSourceId = (typeof MEDIA_SOURCES)[number]['id']

@@ -30,7 +30,7 @@ JOB_STATE_LABELS = {
 }
 
 FEED_ALLOWLIST = frozenset({"arg"})
-SEARCH_ALLOWLIST = frozenset({"pwc", "accenture"})
+SEARCH_ALLOWLIST = frozenset({"pwc", "accenture", "kpmg"})
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
 CAPABILITY_LABELS = {
     "feed": "리스트 발굴",
@@ -304,13 +304,17 @@ PWC_CATALOGS = frozenset({"kr", "gx"})
 DEFAULT_PWC_CATALOG = "kr"
 ACCENTURE_CATALOGS = frozenset({"us"})
 DEFAULT_ACCENTURE_CATALOG = "us"
+KPMG_CATALOGS = frozenset({"us"})
+DEFAULT_KPMG_CATALOG = "us"
 SOURCE_DEFAULT_CATALOG = {
     "pwc": DEFAULT_PWC_CATALOG,
     "accenture": DEFAULT_ACCENTURE_CATALOG,
+    "kpmg": DEFAULT_KPMG_CATALOG,
 }
 SOURCE_CATALOGS = {
     "pwc": PWC_CATALOGS,
     "accenture": ACCENTURE_CATALOGS,
+    "kpmg": KPMG_CATALOGS,
 }
 
 
@@ -322,7 +326,7 @@ def start_search(
     limit: int | None = None,
     catalog: str | None = None,
 ) -> dict[str, Any]:
-    """Start list-while-download search job (PwC / Accenture)."""
+    """Start list-while-download search job (PwC / Accenture / KPMG)."""
     source_s = (source or "").strip().lower()
     if source_s not in SEARCH_ALLOWLIST:
         return {

@@ -1,8 +1,8 @@
 import { Link, useOutletContext } from 'react-router-dom'
 import { useSessionStatus } from '../../hooks/useSessionStatus'
 import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
-import type { CollectSource } from '../../lib/collectNav'
-import { getMediaSource } from '../../lib/mediaSources'
+import { defaultCollectPath, type CollectSource } from '../../lib/collectNav'
+import { MEDIA_SOURCES, getMediaSource } from '../../lib/mediaSources'
 import type { CrawlMode } from '../../types'
 
 type Ctx = {
@@ -96,9 +96,13 @@ export function SourceAdhocRunPage() {
 
       <p className="account-line">
         다른 매체:{' '}
-        <Link to="/collect/pwc/list/search">PwC</Link>
-        {' · '}
-        <Link to="/collect/fnguide/list/search">FnGuide</Link>
+        <Link to={defaultCollectPath('fnguide')}>FnGuide</Link>
+        {MEDIA_SOURCES.filter((s) => s.id !== source).map((s) => (
+          <span key={s.id}>
+            {' · '}
+            <Link to={defaultCollectPath(s.id as CollectSource)}>{s.label}</Link>
+          </span>
+        ))}
       </p>
 
       <div className="actions">
