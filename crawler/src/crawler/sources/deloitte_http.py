@@ -90,7 +90,6 @@ PROFILES: dict[str, DeloitteProfile] = {
             "robot",
             "on-device",
         ),
-        period_months=12,
     ),
     "appliance": DeloitteProfile(
         id="appliance",

@@ -15,7 +15,7 @@ export const DELOITTE_PROFILES = [
   {
     id: 'physical_ai',
     label: '피지컬 AI',
-    periodMonths: 12,
+    periodMonths: 3,
     queries: ['Physical AI', 'humanoid', 'robotics', 'robot', 'on-device'],
   },
   {

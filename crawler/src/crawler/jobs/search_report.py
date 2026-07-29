@@ -75,7 +75,6 @@ PROFILES: dict[str, SearchProfile] = {
         ),
         sectors=(),
         theme="physical_ai",
-        period_months=12,
         page_min_label="10p 이상",
     ),
     "appliance": SearchProfile(
