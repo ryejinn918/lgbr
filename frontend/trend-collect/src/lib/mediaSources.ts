@@ -39,6 +39,13 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hasSearch: true,
     hasCatalogs: false,
   },
+  {
+    id: 'deloitte',
+    label: 'Deloitte',
+    hubUrl: 'https://www.deloitte.com/us/en/insights.html',
+    hasSearch: true,
+    hasCatalogs: false,
+  },
 ]
 
 export type MediaSourceId = (typeof MEDIA_SOURCES)[number]['id']

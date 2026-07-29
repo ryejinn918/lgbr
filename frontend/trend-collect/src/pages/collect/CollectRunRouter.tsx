@@ -10,6 +10,7 @@ import { ArgFeedRunPage } from './ArgFeedRunPage'
 import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
 import { getMediaSource } from '../../lib/mediaSources'
 import { AccentureRunPage } from './AccentureRunPage'
+import { DeloitteRunPage } from './DeloitteRunPage'
 import { EyRunPage } from './EyRunPage'
 import { KpmgRunPage } from './KpmgRunPage'
 import { PwcAdhocRunPage } from './PwcAdhocRunPage'
@@ -52,6 +53,13 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'ey' && ctx.stage === 'list' && ctx.means === 'search') {
     return <EyRunPage />
+  }
+  if (
+    ctx.source === 'deloitte' &&
+    ctx.stage === 'list' &&
+    ctx.means === 'search'
+  ) {
+    return <DeloitteRunPage />
   }
   const media = getMediaSource(ctx.source)
   if (

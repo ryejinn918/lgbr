@@ -47,6 +47,13 @@ SOURCES: dict[str, SourceDef] = {
         hub_url="https://www.ey.com/en_us/insights",
         has_search=True,
     ),
+    "deloitte": SourceDef(
+        id="deloitte",
+        label="Deloitte",
+        abbrev="dl",
+        hub_url="https://www.deloitte.com/us/en/insights.html",
+        has_search=True,
+    ),
 }
 
 FNGUIDE_MODES = frozenset(

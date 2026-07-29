@@ -20,6 +20,7 @@ const SOURCE_LABEL: Record<string, string> = {
   accenture: 'Accenture',
   kpmg: 'KPMG',
   ey: 'EY',
+  deloitte: 'Deloitte',
 }
 
 function sourceLabel(source: string | null | undefined) {
@@ -148,6 +149,10 @@ export function DashboardPage() {
     source: 'ey',
     capability: 'search',
   })
+  const deloitteSearch = useCollectionJob({
+    source: 'deloitte',
+    capability: 'search',
+  })
 
   const crawlMode = crawl.crawl?.mode ?? null
   const fnguideOwned =
@@ -159,6 +164,7 @@ export function DashboardPage() {
   const kpmgAdhoc =
     isBusy(crawl.state) && crawlMode === 'kpmg'
   const eyAdhoc = isBusy(crawl.state) && crawlMode === 'ey'
+  const deloitteAdhoc = isBusy(crawl.state) && crawlMode === 'deloitte'
 
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
@@ -167,10 +173,12 @@ export function DashboardPage() {
   const accentureSearchBusy = isBusy(accentureSearch.status.state)
   const kpmgSearchBusy = isBusy(kpmgSearch.status.state)
   const eySearchBusy = isBusy(eySearch.status.state)
+  const deloitteSearchBusy = isBusy(deloitteSearch.status.state)
   const pwcBusy = pwcSearchBusy || pwcAdhoc
   const accentureBusy = accentureSearchBusy || accentureAdhoc
   const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
   const eyBusy = eySearchBusy || eyAdhoc
+  const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
 
   const crawlProgress = crawl.progress ?? {}
   const pwcProgress = (pwcSearch.status.progress ??
@@ -184,6 +192,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const eyProgress = (eySearch.status.progress ??
     eySearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const deloitteProgress = (deloitteSearch.status.progress ??
+    deloitteSearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const argProgress = (argView.status.progress ??
     argView.status.job?.progress ??
@@ -225,6 +236,12 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsDl = useReports({
+    source: 'deloitte',
+    limit: 1,
+    offset: 0,
+    poll: true,
+  })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -257,6 +274,11 @@ export function DashboardPage() {
     eyBusy,
     eySearchBusy ? eySearch.status.state : crawl.state,
   )
+  const deloitteBadge = jobBadgeClass(
+    !!(deloitteSearch.fetchError || (deloitteAdhoc && fetchError)),
+    deloitteBusy,
+    deloitteSearchBusy ? deloitteSearch.status.state : crawl.state,
+  )
 
   async function onStopFnguide() {
     if (!window.confirm('FnGuide 크롤을 종료하고 로그아웃할까요?')) return
@@ -279,7 +301,7 @@ export function DashboardPage() {
   }
 
   async function onStopMedia(
-    source: 'pwc' | 'accenture' | 'kpmg' | 'ey',
+    source: 'pwc' | 'accenture' | 'kpmg' | 'ey' | 'deloitte',
     searchBusy: boolean,
     adhoc: boolean,
     stopSearch?: () => Promise<unknown>,
@@ -352,6 +374,16 @@ export function DashboardPage() {
           ? eySearch.status.label
           : '유휴'
 
+  const deloitteValue = deloitteSearch.fetchError
+    ? 'API Offline'
+    : deloitteSearchBusy
+      ? deloitteSearch.status.label
+      : deloitteAdhoc
+        ? crawl.label
+        : deloitteSearch.status.job
+          ? deloitteSearch.status.label
+          : '유휴'
+
   return (
     <>
       <header className="monitor-header">
@@ -365,7 +397,7 @@ export function DashboardPage() {
         <div className="section-head">
           <h2>수집 작업</h2>
           <span className="section-note">
-            FnGuide · ARG · PwC · Accenture · KPMG
+            FnGuide · ARG · PwC · Accenture · KPMG · EY · Deloitte
           </span>
         </div>
         <div className="job-board">
@@ -743,6 +775,77 @@ export function DashboardPage() {
               </div>
             ) : null}
           </article>
+
+          <article className={`job-card state-${deloitteBadge}`}>
+            <p className="badge-label">
+              Deloitte · 검색
+              {deloitteAdhoc ? ' · 애드혹' : ''}
+            </p>
+            <p className="badge-value">{deloitteValue}</p>
+            {deloitteSearchBusy && deloitteSearch.status.job?.started_at ? (
+              <p className="account-line">
+                {formatTime(deloitteSearch.status.job.started_at)}
+                {deloitteSearch.status.job.ended_at
+                  ? ` · ${formatTime(deloitteSearch.status.job.ended_at)}`
+                  : ''}
+              </p>
+            ) : null}
+            {deloitteAdhoc && crawl.crawl?.started_at ? (
+              <p className="account-line">
+                {formatTime(crawl.crawl.started_at)}
+                {crawl.crawl.cdp_port
+                  ? ` · CDP ${crawl.crawl.cdp_port}`
+                  : ''}
+              </p>
+            ) : null}
+            {deloitteSearchBusy ? (
+              <p className="account-line">
+                {formatSearchProgress(deloitteProgress) ||
+                  deloitteSearch.status.job?.message ||
+                  '…'}
+              </p>
+            ) : null}
+            {deloitteAdhoc && !deloitteSearchBusy ? (
+              <p className="account-line">
+                {typeof crawlProgress.url === 'string'
+                  ? crawlProgress.url
+                  : formatProgress(crawlProgress)}
+              </p>
+            ) : null}
+            <p className="account-line">
+              <Link to="/collect/deloitte/list/search">검색 실행</Link>
+              {' · '}
+              <Link to="/docs/reports/deloitte">보고서</Link>
+            </p>
+            {deloitteBusy ? (
+              <div className="actions">
+                <button
+                  type="button"
+                  disabled={
+                    deloitteSearchBusy
+                      ? deloitteSearch.requestingStop
+                      : requestingStop || !!fetchError
+                  }
+                  onClick={() =>
+                    void onStopMedia(
+                      'deloitte',
+                      deloitteSearchBusy,
+                      deloitteAdhoc,
+                      () => deloitteSearch.stopFeed(),
+                    )
+                  }
+                >
+                  {(deloitteSearchBusy
+                    ? deloitteSearch.requestingStop
+                    : requestingStop)
+                    ? '요청 중…'
+                    : deloitteSearchBusy
+                      ? '검색 중단'
+                      : '애드혹 종료'}
+                </button>
+              </div>
+            ) : null}
+          </article>
         </div>
       </section>
 
@@ -855,6 +958,14 @@ export function DashboardPage() {
             keys={COUNT_KEYS_MEDIA}
             error={countsEy.error}
             total={countsEy.counts.all ?? 0}
+          />
+          <CountRow
+            label="Deloitte"
+            source="deloitte"
+            counts={countsDl.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsDl.error}
+            total={countsDl.counts.all ?? 0}
           />
         </div>
       </section>

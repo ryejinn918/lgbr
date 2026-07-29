@@ -21,6 +21,7 @@ export function DocsShell() {
         <NavLink to="/docs/reports/accenture">Accenture</NavLink>
         <NavLink to="/docs/reports/kpmg">KPMG</NavLink>
         <NavLink to="/docs/reports/ey">EY</NavLink>
+        <NavLink to="/docs/reports/deloitte">Deloitte</NavLink>
       </nav>
 
       <Outlet />
