@@ -313,6 +313,18 @@ EY_CATALOGS = frozenset({"us"})
 DEFAULT_EY_CATALOG = "us"
 DELOITTE_CATALOGS = frozenset({"us"})
 DEFAULT_DELOITTE_CATALOG = "us"
+DELOITTE_PROFILES = frozenset(
+    {
+        "report",
+        "ai",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    }
+)
+DEFAULT_DELOITTE_PROFILE = "report"
 SOURCE_DEFAULT_CATALOG = {
     "pwc": DEFAULT_PWC_CATALOG,
     "accenture": DEFAULT_ACCENTURE_CATALOG,
@@ -336,6 +348,7 @@ def start_search(
     period_months: int | None = None,
     limit: int | None = None,
     catalog: str | None = None,
+    profile: str | None = None,
     item_delay_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Start list-while-download search job (PwC / Accenture / KPMG / EY / Deloitte)."""
@@ -372,6 +385,35 @@ def start_search(
             "can_start": False,
         }
 
+    profile_s: str | None = None
+    if source_s == "deloitte":
+        profile_s = (
+            DEFAULT_DELOITTE_PROFILE
+            if profile is None or str(profile).strip() == ""
+            else str(profile).strip().lower()
+        )
+        if profile_s not in DELOITTE_PROFILES:
+            return {
+                "ok": False,
+                "status": 400,
+                "label": "오류",
+                "message": (
+                    "profile must be one of: "
+                    + ", ".join(sorted(DELOITTE_PROFILES))
+                ),
+                "job": None,
+                "can_start": False,
+            }
+    elif profile is not None and str(profile).strip() != "":
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": "profile is only supported for source=deloitte",
+            "job": None,
+            "can_start": False,
+        }
+
     pages = (
         DEFAULT_SEARCH_MAX_PAGES if max_pages is None else int(max_pages)
     )
@@ -385,10 +427,15 @@ def start_search(
             "can_start": False,
         }
 
-    months = (
-        DEFAULT_PERIOD_MONTHS if period_months is None else int(period_months)
-    )
-    if months < MIN_PERIOD_MONTHS or months > MAX_PERIOD_MONTHS:
+    # Deloitte: omit months so the worker applies the profile default.
+    months: int | None
+    if period_months is None:
+        months = None if source_s == "deloitte" else DEFAULT_PERIOD_MONTHS
+    else:
+        months = int(period_months)
+    if months is not None and (
+        months < MIN_PERIOD_MONTHS or months > MAX_PERIOD_MONTHS
+    ):
         return {
             "ok": False,
             "status": 400,
@@ -476,20 +523,23 @@ def start_search(
         job["id"],
         "--max-pages",
         str(pages),
-        "--period-months",
-        str(months),
         "--catalog",
         catalog_s,
         "--item-delay-seconds",
         str(delay),
     ]
+    if months is not None:
+        cmd.extend(["--period-months", str(months)])
+    if profile_s is not None:
+        cmd.extend(["--profile", profile_s])
     if lim is not None:
         cmd.extend(["--limit", str(lim)])
     try:
         log_f.write(
             f"\n--- search start {_now().isoformat()} "
             f"id={job['id']} source={source_s} catalog={catalog_s} "
-            f"period_months={months} max_pages={pages} limit={lim} "
+            f"profile={profile_s} period_months={months} "
+            f"max_pages={pages} limit={lim} "
             f"item_delay_seconds={delay} ---\n"
         )
         log_f.flush()

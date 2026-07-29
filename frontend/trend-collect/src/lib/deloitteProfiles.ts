@@ -1,0 +1,56 @@
+/** Deloitte search profiles — keep in sync with crawler.sources.deloitte_http.PROFILES */
+export const DELOITTE_PROFILES = [
+  {
+    id: 'report',
+    label: 'Report',
+    periodMonths: 3,
+    queries: ['report'],
+  },
+  {
+    id: 'ai',
+    label: 'AI/AIDC',
+    periodMonths: 3,
+    queries: ['AI', 'AIDC', 'data center', 'AI semiconductor'],
+  },
+  {
+    id: 'physical_ai',
+    label: '피지컬 AI',
+    periodMonths: 12,
+    queries: ['Physical AI', 'humanoid', 'robotics', 'robot', 'on-device'],
+  },
+  {
+    id: 'appliance',
+    label: '가전',
+    periodMonths: 3,
+    queries: ['appliance', 'consumer electronics', 'HVAC', 'TV'],
+  },
+  {
+    id: 'display',
+    label: '디스플레이',
+    periodMonths: 3,
+    queries: ['display', 'OLED', 'panel'],
+  },
+  {
+    id: 'automotive',
+    label: '자동차',
+    periodMonths: 3,
+    queries: ['automotive', 'EV', 'mobility', 'battery', 'SDV'],
+  },
+  {
+    id: 'petrochemical',
+    label: '석유화학',
+    periodMonths: 3,
+    queries: ['chemicals', 'petrochemical', 'chemical'],
+  },
+] as const
+
+export type DeloitteProfileId = (typeof DELOITTE_PROFILES)[number]['id']
+
+export const DEFAULT_DELOITTE_PROFILE: DeloitteProfileId = 'report'
+
+const BY_ID = new Map(DELOITTE_PROFILES.map((p) => [p.id, p]))
+
+export function getDeloitteProfile(id: string | null | undefined) {
+  if (!id) return null
+  return BY_ID.get(id as DeloitteProfileId) ?? null
+}

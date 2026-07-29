@@ -2,6 +2,12 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollectionJob } from '../../hooks/useCollectionJob'
 import { useSessionStatus } from '../../hooks/useSessionStatus'
+import {
+  DEFAULT_DELOITTE_PROFILE,
+  DELOITTE_PROFILES,
+  getDeloitteProfile,
+  type DeloitteProfileId,
+} from '../../lib/deloitteProfiles'
 import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
 import { getMediaSource } from '../../lib/mediaSources'
 
@@ -11,6 +17,11 @@ const HUB = getMediaSource('deloitte')?.hubUrl ?? ''
 function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (!progress) return null
   const bits: string[] = []
+  if (progress.profile != null)
+    bits.push(`profile ${String(progress.profile)}`)
+  if (progress.query != null) bits.push(`q=${String(progress.query)}`)
+  if (progress.queries_done != null)
+    bits.push(`queries ${String(progress.queries_done)}`)
   if (progress.pages_done != null)
     bits.push(`pages ${String(progress.pages_done)}`)
   if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
@@ -22,6 +33,8 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
     bits.push(`existing ${String(progress.skipped_existing)}`)
   if (progress.skipped_old != null)
     bits.push(`old ${String(progress.skipped_old)}`)
+  if (progress.skipped_dup != null)
+    bits.push(`dup ${String(progress.skipped_dup)}`)
   if (progress.current_title)
     bits.push(String(progress.current_title).slice(0, 60))
   return bits.length ? bits.join(' · ') : null
@@ -29,7 +42,12 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
 
 /** Deloitte US: Insights template search list-while-download + optional CDP adhoc. */
 export function DeloitteRunPage() {
-  const [periodMonths, setPeriodMonths] = useState(3)
+  const [profileId, setProfileId] = useState<DeloitteProfileId>(
+    DEFAULT_DELOITTE_PROFILE,
+  )
+  const [periodMonths, setPeriodMonths] = useState<number>(
+    () => getDeloitteProfile(DEFAULT_DELOITTE_PROFILE)?.periodMonths ?? 3,
+  )
   const [maxPages, setMaxPages] = useState(20)
   const [limit, setLimit] = useState('')
   const [itemDelaySeconds, setItemDelaySeconds] = useState(2)
@@ -62,6 +80,7 @@ export function DeloitteRunPage() {
   )
   const isDeloitteAdhoc = crawl.crawl?.mode === 'deloitte'
   const cdpPort = crawl.crawl?.cdp_port
+  const activeProfile = getDeloitteProfile(profileId)
   const badgeValue = session.fetchError || collection.fetchError
     ? 'API Offline'
     : searchBusy
@@ -73,6 +92,12 @@ export function DeloitteRunPage() {
           : job.job
             ? `Deloitte · ${job.label}`
             : 'Deloitte · 유휴'
+
+  function onProfileChange(next: DeloitteProfileId) {
+    setProfileId(next)
+    const prof = getDeloitteProfile(next)
+    if (prof) setPeriodMonths(prof.periodMonths)
+  }
 
   async function onStartAdhoc() {
     if (!window.confirm(`Deloitte US 애드혹을 시작할까요?\n${HUB}`)) return
@@ -89,7 +114,7 @@ export function DeloitteRunPage() {
       periodMonths as (typeof PERIOD_OPTIONS)[number],
     )
       ? periodMonths
-      : 3
+      : (activeProfile?.periodMonths ?? 3)
     const limRaw = String(limit).trim()
     const lim =
       limRaw === ''
@@ -97,9 +122,10 @@ export function DeloitteRunPage() {
         : Math.min(200, Math.max(1, Number(limRaw) || 0)) || undefined
     const limLabel = lim == null ? '제한 없음' : String(lim)
     const delay = Math.min(10, Math.max(0, Number(itemDelaySeconds) || 0))
+    const qLabel = activeProfile?.queries.join(', ') ?? profileId
     if (
       !window.confirm(
-        `Deloitte US 검색(Insights · insights)을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
+        `Deloitte US 검색(${activeProfile?.label ?? profileId})을 시작할까요?\n쿼리: ${qLabel}\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -109,6 +135,7 @@ export function DeloitteRunPage() {
         maxPages: pages,
         periodMonths: months,
         catalog: 'us',
+        profile: profileId,
         itemDelaySeconds: delay,
         ...(lim != null ? { limit: lim } : {}),
       })
@@ -140,9 +167,9 @@ export function DeloitteRunPage() {
       <p className="badge-label">검색 · 실행</p>
       <p className="badge-value">{badgeValue}</p>
       <p className="account-line">
-        US Insights OpenSearch template(query=insights, article)을 돌며 상세에서
-        PDF를 받습니다. 관련도 정렬이라 기간은 발행일로 필터합니다. 애드혹은
-        허브 분석용 Chrome+CDP입니다.
+        US Insights OpenSearch template을 프로필 쿼리로 돌며 상세에서 PDF를
+        받습니다. 관련도 정렬이라 기간은 발행일로 필터합니다. 애드혹은 허브
+        분석용 Chrome+CDP입니다.
       </p>
 
       {job.job?.started_at && !collection.fetchError ? (
@@ -173,6 +200,22 @@ export function DeloitteRunPage() {
       </p>
 
       <div className="actions">
+        <label className="limit-field">
+          프로필
+          <select
+            value={profileId}
+            onChange={(e) =>
+              onProfileChange(e.target.value as DeloitteProfileId)
+            }
+            disabled={searchBusy}
+          >
+            {DELOITTE_PROFILES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="limit-field">
           기간
           <select
@@ -251,6 +294,11 @@ export function DeloitteRunPage() {
           {session.requestingStop ? '종료 중…' : '애드혹 종료'}
         </button>
       </div>
+      {activeProfile ? (
+        <p className="account-line">
+          쿼리: {activeProfile.queries.join(' · ')}
+        </p>
+      ) : null}
     </section>
   )
 }

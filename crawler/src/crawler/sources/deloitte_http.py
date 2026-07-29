@@ -33,7 +33,7 @@ from crawler.sources.browser_http import (
 SOURCE = "deloitte"
 BASE = "https://www.deloitte.com"
 DEFAULT_CATALOG = "us"
-DEFAULT_QUERY = "insights"
+DEFAULT_PROFILE = "report"
 PAGE_SIZE = 10
 TEMPLATE_ID = "modern-insights-internal-search-template"
 TEMPLATE_URL = f"{BASE}/modern-prod-english/_search/template"
@@ -48,7 +48,6 @@ class DeloitteCatalog:
     label: str
     hub_url: str
     page_size: int = PAGE_SIZE
-    query: str = DEFAULT_QUERY
 
 
 CATALOGS: dict[str, DeloitteCatalog] = {
@@ -57,9 +56,65 @@ CATALOGS: dict[str, DeloitteCatalog] = {
         label="미국",
         hub_url=HUB_URL,
         page_size=PAGE_SIZE,
-        query=DEFAULT_QUERY,
     ),
 }
+
+
+@dataclass(frozen=True)
+class DeloitteProfile:
+    id: str
+    label: str
+    queries: tuple[str, ...]
+    period_months: int = 3
+
+
+# FnGuide theme ids + report; English queries for Insights US index.
+PROFILES: dict[str, DeloitteProfile] = {
+    "report": DeloitteProfile(
+        id="report",
+        label="Report",
+        queries=("report",),
+    ),
+    "ai": DeloitteProfile(
+        id="ai",
+        label="AI/AIDC",
+        queries=("AI", "AIDC", "data center", "AI semiconductor"),
+    ),
+    "physical_ai": DeloitteProfile(
+        id="physical_ai",
+        label="피지컬 AI",
+        queries=(
+            "Physical AI",
+            "humanoid",
+            "robotics",
+            "robot",
+            "on-device",
+        ),
+        period_months=12,
+    ),
+    "appliance": DeloitteProfile(
+        id="appliance",
+        label="가전",
+        queries=("appliance", "consumer electronics", "HVAC", "TV"),
+    ),
+    "display": DeloitteProfile(
+        id="display",
+        label="디스플레이",
+        queries=("display", "OLED", "panel"),
+    ),
+    "automotive": DeloitteProfile(
+        id="automotive",
+        label="자동차",
+        queries=("automotive", "EV", "mobility", "battery", "SDV"),
+    ),
+    "petrochemical": DeloitteProfile(
+        id="petrochemical",
+        label="석유화학",
+        queries=("chemicals", "petrochemical", "chemical"),
+    ),
+}
+
+PROFILE_IDS = frozenset(PROFILES)
 
 
 def get_catalog(catalog_id: str | None = None) -> DeloitteCatalog:
@@ -71,6 +126,17 @@ def get_catalog(catalog_id: str | None = None) -> DeloitteCatalog:
             f"expected one of: {', '.join(sorted(CATALOGS))}"
         )
     return cat
+
+
+def get_profile(profile_id: str | None = None) -> DeloitteProfile:
+    key = (profile_id or DEFAULT_PROFILE).strip().lower() or DEFAULT_PROFILE
+    prof = PROFILES.get(key)
+    if prof is None:
+        raise ValueError(
+            f"unknown Deloitte profile {profile_id!r}; "
+            f"expected one of: {', '.join(sorted(PROFILES))}"
+        )
+    return prof
 
 
 @dataclass(frozen=True)
@@ -124,12 +190,16 @@ def fetch_list_page(
     page: int = 1,
     *,
     catalog: str | DeloitteCatalog | None = None,
+    query: str,
     session: requests.Session | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[list[DeloitteListItem], bool]:
     """Return (items, has_more) for one search page (1-based)."""
     if page < 1:
         raise ValueError("page must be >= 1")
+    q = (query or "").strip()
+    if not q:
+        raise ValueError("query must be non-empty")
     cat = (
         catalog
         if isinstance(catalog, DeloitteCatalog)
@@ -141,7 +211,7 @@ def fetch_list_page(
     body = {
         "id": TEMPLATE_ID,
         "params": {
-            "query-string": cat.query,
+            "query-string": q,
             "from": offset,
             "size": page_size,
             "site-name": cat.id,
@@ -157,7 +227,7 @@ def fetch_list_page(
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
             "Origin": BASE,
-            "Referer": f"{SEARCH_RESULTS_URL}?qr={cat.query}",
+            "Referer": f"{SEARCH_RESULTS_URL}?qr={q}",
             "d-target": "elastic",
         },
         timeout=timeout,

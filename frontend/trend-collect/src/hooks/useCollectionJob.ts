@@ -106,20 +106,21 @@ export function useCollectionJob(opts?: {
     periodMonths?: number
     limit?: number
     catalog?: string
+    profile?: string
     itemDelaySeconds?: number
   }) {
     const maxPages = opts?.maxPages ?? 20
-    const periodMonths = opts?.periodMonths ?? 3
     setRequestingStart(true)
     try {
       const body: Record<string, unknown> = {
         source,
         capability: 'search',
         max_pages: maxPages,
-        period_months: periodMonths,
       }
+      if (opts?.periodMonths != null) body.period_months = opts.periodMonths
       if (opts?.limit != null) body.limit = opts.limit
       if (opts?.catalog) body.catalog = opts.catalog
+      if (opts?.profile) body.profile = opts.profile
       if (opts?.itemDelaySeconds != null) {
         body.item_delay_seconds = opts.itemDelaySeconds
       }

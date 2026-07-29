@@ -260,6 +260,7 @@ async def collection_start(request: Request) -> JSONResponse:
         period_months = body.get("period_months")
         limit_raw = body.get("limit")
         catalog_raw = body.get("catalog")
+        profile_raw = body.get("profile")
         delay_raw = body.get("item_delay_seconds")
         try:
             pages = int(max_pages) if max_pages is not None else None
@@ -316,12 +317,16 @@ async def collection_start(request: Request) -> JSONResponse:
         catalog = (
             str(catalog_raw).strip() if catalog_raw is not None else None
         )
+        profile = (
+            str(profile_raw).strip() if profile_raw is not None else None
+        )
         result = start_search(
             source=source,
             max_pages=pages,
             period_months=months,
             limit=lim,
             catalog=catalog,
+            profile=profile,
             item_delay_seconds=delay,
         )
         status = int(result.pop("status", 200 if result.get("ok") else 400))

@@ -39,6 +39,7 @@ from crawler.jobs.pwc_report import (
     DEFAULT_PERIOD_MONTHS as PWC_DEFAULT_PERIOD_MONTHS,
     run_pwc_search_job,
 )
+from crawler.sources.deloitte_http import DEFAULT_PROFILE as DELOITTE_DEFAULT_PROFILE
 from crawler.fnguide_session import (
     DEFAULT_IDLE_SECONDS,
     DEFAULT_TTL_SECONDS,
@@ -228,8 +229,12 @@ def main() -> None:
     search_run.add_argument(
         "--period-months",
         type=int,
-        default=PWC_DEFAULT_PERIOD_MONTHS,
-        help=f"Look-back months (default {PWC_DEFAULT_PERIOD_MONTHS})",
+        default=None,
+        help=(
+            "Look-back months "
+            f"(default {PWC_DEFAULT_PERIOD_MONTHS}; "
+            "Deloitte uses the profile default when omitted)"
+        ),
     )
     search_run.add_argument(
         "--limit",
@@ -241,6 +246,14 @@ def main() -> None:
         "--catalog",
         default="kr",
         help="PwC list catalog: kr (Korea) or gx (Global)",
+    )
+    search_run.add_argument(
+        "--profile",
+        default=DELOITTE_DEFAULT_PROFILE,
+        help=(
+            "Deloitte search profile id "
+            f"(default {DELOITTE_DEFAULT_PROFILE}; ignored for other sources)"
+        ),
     )
     search_run.add_argument(
         "--item-delay-seconds",
@@ -523,14 +536,28 @@ def main() -> None:
                     "gx",
                 ):
                     catalog = "us"
-                result = runner(
-                    args.job_id,
-                    catalog=catalog,
-                    max_pages=args.max_pages,
-                    period_months=args.period_months,
-                    limit=args.limit,
-                    item_delay_seconds=args.item_delay_seconds,
-                )
+                period_months = args.period_months
+                if source != "deloitte" and period_months is None:
+                    period_months = PWC_DEFAULT_PERIOD_MONTHS
+                if source == "deloitte":
+                    result = run_deloitte_search_job(
+                        args.job_id,
+                        catalog=catalog,
+                        profile=args.profile,
+                        max_pages=args.max_pages,
+                        period_months=period_months,
+                        limit=args.limit,
+                        item_delay_seconds=args.item_delay_seconds,
+                    )
+                else:
+                    result = runner(
+                        args.job_id,
+                        catalog=catalog,
+                        max_pages=args.max_pages,
+                        period_months=period_months,
+                        limit=args.limit,
+                        item_delay_seconds=args.item_delay_seconds,
+                    )
             except Exception as exc:
                 print(
                     json.dumps(
