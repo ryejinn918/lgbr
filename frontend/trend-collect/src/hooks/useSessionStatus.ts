@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react'
 import { isSearchProfileMode } from '../lib/themes'
-import type {
-  CrawlMode,
-  CrawlResponse,
-  HistoryResponse,
-  SessionRecord,
-  SessionResponse,
-} from '../types'
+import type { CrawlMode, CrawlResponse, SessionResponse } from '../types'
 
 const STALE_AFTER_MS = 30_000
 const POLL_MS = 2_000
-const DEFAULT_HISTORY_LIMIT = 10
 
 const EMPTY_SESSION: SessionResponse = {
   state: 'ended',
@@ -31,11 +24,6 @@ const EMPTY_CRAWL: CrawlResponse = {
 export type SessionView = {
   crawl: CrawlResponse
   status: SessionResponse
-  history: SessionRecord[]
-  historyTotal: number
-  historyLimit: number
-  historyOffset: number
-  setHistoryOffset: (offset: number) => void
   stale: boolean
   fetchError: string | null
   requestingStart: boolean
@@ -76,15 +64,9 @@ function applyCrawl(data: CrawlResponse): CrawlResponse {
   }
 }
 
-export function useSessionStatus(opts?: {
-  historyLimit?: number
-}): SessionView {
-  const historyLimit = opts?.historyLimit ?? DEFAULT_HISTORY_LIMIT
+export function useSessionStatus(): SessionView {
   const [crawl, setCrawl] = useState<CrawlResponse>(EMPTY_CRAWL)
   const [status, setStatus] = useState<SessionResponse>(EMPTY_SESSION)
-  const [history, setHistory] = useState<SessionRecord[]>([])
-  const [historyTotal, setHistoryTotal] = useState(0)
-  const [historyOffset, setHistoryOffset] = useState(0)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [requestingStart, setRequestingStart] = useState(false)
@@ -95,23 +77,12 @@ export function useSessionStatus(opts?: {
 
     async function poll() {
       try {
-        const params = new URLSearchParams({
-          limit: String(historyLimit),
-          offset: String(historyOffset),
-        })
-        const [crawlRes, historyRes] = await Promise.all([
-          fetch('/api/crawl'),
-          fetch(`/api/session/history?${params}`),
-        ])
+        const crawlRes = await fetch('/api/crawl')
         if (!crawlRes.ok) throw new Error(`HTTP ${crawlRes.status}`)
-        if (!historyRes.ok) throw new Error(`HTTP ${historyRes.status}`)
         const crawlData = (await crawlRes.json()) as CrawlResponse
-        const historyData = (await historyRes.json()) as HistoryResponse
         if (cancelled) return
         setCrawl(applyCrawl(crawlData))
         setStatus(crawlData.session ?? EMPTY_SESSION)
-        setHistory(historyData.items ?? [])
-        setHistoryTotal(historyData.total ?? historyData.items?.length ?? 0)
         setFetchError(null)
         setNow(Date.now())
       } catch (err) {
@@ -130,7 +101,7 @@ export function useSessionStatus(opts?: {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [historyLimit, historyOffset])
+  }, [])
 
   async function startCrawl(
     mode: CrawlMode = 'ai',
@@ -182,11 +153,6 @@ export function useSessionStatus(opts?: {
   return {
     crawl,
     status,
-    history,
-    historyTotal,
-    historyLimit,
-    historyOffset,
-    setHistoryOffset,
     stale: isStale(status, now),
     fetchError,
     requestingStart,

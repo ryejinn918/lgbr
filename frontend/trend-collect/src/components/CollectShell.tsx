@@ -2,18 +2,15 @@ import { NavLink, Navigate, Outlet, useParams } from 'react-router-dom'
 import {
   SOURCES,
   defaultCollectPath,
-  defaultMeansPath,
   discoveryTypeLabel,
-  hasSeparateBodyStage,
+  findJob,
   isCollectSource,
   isMeansSupported,
   isStageSupported,
-  meansLabel,
-  mediaHasCatalogs,
-  mediaHasSearch,
-  stageLabel,
-  supportedMeans,
-  supportedStages,
+  jobHasSettings,
+  jobPath,
+  jobsFor,
+  settingsPath,
   type CollectMeans,
   type CollectSource,
   type CollectStage,
@@ -65,26 +62,17 @@ export function CollectShell() {
     return <Navigate to={defaultCollectPath(source)} replace />
   }
 
-  const stages = supportedStages(source)
-  const meansOptions = supportedMeans(source, stage)
-  const showTypes =
-    stage === 'list' &&
-    (source === 'fnguide' || source === 'arg' || mediaHasCatalogs(source))
-  const showMeansNav = meansOptions.length > 1
-  const showStageNav = stages.length > 1
-  const separateBody = hasSeparateBodyStage(source)
-  const adhocOnlyMedia = !separateBody && !mediaHasSearch(source) && source !== 'fnguide'
+  const jobs = jobsFor(source)
+  const currentJob = findJob(source, stage, means)
+  const showSettings = currentJob != null && jobHasSettings(currentJob)
 
   return (
     <div className="collect-shell">
       <header className="monitor-header">
         <h1>수집</h1>
         <p className="lede">
-          {adhocOnlyMedia
-            ? 'CDP 애드혹으로 허브를 엽니다. 목록/PDF 자동 수집은 이후 단계에서 붙입니다.'
-            : separateBody
-              ? '리스트 발굴과 본문 채우기를 나눠 실행합니다. 리스트 발굴 타입은 각 수단의 프로필입니다.'
-              : '검색 실행이 목록 수집과 PDF 다운로드를 함께 처리합니다. 프로필·목록 타입은 아래 탭에서 고릅니다.'}
+          매체를 고르고, 작업을 실행합니다. 설정이 있는 작업은 아래 탭에서
+          프로필·목록을 고릅니다.
         </p>
       </header>
 
@@ -101,41 +89,27 @@ export function CollectShell() {
         ))}
       </nav>
 
-      {showStageNav ? (
-        <nav className="subnav subnav-secondary" aria-label="수집 단계">
-          {stages.map((st) => (
-            <NavLink
-              key={st}
-              to={defaultMeansPath(source, st)}
-              className={() => (st === stage ? 'active' : undefined)}
-            >
-              {stageLabel(st)}
-            </NavLink>
-          ))}
-        </nav>
-      ) : null}
+      <nav className="subnav subnav-secondary" aria-label="수집 작업">
+        {jobs.map((job) => (
+          <NavLink
+            key={job.id}
+            to={jobPath(source, job)}
+            className={() =>
+              currentJob?.id === job.id ? 'active' : undefined
+            }
+          >
+            {job.label}
+          </NavLink>
+        ))}
+      </nav>
 
-      {showMeansNav ? (
-        <nav className="subnav subnav-tertiary" aria-label="수집 수단">
-          {meansOptions.map((m) => (
-            <NavLink key={m} to={`/collect/${source}/${stage}/${m}`}>
-              {meansLabel(m)}
-            </NavLink>
-          ))}
-        </nav>
-      ) : null}
-
-      {showTypes ? (
-        <nav className="subnav subnav-action" aria-label="실행 또는 목록/프로필">
-          <NavLink to={`/collect/${source}/list/${means}`} end>
+      {showSettings && currentJob ? (
+        <nav className="subnav subnav-action" aria-label="실행 또는 설정">
+          <NavLink to={jobPath(source, currentJob)} end>
             실행
           </NavLink>
-          <NavLink to={`/collect/${source}/list/${means}/types`}>
-            {source === 'pwc'
-              ? '목록 · 한국 / 국제'
-              : source === 'fnguide'
-                ? '검색 프로필'
-                : '리스트 발굴 타입'}
+          <NavLink to={settingsPath(source, currentJob)}>
+            {currentJob.settingsLabel}
           </NavLink>
         </nav>
       ) : null}

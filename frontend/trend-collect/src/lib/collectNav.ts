@@ -19,6 +19,16 @@ export type ListMeans = 'feed' | 'search'
 export type BodyMeans = 'download' | 'fetch'
 export type CollectMeans = ListMeans | BodyMeans
 
+/** L2 job chip + optional L3 settings screen. */
+export type CollectJob = {
+  id: string
+  label: string
+  stage: CollectStage
+  means: CollectMeans
+  /** L3 settings chip label; null = no L3 row. */
+  settingsLabel: string | null
+}
+
 export const SOURCES: { id: CollectSource; label: string }[] = [
   { id: 'fnguide', label: 'FnGuide' },
   { id: 'arg', label: 'ARG' },
@@ -31,21 +41,91 @@ export const SOURCE_LABEL: Record<string, string> = {
   ...Object.fromEntries(MEDIA_SOURCES.map((s) => [s.id, s.label])),
 }
 
+const CORE_JOBS: Record<'fnguide' | 'arg', CollectJob[]> = {
+  fnguide: [
+    {
+      id: 'search',
+      label: '검색',
+      stage: 'list',
+      means: 'search',
+      settingsLabel: '프로필',
+    },
+  ],
+  arg: [
+    {
+      id: 'feed',
+      label: '피드',
+      stage: 'list',
+      means: 'feed',
+      settingsLabel: '타입',
+    },
+    {
+      id: 'body',
+      label: '본문',
+      stage: 'body',
+      means: 'fetch',
+      settingsLabel: null,
+    },
+  ],
+}
+
+function mediaJobs(sourceId: string): CollectJob[] {
+  const meta = getMediaSource(sourceId)
+  return [
+    {
+      id: 'search',
+      label: '검색',
+      stage: 'list',
+      means: 'search',
+      settingsLabel: meta?.hasCatalogs ? '목록' : null,
+    },
+  ]
+}
+
+export function jobsFor(source: CollectSource): CollectJob[] {
+  if (source === 'fnguide' || source === 'arg') return CORE_JOBS[source]
+  return mediaJobs(source)
+}
+
+export function findJob(
+  source: CollectSource,
+  stage: CollectStage,
+  means: CollectMeans,
+): CollectJob | null {
+  return (
+    jobsFor(source).find((j) => j.stage === stage && j.means === means) ?? null
+  )
+}
+
+export function jobPath(source: CollectSource, job: CollectJob): string {
+  return `/collect/${source}/${job.stage}/${job.means}`
+}
+
+export function settingsPath(source: CollectSource, job: CollectJob): string {
+  return `${jobPath(source, job)}/types`
+}
+
+export function jobHasSettings(job: CollectJob): boolean {
+  return job.settingsLabel != null
+}
+
 /**
- * Means each source exposes in the collect UI.
- * Only ARG separates list discovery from body fill — media sources with search
- * (and adhoc-only media) expose list/search only (no 리스트/본문 stage tabs).
+ * Means each source exposes — derived from jobs for URL validation.
  */
 export const SOURCE_MEANS: Record<
   string,
   { list: ListMeans[]; body: BodyMeans[] }
-> = {
-  fnguide: { list: ['search'], body: [] },
-  arg: { list: ['feed'], body: ['fetch'] },
-  ...Object.fromEntries(
-    MEDIA_SOURCES.map((s) => [s.id, { list: ['search' as const], body: [] }]),
-  ),
-}
+> = Object.fromEntries(
+  SOURCES.map((s) => {
+    const list: ListMeans[] = []
+    const body: BodyMeans[] = []
+    for (const j of jobsFor(s.id)) {
+      if (j.stage === 'list') list.push(j.means as ListMeans)
+      else body.push(j.means as BodyMeans)
+    }
+    return [s.id, { list, body }]
+  }),
+)
 
 export function isCollectSource(value: string | undefined): value is CollectSource {
   return value === 'fnguide' || value === 'arg' || isMediaSourceId(value)
@@ -53,23 +133,12 @@ export function isCollectSource(value: string | undefined): value is CollectSour
 
 /** True when list and body can be started as separate jobs. */
 export function hasSeparateBodyStage(source: CollectSource): boolean {
-  return (SOURCE_MEANS[source]?.body.length ?? 0) > 0
+  return jobsFor(source).some((j) => j.stage === 'body')
 }
 
 export function defaultCollectPath(source: CollectSource): string {
-  const means = SOURCE_MEANS[source] ?? { list: ['search'], body: [] }
-  if (means.list.includes('search')) {
-    return `/collect/${source}/list/search`
-  }
-  if (means.list.includes('feed')) {
-    return `/collect/${source}/list/feed`
-  }
-  if (means.body.includes('download')) {
-    return `/collect/${source}/body/download`
-  }
-  if (means.body[0]) {
-    return `/collect/${source}/body/${means.body[0]}`
-  }
+  const first = jobsFor(source)[0]
+  if (first) return jobPath(source, first)
   return `/collect/${source}/list/feed`
 }
 
@@ -78,28 +147,25 @@ export function isMeansSupported(
   stage: CollectStage,
   means: CollectMeans,
 ): boolean {
-  const entry = SOURCE_MEANS[source]
-  if (!entry) return false
-  if (stage === 'list') {
-    return entry.list.includes(means as ListMeans)
-  }
-  return entry.body.includes(means as BodyMeans)
+  return findJob(source, stage, means) != null
 }
 
 export function isStageSupported(
   source: CollectSource,
   stage: CollectStage,
 ): boolean {
-  const entry = SOURCE_MEANS[source]
-  if (!entry) return false
-  if (stage === 'list') return entry.list.length > 0
-  return entry.body.length > 0
+  return jobsFor(source).some((j) => j.stage === stage)
 }
 
 export function supportedStages(source: CollectSource): CollectStage[] {
+  const seen = new Set<CollectStage>()
   const out: CollectStage[] = []
-  if (isStageSupported(source, 'list')) out.push('list')
-  if (isStageSupported(source, 'body')) out.push('body')
+  for (const j of jobsFor(source)) {
+    if (!seen.has(j.stage)) {
+      seen.add(j.stage)
+      out.push(j.stage)
+    }
+  }
   return out
 }
 
@@ -107,23 +173,22 @@ export function supportedMeans(
   source: CollectSource,
   stage: CollectStage,
 ): CollectMeans[] {
-  const entry = SOURCE_MEANS[source]
-  if (!entry) return []
-  if (stage === 'list') return [...entry.list]
-  return [...entry.body]
+  return jobsFor(source)
+    .filter((j) => j.stage === stage)
+    .map((j) => j.means)
 }
 
 export function defaultMeansPath(
   source: CollectSource,
   stage: CollectStage,
 ): string {
-  const means = supportedMeans(source, stage)
-  if (means[0]) return `/collect/${source}/${stage}/${means[0]}`
+  const job = jobsFor(source).find((j) => j.stage === stage)
+  if (job) return jobPath(source, job)
   return defaultCollectPath(source)
 }
 
 export function stageLabel(stage: CollectStage): string {
-  return stage === 'list' ? '리스트 발굴' : '본문 채우기'
+  return stage === 'list' ? '검색' : '본문'
 }
 
 export function meansLabel(means: CollectMeans): string {
@@ -135,19 +200,22 @@ export function meansLabel(means: CollectMeans): string {
     case 'download':
       return '다운로드'
     case 'fetch':
-      return '본문읽기'
+      return '본문'
   }
 }
 
-/** Types tab / page title for list-discovery profiles. */
+/** L3 settings label for the current job (or fallback). */
 export function discoveryTypeLabel(
   means?: CollectMeans | null,
   source?: CollectSource | null,
 ): string {
-  if (source === 'pwc' && means === 'search') return '목록 · 한국 / 국제'
-  if (means === 'feed') return '리스트 발굴 타입 · 피드'
-  if (means === 'search') return '검색 프로필'
-  return '리스트 발굴 타입'
+  if (source && means) {
+    const stage: CollectStage =
+      means === 'fetch' || means === 'download' ? 'body' : 'list'
+    const job = findJob(source, stage, means)
+    if (job?.settingsLabel) return job.settingsLabel
+  }
+  return '설정'
 }
 
 export function crawlModeTypeLabel(mode: string | null | undefined): string {

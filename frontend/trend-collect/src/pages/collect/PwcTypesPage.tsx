@@ -6,13 +6,12 @@ export function PwcTypesPage() {
   return (
     <section className="panel">
       <div className="section-head">
-        <h2>목록 · 한국 / 국제</h2>
-        <span className="section-note">PwC · 검색</span>
+        <h2>목록</h2>
+        <span className="section-note">PwC · 검색 · 설정</span>
       </div>
       <p className="lede" style={{ marginTop: 0 }}>
-        FnGuide의 검색 프로필과 달리, 여기서는 어느 지역 목록(카탈로그)을
-        돌릴지 고릅니다. 실행 화면에서 목록을 선택한 뒤 검색을 돌리면
-        됩니다.
+        어느 지역 목록(카탈로그)을 돌릴지 고릅니다. 실행 화면에서 목록을
+        선택한 뒤 검색을 돌리면 됩니다.
       </p>
       <table className="report-table">
         <thead>

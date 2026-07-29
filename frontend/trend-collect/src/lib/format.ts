@@ -110,47 +110,6 @@ export function formatProgress(
   return bits.length ? bits.join(' · ') : JSON.stringify(progress)
 }
 
-export const SESSION_EVENT_LABEL: Record<string, string> = {
-  login_start: '로그인 시작',
-  login_ok: '로그인 완료',
-  login_fail: '로그인 실패',
-  touch: '세션 유지',
-  logout_request: '로그아웃 요청',
-  logout_ok: '로그아웃 완료',
-  external_logout: '외부 로그아웃',
-  error: '세션 오류',
-}
-
-export function formatEventDetail(detail: Record<string, unknown>): string {
-  const keys = [
-    'rpt_id',
-    'reason',
-    'error',
-    'file_name',
-    'title',
-    'list_page',
-    'candidates',
-    'blind',
-    'existing',
-    'total',
-    'summary',
-    'message',
-    'url',
-    'step',
-  ]
-  const parts: string[] = []
-  for (const key of keys) {
-    if (detail[key] != null && detail[key] !== '') {
-      let value = String(detail[key])
-      if (key === 'title' && value.length > 48) {
-        value = `${value.slice(0, 45)}...`
-      }
-      parts.push(`${key}=${value}`)
-    }
-  }
-  return parts.join(' · ')
-}
-
 /** Prefer progress counters; fall back to a short crawl.message. */
 export function formatCrawlResult(
   progress: Record<string, unknown> | undefined,
