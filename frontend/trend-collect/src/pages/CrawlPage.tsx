@@ -41,7 +41,11 @@ export function CrawlPage() {
   const otherBusy = crawlBusy && !isMine
   const sessionOpen = status.session != null
   const blockedByError = isMine && crawl.state === 'error'
-  const showRunMeta = fnguideBusy || blockedByError
+  // Own last-run stays visible when idle (same as media search job history).
+  const showRunMeta = isMine
+  const showLiveCdp =
+    fnguideBusy &&
+    !!(crawl.crawl?.cdp_port || crawl.crawl?.cdp_http_url)
   const canStart = crawl.can_start === true && !crawlBusy
   const canStop = crawlBusy || sessionOpen
   const resultLine = showRunMeta
@@ -50,6 +54,21 @@ export function CrawlPage() {
         crawl.crawl?.message,
       )
     : null
+  const profileSummary =
+    !profiles.error && profiles.items.length > 0
+      ? profiles.items
+          .filter((p) => isSearchProfileMode(p.mode))
+          .map((p) => {
+            const label = THEME_LABEL[p.mode] ?? p.mode
+            const kw = p.keywords[0] ?? '—'
+            const extra =
+              p.keywords.length > 1 ? ` 외 ${p.keywords.length - 1}` : ''
+            const sectors =
+              p.sectors.length > 0 ? ` · 섹터 ${p.sectors.length}` : ''
+            return `${label} 「${kw}${extra}」 ${p.period_months}개월 · ${p.page_min_label}${sectors}`
+          })
+          .join(' / ')
+      : null
   const badgeState = fetchError
     ? 'offline'
     : fnguideBusy && stale
@@ -61,11 +80,11 @@ export function CrawlPage() {
     ? 'API Offline'
     : fnguideBusy && stale
       ? '응답 없음'
-      : fnguideBusy
+      : fnguideBusy || blockedByError
         ? `FnGuide · ${crawl.label}`
         : otherBusy
           ? 'FnGuide · 대기 (다른 세션이 브라우저 사용 중)'
-          : blockedByError
+          : isMine
             ? `FnGuide · ${crawl.label}`
             : 'FnGuide · 유휴'
 
@@ -102,9 +121,21 @@ export function CrawlPage() {
       <section className={`panel badge-panel state-${badgeState}`}>
         <p className="badge-label">검색 · 실행</p>
         <p className="badge-value">{badgeValue}</p>
+        <p className="account-line">
+          프로필 검색으로 리포트를 받습니다. debug·애드혹은 CDP로 브라우저를
+          엽니다.
+        </p>
         <p className={`account-line state-${SESSION_CLASS[status.state]}`}>
           계정: {fetchError ? '—' : status.label}
         </p>
+        {showRunMeta && crawl.crawl?.started_at && !fetchError ? (
+          <p className="account-line">
+            시작 {formatTime(crawl.crawl.started_at)}
+            {crawl.crawl.ended_at
+              ? ` · 종료 ${formatTime(crawl.crawl.ended_at)}`
+              : ''}
+          </p>
+        ) : null}
         {showRunMeta && crawl.crawl?.mode && !fetchError ? (
           <p className="account-line">
             모드: {crawlModeTypeLabel(crawl.crawl.mode)}
@@ -112,9 +143,10 @@ export function CrawlPage() {
               ? ` · ${crawl.crawl.period_months}개월`
               : ''}
             {crawl.crawl.debug ? ' · debug' : ''}
-            {crawl.crawl.cdp_port
+            {fnguideBusy && crawl.crawl.cdp_port
               ? ` · CDP ${crawl.crawl.cdp_port}`
-              : crawl.crawl.mode === 'adhoc' || crawl.crawl.debug
+              : fnguideBusy &&
+                  (crawl.crawl.mode === 'adhoc' || crawl.crawl.debug)
                 ? ' · CDP 대기'
                 : ''}
           </p>
@@ -125,8 +157,11 @@ export function CrawlPage() {
         {showRunMeta && resultLine && !fetchError ? (
           <p className="account-line">결과: {resultLine}</p>
         ) : null}
-        {showRunMeta && crawl.crawl?.cdp_http_url && !fetchError ? (
+        {showLiveCdp && crawl.crawl?.cdp_http_url && !fetchError ? (
           <p className="account-line">CDP: {crawl.crawl.cdp_http_url}</p>
+        ) : null}
+        {fnguideBusy && !fetchError ? (
+          <p className="account-line">{formatProgress(crawl.progress)}</p>
         ) : null}
         {otherBusy && !fetchError ? (
           <p className="account-line">
@@ -161,8 +196,22 @@ export function CrawlPage() {
         ) : null}
         {fetchError ? <p className="warn">API 연결 실패: {fetchError}</p> : null}
 
+        {profileSummary ? (
+          <p className="account-line profile-summary">
+            필터: {profileSummary}{' '}
+            <Link to="/collect/fnguide/list/search/types">프로필</Link>
+          </p>
+        ) : null}
         <p className="account-line">
-          <Link to="/collect/fnguide/list/search/types">프로필·필터 설정</Link>
+          {!profileSummary ? (
+            <>
+              <Link to="/collect/fnguide/list/search/types">
+                프로필·필터 설정
+              </Link>
+              {' · '}
+            </>
+          ) : null}
+          문서: <Link to="/docs/reports/fnguide">FnGuide 보고서</Link>
         </p>
 
         <div className="actions">
@@ -220,7 +269,7 @@ export function CrawlPage() {
           <div>
             <dt>진행</dt>
             <dd>
-              {fetchError || !showRunMeta
+              {fetchError || !fnguideBusy
                 ? '—'
                 : formatProgress(crawl.progress)}
             </dd>
