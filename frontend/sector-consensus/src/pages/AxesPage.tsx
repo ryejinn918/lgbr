@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { SelectPanels } from '../components/SelectPanels'
 import { useConsensusStatusContext } from '../hooks/ConsensusStatusContext'
+import {
+  clearAxisDraft,
+  readAxisDraft,
+  sameAxisFields,
+  writeAxisDraft,
+  type AxisFields,
+} from '../lib/axisDraft'
 import {
   BLOCKED_BY_OPEN_RUN,
   BLOCKED_BY_THIS_SECTOR,
@@ -44,6 +51,9 @@ export function AxesPage() {
   const [cutLogic, setCutLogic] = useState('')
   const [pillars, setPillars] = useState('')
   const [continuing, setContinuing] = useState(false)
+  const [draftSaved, setDraftSaved] = useState(false)
+  const [draftConflict, setDraftConflict] = useState(false)
+  const draftBaseRef = useRef<AxisFields | null>(null)
 
   const themeHistory = useMemo(
     () => history.filter((h) => h.theme === theme).slice(0, 2),
@@ -61,32 +71,71 @@ export function AxesPage() {
 
   const lastCriteria = asCriteria(lastEnded?.criteria)
   const openCriteria = asCriteria(openRun?.criteria)
-  const pillarsKey = JSON.stringify(openCriteria?.pillar_sketch || [])
+  const openRunId = openRun?.id
+  const openRunState = openRun?.state
+  const serverAxes = useMemo<AxisFields>(
+    () => ({
+      thesis: String(openCriteria?.thesis || ''),
+      cutLogic: String(openCriteria?.cut_logic || ''),
+      pillars: pillarsText(openCriteria?.pillar_sketch),
+    }),
+    [
+      openCriteria?.thesis,
+      openCriteria?.cut_logic,
+      openCriteria?.pillar_sketch,
+    ],
+  )
 
   const busy = isLiveState(openRun?.state)
   const awaiting = openRun?.state === 'awaiting'
 
   useEffect(() => {
-    if (!openRun) {
+    if (!openRunId) {
       setThesis(() => '')
       setCutLogic(() => '')
       setPillars(() => '')
       setContinuing(() => false)
+      setDraftSaved(() => false)
+      setDraftConflict(() => false)
+      draftBaseRef.current = null
       return
     }
-    const c = asCriteria(openRun.criteria)
-    setThesis(() => String(c?.thesis || ''))
-    setCutLogic(() => String(c?.cut_logic || ''))
-    setPillars(() => pillarsText(c?.pillar_sketch))
+    const stored =
+      openRunState === 'awaiting' ? readAxisDraft(openRunId) : null
+    const axes = stored?.values ?? serverAxes
+    draftBaseRef.current = stored?.base ?? serverAxes
+    setThesis(() => axes.thesis)
+    setCutLogic(() => axes.cutLogic)
+    setPillars(() => axes.pillars)
     setContinuing(() => false)
+    setDraftSaved(() => stored !== null)
+    setDraftConflict(() =>
+      stored ? !sameAxisFields(stored.base, serverAxes) : false,
+    )
   }, [
     theme,
-    openRun?.id,
-    openRun?.state,
-    openCriteria?.thesis,
-    openCriteria?.cut_logic,
-    pillarsKey,
+    openRunId,
+    openRunState,
+    serverAxes,
   ])
+
+  function persistDraft(values: AxisFields) {
+    if (!openRun?.id || !awaiting) return
+    const base = draftBaseRef.current ?? serverAxes
+    writeAxisDraft(openRun.id, base, values, serverAxes)
+    setDraftSaved(() => !sameAxisFields(serverAxes, values))
+  }
+
+  function resetDraft() {
+    if (!openRun?.id) return
+    clearAxisDraft(openRun.id)
+    draftBaseRef.current = serverAxes
+    setThesis(() => serverAxes.thesis)
+    setCutLogic(() => serverAxes.cutLogic)
+    setPillars(() => serverAxes.pillars)
+    setDraftSaved(() => false)
+    setDraftConflict(() => false)
+  }
 
   const canEdit = Boolean(awaiting && openRun?.id)
   const hasCut = Boolean(thesis.trim() && parsePillars(pillars).length >= 2)
@@ -129,6 +178,9 @@ export function AxesPage() {
         pillar_sketch: parsePillars(pillars),
         until: untilSelect ? 'select' : undefined,
       })
+      clearAxisDraft(openRun.id)
+      setDraftSaved(() => false)
+      setDraftConflict(() => false)
       await refresh()
     } catch (e) {
       window.alert(e instanceof Error ? e.message : '계속 실패')
@@ -186,6 +238,7 @@ export function AxesPage() {
             onChange={(e) => {
               const v = e.target.value
               setThesis(() => v)
+              persistDraft({ thesis: v, cutLogic, pillars })
             }}
             style={{ width: '100%', marginBottom: '0.75rem' }}
           />
@@ -202,6 +255,7 @@ export function AxesPage() {
             onChange={(e) => {
               const v = e.target.value
               setCutLogic(() => v)
+              persistDraft({ thesis, cutLogic: v, pillars })
             }}
             style={{ width: '100%', marginBottom: '0.75rem' }}
           />
@@ -218,9 +272,22 @@ export function AxesPage() {
             onChange={(e) => {
               const v = e.target.value
               setPillars(() => v)
+              persistDraft({ thesis, cutLogic, pillars: v })
             }}
             style={{ width: '100%', marginBottom: '0.75rem' }}
           />
+          {draftSaved && (
+            <div className="section-note" role="status">
+              <span>
+                {draftConflict
+                  ? '서버의 분석 축이 바뀌었지만 이 브라우저의 편집 초안을 유지하고 있습니다.'
+                  : '편집 초안이 이 브라우저에 저장되었습니다.'}
+              </span>{' '}
+              <button type="button" className="text-link" onClick={resetDraft}>
+                서버 축으로 되돌리기
+              </button>
+            </div>
+          )}
           {awaiting && (
             <div className="chip-row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
               <button

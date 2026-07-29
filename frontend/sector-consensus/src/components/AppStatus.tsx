@@ -6,21 +6,57 @@ import { isLiveState, isOpenState, openRunGlobal, stateClass } from '../lib/runS
 import { parseTab, parseTheme, themePath } from '../lib/theme'
 
 export function AppStatus() {
-  const { status, fetchError, requestingStop, stopRun } =
+  const {
+    status,
+    connectionState,
+    hasSnapshot,
+    requestingStop,
+    stopRun,
+  } =
     useConsensusStatusContext()
   const { theme: raw } = useParams()
   const viewTheme = parseTheme(raw)
   const tab = parseTab(useLocation().pathname)
 
-  if (fetchError) {
+  const run = openRunGlobal(status)
+
+  if (connectionState === 'loading' && !hasSnapshot) {
     return (
-      <div className="app-status state-offline" role="status">
-        <p className="app-status-text">API 연결 끊김</p>
+      <div className="app-status state-idle" role="status">
+        <p className="app-status-text">작업 상태 확인 중…</p>
       </div>
     )
   }
 
-  const run = openRunGlobal(status)
+  if (connectionState === 'loading') {
+    return (
+      <div className="app-status state-idle" role="status">
+        <p className="app-status-text">
+          API 상태 확인 중 · 마지막 저장 상태: {status.label}
+        </p>
+      </div>
+    )
+  }
+
+  if (connectionState === 'offline') {
+    const staleProgress = formatProgress(status.progress)
+    const staleRun = run
+      ? `${labelThemeSector(run.theme)} · ${status.label}${
+          staleProgress !== '—' ? ` · ${staleProgress}` : ''
+        }`
+      : null
+    return (
+      <div className="app-status state-offline" role="status">
+        <p className="app-status-text">
+          API 연결 끊김
+          {staleRun
+            ? ` · 마지막 상태: ${staleRun}`
+            : ' · 저장된 작업 상태 없음'}
+        </p>
+      </div>
+    )
+  }
+
   if (!run || !isOpenState(run.state)) return null
 
   const sector = labelThemeSector(run.theme)

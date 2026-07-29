@@ -244,6 +244,56 @@ def pause_awaiting(run_id: str, *, message: str | None = None) -> str:
     return "awaiting" if ok else "ended"
 
 
+def complete_thesis(
+    run_id: str,
+    *,
+    criteria: dict[str, Any],
+    progress: dict[str, Any],
+    message: str | None = None,
+) -> str:
+    """Persist the axis cut and pause atomically. Returns awaiting|ended."""
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE consensus_runs
+            SET criteria = %s::jsonb,
+                progress = COALESCE(progress, '{}'::jsonb) || %s::jsonb,
+                state = CASE
+                    WHEN stop_requested_at IS NOT NULL OR state = 'stopping'
+                    THEN 'ended'
+                    ELSE 'awaiting'
+                END,
+                ended_at = CASE
+                    WHEN stop_requested_at IS NOT NULL OR state = 'stopping'
+                    THEN now()
+                    ELSE NULL
+                END,
+                pid = NULL,
+                message = CASE
+                    WHEN stop_requested_at IS NOT NULL OR state = 'stopping'
+                    THEN COALESCE(message, '종료 요청으로 분석 축 확인 전 종료됨')
+                    ELSE COALESCE(%s, message)
+                END,
+                stop_requested_at = NULL
+            WHERE id = %s::uuid
+              AND ended_at IS NULL
+              AND state IN ('active', 'stopping')
+            RETURNING state
+            """,
+            (
+                Jsonb(criteria),
+                Jsonb(progress),
+                message,
+                run_id,
+            ),
+        )
+        row = cur.fetchone()
+        conn.commit()
+    if not row:
+        return "ended"
+    return "awaiting" if row["state"] == "awaiting" else "ended"
+
+
 def set_run_criteria(run_id: str, criteria: dict[str, Any]) -> None:
     with connect() as conn, conn.cursor() as cur:
         cur.execute(

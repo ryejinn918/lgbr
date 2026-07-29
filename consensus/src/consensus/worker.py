@@ -401,21 +401,24 @@ async def run_pipeline(run_id: str) -> None:
                 cut = await thesis_for_theme(theme, model=model)
                 criteria = {**criteria0, **cut}
                 criteria.pop("resume_from", None)
-                runs_store.set_run_criteria(run_id, criteria)
-                runs_store.update_progress(
-                    run_id,
-                    {
-                        "stage": "thesis",
-                        "criteria_snapshot": {
-                            k: criteria.get(k)
-                            for k in (
-                                "thesis",
-                                "cut_logic",
-                                "pillar_sketch",
-                                "pool_qp_count",
-                            )
-                        },
+                thesis_progress = {
+                    "stage": "thesis",
+                    "criteria_snapshot": {
+                        k: criteria.get(k)
+                        for k in (
+                            "thesis",
+                            "cut_logic",
+                            "pillar_sketch",
+                            "pool_qp_count",
+                        )
                     },
+                }
+                msg = "awaiting axis review"
+                paused = runs_store.complete_thesis(
+                    run_id,
+                    criteria=criteria,
+                    progress=thesis_progress,
+                    message=msg,
                 )
                 log_c.emit(
                     stage="thesis",
@@ -423,8 +426,6 @@ async def run_pipeline(run_id: str) -> None:
                     pillars=len(criteria.get("pillar_sketch") or []),
                     thesis=_clip_msg(criteria.get("thesis"), 120),
                 )
-            msg = "awaiting axis review"
-            paused = runs_store.pause_awaiting(run_id, message=msg)
             if paused == "ended":
                 log_c.emit(stage="run", event="ended", reason="stop_before_awaiting")
                 log(f"STOPPED before awaiting run={run_id}")

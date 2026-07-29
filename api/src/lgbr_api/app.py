@@ -16,6 +16,7 @@ from starlette.routing import Route
 from lgbr_api.auth import ApiKeyMiddleware
 from lgbr_api.collection import (
     get_current_job,
+    reconcile_stale_jobs,
     request_stop as collection_request_stop,
     start_feed,
     start_fetch_body,
@@ -32,6 +33,7 @@ from lgbr_api.consensus_api import (
     list_events as list_consensus_events,
     list_history as list_consensus_history,
     list_inputs,
+    reconcile_stale_runs,
     request_stop as consensus_request_stop,
     start_run,
 )
@@ -44,6 +46,7 @@ from lgbr_api.crawls import (
     get_cdp_status,
     get_current_crawl,
     list_crawl_events,
+    reconcile_stale_crawls,
     request_stop,
     shutdown_open_crawl,
     start_crawl,
@@ -68,6 +71,11 @@ SHUTDOWN_WAIT_SECONDS = 60.0
 async def lifespan(_app: Starlette) -> AsyncIterator[None]:
     # Eval runs inside the request SSE; anything left open cannot resume.
     await asyncio.to_thread(mark_all_open_evals_interrupted)
+    # Detached workers survive API restarts. Reconcile only dead/stale rows;
+    # live worker PIDs and human-review consensus pauses remain open.
+    await asyncio.to_thread(reconcile_stale_crawls)
+    await asyncio.to_thread(reconcile_stale_jobs)
+    await asyncio.to_thread(reconcile_stale_runs)
     yield
     # PM2/uvicorn stop: ask crawl worker to logout before this process exits.
     await asyncio.to_thread(

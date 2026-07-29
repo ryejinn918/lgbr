@@ -77,6 +77,20 @@ def _pid_alive(pid: int | None) -> bool:
     return True
 
 
+def _consensus_worker_alive(pid: int, run_id: str) -> bool:
+    """Reject a reused PID that no longer belongs to this consensus run."""
+    if not _pid_alive(pid):
+        return False
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ")
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # Preserve the live result when process metadata is not readable.
+        return True
+    return b"consensus" in cmdline and run_id.encode() in cmdline
+
+
 def _make_asset_id(theme: str) -> str:
     abbrev = THEME_ABBREV[theme]
     day = datetime.now(_SEOUL).strftime("%y%m%d")
@@ -125,12 +139,32 @@ def _serialize_run(row: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
+def _recoverable_thesis(row: dict[str, Any]) -> bool:
+    """Whether a dead thesis worker already persisted a usable axis cut."""
+    if row.get("state") != "active" or row.get("stop_requested_at") is not None:
+        return False
+    criteria = _parse_jsonb(row.get("criteria") or {})
+    progress = _parse_jsonb(row.get("progress") or {})
+    if not isinstance(criteria, dict) or not isinstance(progress, dict):
+        return False
+    pillars = criteria.get("pillar_sketch")
+    return (
+        criteria.get("until") == "thesis"
+        and not criteria.get("resume_from")
+        and bool(str(criteria.get("thesis") or "").strip())
+        and isinstance(pillars, list)
+        and len([p for p in pillars if str(p).strip()]) >= 2
+        and progress.get("stage") == "thesis"
+    )
+
+
 def reconcile_stale_runs() -> None:
     now = _now()
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, pid, state, started_at
+            SELECT id, pid, state, started_at, criteria, progress,
+                   stop_requested_at
             FROM consensus_runs
             WHERE ended_at IS NULL
             """
@@ -148,18 +182,37 @@ def reconcile_stale_runs() -> None:
                 if row.get("state") == "starting" and age < 60:
                     continue
                 message = "consensus worker never claimed pid"
-            elif _pid_alive(int(pid)):
+            elif _consensus_worker_alive(int(pid), str(row["id"])):
                 continue
             else:
                 message = f"consensus worker pid {pid} is dead"
+                if _recoverable_thesis(dict(row)):
+                    cur.execute(
+                        """
+                        UPDATE consensus_runs
+                        SET state = 'awaiting', pid = NULL,
+                            message = COALESCE(
+                                message,
+                                'awaiting axis review (recovered)'
+                            )
+                        WHERE id = %s AND ended_at IS NULL
+                          AND state = 'active'
+                          AND stop_requested_at IS NULL
+                          AND pid IS NOT DISTINCT FROM %s
+                        """,
+                        (row["id"], pid),
+                    )
+                    continue
             cur.execute(
                 """
                 UPDATE consensus_runs
                 SET state = 'error', ended_at = %s,
                     message = COALESCE(message, %s)
                 WHERE id = %s AND ended_at IS NULL
+                  AND state = %s
+                  AND pid IS NOT DISTINCT FROM %s
                 """,
-                (now, message, row["id"]),
+                (now, message, row["id"], row.get("state"), pid),
             )
         conn.commit()
 
@@ -981,36 +1034,25 @@ def _continue_from_select_only(
 
 def request_stop() -> dict[str, Any]:
     with connect() as conn, conn.cursor() as cur:
-        # Cancel human-review pause immediately.
         cur.execute(
             """
             UPDATE consensus_runs
-            SET state = 'ended',
-                ended_at = now(),
-                pid = NULL,
-                message = COALESCE(message, '분석 축 확인에서 종료됨'),
-                stop_requested_at = now()
-            WHERE ended_at IS NULL AND state = 'awaiting'
-            RETURNING *
-            """
-        )
-        awaiting = cur.fetchone()
-        if awaiting:
-            conn.commit()
-            return {
-                "ok": True,
-                "message": "분석 축 확인 대기를 종료했습니다.",
-                "run": _serialize_run(dict(awaiting)),
-                "can_start": True,
-            }
-        cur.execute(
-            """
-            UPDATE consensus_runs
-            SET stop_requested_at = now(),
-                state = CASE
+            SET state = CASE
+                    WHEN state = 'awaiting' THEN 'ended'
                     WHEN state IN ('active', 'starting') THEN 'stopping'
                     ELSE state
-                END
+                END,
+                ended_at = CASE
+                    WHEN state = 'awaiting' THEN now()
+                    ELSE ended_at
+                END,
+                pid = CASE WHEN state = 'awaiting' THEN NULL ELSE pid END,
+                message = CASE
+                    WHEN state = 'awaiting'
+                    THEN COALESCE(message, '분석 축 확인에서 종료됨')
+                    ELSE message
+                END,
+                stop_requested_at = now()
             WHERE ended_at IS NULL
             RETURNING *
             """
@@ -1022,6 +1064,13 @@ def request_stop() -> dict[str, Any]:
             "ok": True,
             "message": "실행 중인 런이 없습니다.",
             "run": None,
+            "can_start": True,
+        }
+    if row.get("state") == "ended":
+        return {
+            "ok": True,
+            "message": "분석 축 확인 대기를 종료했습니다.",
+            "run": _serialize_run(dict(row)),
             "can_start": True,
         }
     return {
