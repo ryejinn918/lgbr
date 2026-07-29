@@ -465,20 +465,6 @@ export function ReportsPage({
                           >
                             {item.title}
                           </span>
-                          <span className="report-title-meta">
-                            {(item.themes?.length
-                              ? item.themes
-                              : item.theme
-                                ? [item.theme]
-                                : item.crawl_profile
-                                  ? [item.crawl_profile]
-                                  : ['other']
-                            ).map((t) => (
-                              <span key={t} className="theme-chip">
-                                {THEME_LABEL[t] || t}
-                              </span>
-                            ))}
-                          </span>
                           {originalUrl ? (
                             <a
                               className="report-file-link report-original-link"
