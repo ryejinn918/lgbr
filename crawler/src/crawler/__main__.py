@@ -232,6 +232,11 @@ def main() -> None:
         default=None,
         help="Optional max PDF downloads for this run",
     )
+    search_run.add_argument(
+        "--catalog",
+        default="kr",
+        help="PwC list catalog: kr (Korea) or gx (Global)",
+    )
     search_current = search_sub.add_parser(
         "current",
         help="Show latest/open search collection job",
@@ -480,6 +485,7 @@ def main() -> None:
             try:
                 result = run_pwc_search_job(
                     args.job_id,
+                    catalog=args.catalog,
                     max_pages=args.max_pages,
                     period_months=args.period_months,
                     limit=args.limit,

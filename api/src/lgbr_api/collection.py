@@ -300,12 +300,17 @@ DEFAULT_SEARCH_MAX_PAGES = 20
 DEFAULT_SEARCH_LIMIT: int | None = None
 
 
+PWC_CATALOGS = frozenset({"kr", "gx"})
+DEFAULT_PWC_CATALOG = "kr"
+
+
 def start_search(
     *,
     source: str = "pwc",
     max_pages: int | None = None,
     period_months: int | None = None,
     limit: int | None = None,
+    catalog: str | None = None,
 ) -> dict[str, Any]:
     """Start list-while-download search job (PwC)."""
     source_s = (source or "").strip().lower()
@@ -317,6 +322,24 @@ def start_search(
             "message": (
                 "source must be one of: "
                 + ", ".join(sorted(SEARCH_ALLOWLIST))
+            ),
+            "job": None,
+            "can_start": False,
+        }
+
+    catalog_s = (
+        DEFAULT_PWC_CATALOG
+        if catalog is None or str(catalog).strip() == ""
+        else str(catalog).strip().lower()
+    )
+    if catalog_s not in PWC_CATALOGS:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                "catalog must be one of: "
+                + ", ".join(sorted(PWC_CATALOGS))
             ),
             "job": None,
             "can_start": False,
@@ -410,13 +433,15 @@ def start_search(
         str(pages),
         "--period-months",
         str(months),
+        "--catalog",
+        catalog_s,
     ]
     if lim is not None:
         cmd.extend(["--limit", str(lim)])
     try:
         log_f.write(
             f"\n--- search start {_now().isoformat()} "
-            f"id={job['id']} source={source_s} "
+            f"id={job['id']} source={source_s} catalog={catalog_s} "
             f"period_months={months} max_pages={pages} limit={lim} ---\n"
         )
         log_f.flush()

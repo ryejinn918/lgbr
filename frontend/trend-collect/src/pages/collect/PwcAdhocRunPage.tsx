@@ -4,12 +4,20 @@ import { useCollectionJob } from '../../hooks/useCollectionJob'
 import { useSessionStatus } from '../../hooks/useSessionStatus'
 import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
 import { crawlModeTypeLabel } from '../../lib/collectNav'
+import {
+  DEFAULT_PWC_CATALOG,
+  PWC_CATALOGS,
+  getPwcCatalog,
+  type PwcCatalogId,
+} from '../../lib/pwcCatalogs'
 
 const PERIOD_OPTIONS = [3, 6, 12] as const
 
 function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (!progress) return null
   const bits: string[] = []
+  if (progress.catalog_label != null || progress.catalog != null)
+    bits.push(String(progress.catalog_label || progress.catalog))
   if (progress.pages_done != null)
     bits.push(`pages ${String(progress.pages_done)}`)
   if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
@@ -26,12 +34,14 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
 
 /** PwC list/search: adhoc CDP browser + automated list-while-download. */
 export function PwcAdhocRunPage() {
+  const [catalog, setCatalog] = useState<PwcCatalogId>(DEFAULT_PWC_CATALOG)
   const [periodMonths, setPeriodMonths] = useState(3)
   const [maxPages, setMaxPages] = useState(20)
   /** Empty = no download cap (full period). */
   const [limit, setLimit] = useState('')
   const session = useSessionStatus()
   const collection = useCollectionJob({ source: 'pwc', capability: 'search' })
+  const catalogMeta = getPwcCatalog(catalog)
 
   const crawl = session.crawl
   const crawlBusy =
@@ -60,13 +70,13 @@ export function PwcAdhocRunPage() {
   async function onStartAdhoc() {
     if (
       !window.confirm(
-        'PwC 애드혹 크롤을 시작할까요? (로그인 없이 Chrome+CDP)',
+        `PwC 애드혹(${catalogMeta.label})을 시작할까요?\n${catalogMeta.hubUrl}`,
       )
     ) {
       return
     }
     try {
-      await session.startCrawl('pwc')
+      await session.startCrawl('pwc', { catalog })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '실행 실패')
     }
@@ -87,7 +97,7 @@ export function PwcAdhocRunPage() {
     const limLabel = lim == null ? '제한 없음' : String(lim)
     if (
       !window.confirm(
-        `PwC 검색(list-while-download)을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel}`,
+        `PwC 검색(${catalogMeta.label})을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel}`,
       )
     ) {
       return
@@ -96,6 +106,7 @@ export function PwcAdhocRunPage() {
       await collection.startSearch({
         maxPages: pages,
         periodMonths: months,
+        catalog,
         ...(lim != null ? { limit: lim } : {}),
       })
     } catch (err) {
@@ -123,7 +134,7 @@ export function PwcAdhocRunPage() {
 
   return (
     <section className={`panel badge-panel state-${badgeState}`}>
-      <p className="badge-label">리스트 발굴 · 검색 · 실행</p>
+      <p className="badge-label">검색 · 실행</p>
       <p className="badge-value">
         {session.fetchError || collection.fetchError
           ? 'API Offline'
@@ -132,49 +143,8 @@ export function PwcAdhocRunPage() {
             : `PwC · ${crawlModeTypeLabel(crawl.crawl?.mode)} · ${crawl.label}`}
       </p>
       <p className="account-line">
-        검색 실행이 목록을 넘기며 PDF를 바로 받습니다 (리스트 전용 잡 없음).
-        애드혹은 페이지 소스 분석용 Chrome+CDP입니다.
+        검색 한 번에 목록과 PDF를 함께 받습니다.
       </p>
-
-      <div className="form-row">
-        <label>
-          기간(개월)
-          <select
-            value={periodMonths}
-            onChange={(e) => setPeriodMonths(Number(e.target.value))}
-            disabled={searchBusy}
-          >
-            {PERIOD_OPTIONS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          max pages
-          <input
-            type="number"
-            min={1}
-            max={50}
-            value={maxPages}
-            disabled={searchBusy}
-            onChange={(e) => setMaxPages(Number(e.target.value))}
-          />
-        </label>
-        <label>
-          download limit
-          <input
-            type="number"
-            min={1}
-            max={200}
-            placeholder="없음"
-            value={limit}
-            disabled={searchBusy}
-            onChange={(e) => setLimit(e.target.value)}
-          />
-        </label>
-      </div>
 
       {job.job?.started_at && !collection.fetchError ? (
         <p className="account-line">
@@ -200,12 +170,64 @@ export function PwcAdhocRunPage() {
       ) : null}
 
       <p className="account-line">
-        문서: <Link to="/docs/reports/pwc">PwC 보고서</Link>
+        목록 타입:{' '}
+        <Link to="/collect/pwc/list/search/types">한국 / 국제</Link>
         {' · '}
-        본문 탭: <Link to="/collect/pwc/body/download">다운로드 상태</Link>
+        문서: <Link to="/docs/reports/pwc">PwC 보고서</Link>
       </p>
 
-      <div className="button-row">
+      <div className="actions">
+        <label className="limit-field">
+          목록
+          <select
+            value={catalog}
+            onChange={(e) => setCatalog(e.target.value as PwcCatalogId)}
+            disabled={searchBusy || crawlBusy}
+          >
+            {PWC_CATALOGS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="limit-field">
+          기간
+          <select
+            value={periodMonths}
+            onChange={(e) => setPeriodMonths(Number(e.target.value))}
+            disabled={searchBusy}
+          >
+            {PERIOD_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                최근 {m}개월
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="limit-field">
+          최대 페이지
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={maxPages}
+            disabled={searchBusy}
+            onChange={(e) => setMaxPages(Number(e.target.value))}
+          />
+        </label>
+        <label className="limit-field">
+          다운로드 상한
+          <input
+            type="number"
+            min={1}
+            max={200}
+            placeholder="없음"
+            value={limit}
+            disabled={searchBusy}
+            onChange={(e) => setLimit(e.target.value)}
+          />
+        </label>
         <button
           type="button"
           disabled={!canStartSearch || collection.requestingStart}

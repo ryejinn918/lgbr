@@ -331,6 +331,7 @@ def start_crawl(
     mode: str = "auto",
     limit: int | None = None,
     debug: bool = False,
+    catalog: str | None = None,
 ) -> dict[str, Any]:
     # `limit` kept for API compat; search crawls use profile period_months.
     _ = limit
@@ -413,6 +414,20 @@ def start_crawl(
                 "can_start": False,
             }
 
+    pwc_catalog = "kr"
+    if mode == "pwc":
+        pwc_catalog = (catalog or "kr").strip().lower() or "kr"
+        if pwc_catalog not in ("kr", "gx"):
+            return {
+                "ok": False,
+                "status": 400,
+                "label": "오류",
+                "message": "catalog must be kr or gx for mode=pwc",
+                "crawl": None,
+                "session": get_current_session(),
+                "can_start": False,
+            }
+
     try:
         crawl = _create_starting_crawl(
             mode=mode, period_months=period_months, debug=use_debug
@@ -434,6 +449,9 @@ def start_crawl(
 
     CRAWL_LOG.parent.mkdir(parents=True, exist_ok=True)
     log_f = open(CRAWL_LOG, "a", encoding="utf-8")  # noqa: SIM115
+    child_env = os.environ.copy()
+    if mode == "pwc":
+        child_env["PWC_CATALOG"] = pwc_catalog
     try:
         log_f.write(f"\n--- crawl start {_now().isoformat()} id={crawl['id']} ---\n")
         log_f.flush()
@@ -452,7 +470,7 @@ def start_crawl(
             stdout=log_f,
             stderr=subprocess.STDOUT,
             start_new_session=True,
-            env=os.environ.copy(),
+            env=child_env,
         )
     except Exception as exc:
         log_f.close()

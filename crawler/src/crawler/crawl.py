@@ -8,6 +8,7 @@ SIGTERM/SIGINT request a cooperative shutdown (logout → crawl ended), not erro
 
 from __future__ import annotations
 
+import os
 import signal
 import threading
 import time
@@ -248,12 +249,20 @@ def _run_pwc_adhoc(
     cdp_port = allocate_cdp_port()
     download_dir = downloads_dir(asset_id)
     download_dir.mkdir(parents=True, exist_ok=True)
+    from crawler.sources.pwc_http import get_catalog
+
+    catalog_id = os.environ.get("PWC_CATALOG") or "kr"
+    try:
+        hub_url = get_catalog(catalog_id).hub_url
+    except ValueError:
+        hub_url = get_catalog("kr").hub_url
     sess = PwcSession(
         ttl_seconds=ttl_seconds,
         idle_seconds=idle_seconds,
         headless=headless,
         cdp_port=cdp_port,
         downloads_path=download_dir,
+        start_url=hub_url,
     )
     try:
         log.emit(level="info", stage="browser", event="stage_start", mode="pwc")

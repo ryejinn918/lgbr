@@ -105,6 +105,7 @@ export function useCollectionJob(opts?: {
     maxPages?: number
     periodMonths?: number
     limit?: number
+    catalog?: string
   }) {
     const maxPages = opts?.maxPages ?? 20
     const periodMonths = opts?.periodMonths ?? 3
@@ -117,6 +118,7 @@ export function useCollectionJob(opts?: {
         period_months: periodMonths,
       }
       if (opts?.limit != null) body.limit = opts.limit
+      if (opts?.catalog) body.catalog = opts.catalog
       const res = await fetch('/api/collection/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

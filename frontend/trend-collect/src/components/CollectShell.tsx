@@ -4,6 +4,7 @@ import {
   defaultCollectPath,
   defaultMeansPath,
   discoveryTypeLabel,
+  hasSeparateBodyStage,
   isMeansSupported,
   isStageSupported,
   meansLabel,
@@ -67,14 +68,16 @@ export function CollectShell() {
   const showTypes = stage === 'list'
   const showMeansNav = meansOptions.length > 1
   const showStageNav = stages.length > 1
+  const separateBody = hasSeparateBodyStage(source)
 
   return (
     <div className="collect-shell">
       <header className="monitor-header">
         <h1>수집</h1>
         <p className="lede">
-          매체별로 리스트 발굴(피드·검색)과 본문 채우기를 나눕니다. 리스트 발굴
-          타입은 각 수단의 프로필입니다.
+          {separateBody
+            ? '리스트 발굴과 본문 채우기를 나눠 실행합니다. 리스트 발굴 타입은 각 수단의 프로필입니다.'
+            : '검색 실행이 목록 수집과 PDF 다운로드를 함께 처리합니다. 프로필·목록 타입은 아래 탭에서 고릅니다.'}
         </p>
       </header>
 
@@ -103,11 +106,7 @@ export function CollectShell() {
             </NavLink>
           ))}
         </nav>
-      ) : (
-        <p className="section-note" style={{ margin: 0 }}>
-          {stageLabel(stage)}
-        </p>
-      )}
+      ) : null}
 
       {showMeansNav ? (
         <nav className="subnav subnav-tertiary" aria-label="수집 수단">
@@ -117,19 +116,19 @@ export function CollectShell() {
             </NavLink>
           ))}
         </nav>
-      ) : (
-        <p className="section-note" style={{ margin: 0 }}>
-          {meansLabel(means)}
-        </p>
-      )}
+      ) : null}
 
       {showTypes ? (
-        <nav className="subnav subnav-action" aria-label="실행 또는 리스트 발굴 타입">
+        <nav className="subnav subnav-action" aria-label="실행 또는 목록/프로필">
           <NavLink to={`/collect/${source}/list/${means}`} end>
             실행
           </NavLink>
           <NavLink to={`/collect/${source}/list/${means}/types`}>
-            리스트 발굴 타입
+            {source === 'pwc'
+              ? '목록 · 한국 / 국제'
+              : source === 'fnguide'
+                ? '검색 프로필'
+                : '리스트 발굴 타입'}
           </NavLink>
         </nav>
       ) : null}
@@ -140,7 +139,7 @@ export function CollectShell() {
           stage,
           means,
           supported: true,
-          typeLabel: discoveryTypeLabel(means),
+          typeLabel: discoveryTypeLabel(means, source),
         }}
       />
     </div>

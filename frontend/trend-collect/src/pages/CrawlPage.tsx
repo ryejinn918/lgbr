@@ -54,21 +54,17 @@ export function CrawlPage() {
 
   async function onStart(mode: CrawlMode = 'ai') {
     const searchLabel = crawlModeTypeLabel(mode)
-    const isSearchMode = isSearchProfileMode(mode)
     const periodMonths =
       profiles.items.find((p) => p.mode === mode)?.period_months ?? 3
-    const label =
-      mode === 'adhoc'
-        ? '애드혹 크롤을 시작할까요? (CDP 원격 조작, 로그인 세션 획득)'
-        : debugMode
-          ? `${searchLabel} ${periodMonths}개월치 다운로드 후 debug(adhoc/CDP)로 전환할까요?`
-          : `${searchLabel} ${periodMonths}개월치 리포트를 다운로드할까요?`
+    const label = debugMode
+      ? `${searchLabel} ${periodMonths}개월치 다운로드 후 debug(CDP)로 전환할까요?`
+      : `${searchLabel} ${periodMonths}개월치 리포트를 다운로드할까요?`
     if (!window.confirm(label)) {
       return
     }
     try {
       await startCrawl(mode, {
-        debug: isSearchMode ? debugMode : false,
+        debug: isSearchProfileMode(mode) ? debugMode : false,
       })
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '실행 실패')
@@ -87,7 +83,7 @@ export function CrawlPage() {
   return (
     <>
       <section className={`panel badge-panel state-${badgeState}`}>
-        <p className="badge-label">리스트 발굴 · 검색 · 실행</p>
+        <p className="badge-label">검색 · 실행</p>
         <p className="badge-value">
           {fetchError ? 'API Offline' : stale ? '응답 없음' : crawl.label}
         </p>
@@ -184,14 +180,6 @@ export function CrawlPage() {
               {requestingStart ? '시작 중…' : THEME_LABEL[mode]}
             </button>
           ))}
-          <button
-            type="button"
-            className="run-btn"
-            disabled={!canStart || requestingStart || !!fetchError}
-            onClick={() => void onStart('adhoc')}
-          >
-            {requestingStart ? '시작 중…' : '애드혹'}
-          </button>
           <button
             type="button"
             className="logout-btn"

@@ -11,12 +11,13 @@ from uuid import UUID
 from crawler import collection_jobs_store, reports_store
 from crawler.asset_id import DOWNLOADS_ROOT, downloads_dir, make_asset_id
 from crawler.sources.pwc_http import (
-    PAGE_SIZE,
+    DEFAULT_CATALOG,
     PwcListItem,
     SOURCE,
     download_pdf,
     fetch_detail_pdf_url,
     fetch_list_page,
+    get_catalog,
     months_ago_cutoff,
     pdf_page_count,
 )
@@ -50,6 +51,7 @@ class PwcJobSummary:
 def run_pwc_search_job(
     job_id: UUID | str,
     *,
+    catalog: str = DEFAULT_CATALOG,
     period_months: int = DEFAULT_PERIOD_MONTHS,
     max_pages: int = DEFAULT_MAX_PAGES,
     limit: int | None = None,
@@ -71,6 +73,15 @@ def run_pwc_search_job(
             message=f"source {source!r} is not pwc",
         )
 
+    try:
+        cat = get_catalog(catalog)
+    except ValueError as exc:
+        return collection_jobs_store.end_job(
+            job_id,
+            error=True,
+            message=str(exc),
+        )
+
     period_months = max(MIN_PERIOD_MONTHS, min(int(period_months), MAX_PERIOD_MONTHS))
     max_pages = max(1, min(int(max_pages), MAX_MAX_PAGES))
     if limit is not None and limit < 1:
@@ -82,15 +93,19 @@ def run_pwc_search_job(
     cutoff = months_ago_cutoff(period_months)
     already = reports_store.downloaded_keys(SOURCE)
     summary = PwcJobSummary()
+    page_size = cat.page_size
 
     progress: dict[str, Any] = {
         "stage": "list_download",
         "source": SOURCE,
         "capability": "search",
+        "catalog": cat.id,
+        "catalog_label": cat.label,
         "period_months": period_months,
         "cutoff": cutoff.isoformat(),
         "asset_id": asset_id,
         "page_offset": 0,
+        "page_size": page_size,
         "listed": 0,
         "downloaded": 0,
         "skipped_existing": 0,
@@ -102,7 +117,8 @@ def run_pwc_search_job(
     collection_jobs_store.set_progress(job_id, progress)
     collection_jobs_store.set_message(
         job_id,
-        f"pwc search 시작 (최근 {period_months}개월, max_pages={max_pages})",
+        f"pwc search 시작 ({cat.label}, 최근 {period_months}개월, "
+        f"max_pages={max_pages})",
     )
 
     def stop() -> bool:
@@ -117,12 +133,12 @@ def run_pwc_search_job(
             if limit is not None and len(summary.downloaded) >= limit:
                 break
 
-            page_offset = page_idx * PAGE_SIZE
+            page_offset = page_idx * page_size
             progress["stage"] = "list"
             progress["page_offset"] = page_offset
             collection_jobs_store.set_progress(job_id, progress)
 
-            items, number_hits = fetch_list_page(page_offset)
+            items, number_hits = fetch_list_page(page_offset, catalog=cat)
             if not items:
                 progress["stop_reason"] = "empty_page"
                 break
@@ -143,6 +159,7 @@ def run_pwc_search_job(
 
                 _process_item(
                     item,
+                    catalog_id=cat.id,
                     summary=summary,
                     already=already,
                     download_dir=download_dir,
@@ -186,6 +203,7 @@ def run_pwc_search_job(
 def _process_item(
     item: PwcListItem,
     *,
+    catalog_id: str,
     summary: PwcJobSummary,
     already: set[str],
     download_dir: Path,
@@ -194,6 +212,7 @@ def _process_item(
 ) -> None:
     attrs = {
         "url": item.url,
+        "catalog": catalog_id,
         "publish_date_raw": item.publish_date_raw,
         "tags": list(item.tags),
         "provider": "PwC",

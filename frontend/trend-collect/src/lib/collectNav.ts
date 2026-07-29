@@ -18,14 +18,23 @@ export const SOURCE_LABEL: Record<CollectSource, string> = {
   pwc: 'PwC',
 }
 
-/** Means each source exposes in the collect UI (unsupported means are hidden). */
+/**
+ * Means each source exposes in the collect UI.
+ * Only ARG separates list discovery from body fill — FnGuide/PwC run both in one job,
+ * so they expose list means only (no 리스트/본문 stage tabs).
+ */
 export const SOURCE_MEANS: Record<
   CollectSource,
   { list: ListMeans[]; body: BodyMeans[] }
 > = {
-  fnguide: { list: ['search'], body: ['download'] },
+  fnguide: { list: ['search'], body: [] },
   arg: { list: ['feed'], body: ['fetch'] },
-  pwc: { list: ['search'], body: ['download'] },
+  pwc: { list: ['search'], body: [] },
+}
+
+/** True when list and body can be started as separate jobs. */
+export function hasSeparateBodyStage(source: CollectSource): boolean {
+  return SOURCE_MEANS[source].body.length > 0
 }
 
 export function defaultCollectPath(source: CollectSource): string {
@@ -106,9 +115,13 @@ export function meansLabel(means: CollectMeans): string {
 }
 
 /** Types tab / page title for list-discovery profiles. */
-export function discoveryTypeLabel(means?: CollectMeans | null): string {
+export function discoveryTypeLabel(
+  means?: CollectMeans | null,
+  source?: CollectSource | null,
+): string {
+  if (source === 'pwc' && means === 'search') return '목록 · 한국 / 국제'
   if (means === 'feed') return '리스트 발굴 타입 · 피드'
-  if (means === 'search') return '리스트 발굴 타입 · 검색'
+  if (means === 'search') return '검색 프로필'
   return '리스트 발굴 타입'
 }
 

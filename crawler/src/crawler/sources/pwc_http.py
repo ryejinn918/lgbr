@@ -1,10 +1,9 @@
-"""삼일PwC (kr/ko) Insights HTTP helpers.
+"""PwC Insights HTTP helpers (catalogs: Korea / Global).
 
-- List hub: ``https://www.pwc.com/kr/ko/insights.html``
-- List JSON (no login)::
-    ``{COLLECTION_PATH}.filter-dynamic.html?currentPagePath=...&list={}&page={offset}&…``
-  ``page`` is an offset (0, 16, 32, …); response has ``numberHits`` + ``elements``.
-- Detail PDF when present: ``a[href*=".pdf"]`` on the detail HTML.
+List JSON (no login)::
+  ``{collection_path}.filter-dynamic.html?currentPagePath=...&list={}&page={offset}&…``
+``page`` is an offset (multiples of catalog page_size); response has
+``numberHits`` + ``elements``. Detail PDF: ``a[href*=".pdf"]``.
 """
 
 from __future__ import annotations
@@ -23,19 +22,70 @@ from urllib.request import Request, urlopen
 
 SOURCE = "pwc"
 BASE = "https://www.pwc.com"
-# Main feed on https://www.pwc.com/kr/ko/insights.html
-COLLECTION_PATH = (
-    "/content/pwc/kr/ko/insights/jcr:content/root/container/"
-    "dynamic-content/collection_v2_copy"
-)
-COLLECTION_URL = f"{BASE}{COLLECTION_PATH}.filter-dynamic.html"
 DEFAULT_IMAGE_PATH = "/content/dam/pwc/network/collection-fallback-images"
-PAGE_SIZE = 16
+DEFAULT_CATALOG = "kr"
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0.0.0 Safari/537.36"
 )
+
+
+@dataclass(frozen=True)
+class PwcCatalog:
+    id: str
+    label: str
+    hub_url: str
+    collection_path: str
+    page_size: int
+
+    @property
+    def collection_url(self) -> str:
+        return f"{BASE}{self.collection_path}.filter-dynamic.html"
+
+
+CATALOGS: dict[str, PwcCatalog] = {
+    "kr": PwcCatalog(
+        id="kr",
+        label="한국 (삼일)",
+        hub_url="https://www.pwc.com/kr/ko/insights.html",
+        collection_path=(
+            "/content/pwc/kr/ko/insights/jcr:content/root/container/"
+            "dynamic-content/collection_v2_copy"
+        ),
+        page_size=16,
+    ),
+    "gx": PwcCatalog(
+        id="gx",
+        label="국제",
+        hub_url="https://www.pwc.com/gx/en/research-insights.html",
+        collection_path=(
+            "/content/pwc/gx/en/research-insights/jcr:content/root/container/"
+            "content-free-container-1/section_906117957/collection_v2_copy"
+        ),
+        page_size=8,
+    ),
+}
+
+# Back-compat aliases used by older call sites.
+COLLECTION_PATH = CATALOGS[DEFAULT_CATALOG].collection_path
+COLLECTION_URL = CATALOGS[DEFAULT_CATALOG].collection_url
+PAGE_SIZE = CATALOGS[DEFAULT_CATALOG].page_size
+
+
+def get_catalog(catalog_id: str | None = None) -> PwcCatalog:
+    key = (catalog_id or DEFAULT_CATALOG).strip().lower() or DEFAULT_CATALOG
+    cat = CATALOGS.get(key)
+    if cat is None:
+        raise ValueError(
+            f"unknown PwC catalog {catalog_id!r}; "
+            f"expected one of: {', '.join(sorted(CATALOGS))}"
+        )
+    return cat
+
+
+def list_catalogs() -> list[PwcCatalog]:
+    return [CATALOGS[k] for k in ("kr", "gx") if k in CATALOGS]
 
 _MONTHS = {
     "january": 1,
@@ -109,21 +159,23 @@ def source_key_from_url(url: str) -> str:
 def fetch_list_page(
     page_offset: int = 0,
     *,
+    catalog: str | PwcCatalog | None = None,
     timeout: float = 30.0,
 ) -> tuple[list[PwcListItem], int]:
-    """Return (items, number_hits) for one list page (offset multiples of PAGE_SIZE)."""
+    """Return (items, number_hits) for one list page."""
     if page_offset < 0:
         raise ValueError("page_offset must be >= 0")
+    cat = catalog if isinstance(catalog, PwcCatalog) else get_catalog(catalog)
     qs = urlencode(
         {
-            "currentPagePath": COLLECTION_PATH,
+            "currentPagePath": cat.collection_path,
             "list": "{}",
             "page": str(int(page_offset)),
             "searchText": "",
             "defaultImagePath": DEFAULT_IMAGE_PATH,
         }
     )
-    url = f"{COLLECTION_URL}?{qs}"
+    url = f"{cat.collection_url}?{qs}"
     payload = _get_json(url, timeout=timeout)
     number_hits = int(payload.get("numberHits") or 0)
     elements = payload.get("elements")

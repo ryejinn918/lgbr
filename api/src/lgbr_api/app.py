@@ -145,6 +145,7 @@ async def crawl_start(request: Request) -> JSONResponse:
     mode = "ai"
     limit: int | None = None
     debug = False
+    catalog: str | None = None
     try:
         body = await request.json()
     except Exception:
@@ -168,7 +169,9 @@ async def crawl_start(request: Request) -> JSONResponse:
                 )
         if "debug" in body:
             debug = bool(body.get("debug"))
-    result = start_crawl(mode=mode, limit=limit, debug=debug)
+        if body.get("catalog") is not None:
+            catalog = str(body.get("catalog") or "").strip() or None
+    result = start_crawl(mode=mode, limit=limit, debug=debug, catalog=catalog)
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 
@@ -243,6 +246,7 @@ async def collection_start(request: Request) -> JSONResponse:
         max_pages = body.get("max_pages")
         period_months = body.get("period_months")
         limit_raw = body.get("limit")
+        catalog_raw = body.get("catalog")
         try:
             pages = int(max_pages) if max_pages is not None else None
         except (TypeError, ValueError):
@@ -282,11 +286,15 @@ async def collection_start(request: Request) -> JSONResponse:
                 },
                 status_code=400,
             )
+        catalog = (
+            str(catalog_raw).strip() if catalog_raw is not None else None
+        )
         result = start_search(
             source=source,
             max_pages=pages,
             period_months=months,
             limit=lim,
+            catalog=catalog,
         )
         status = int(result.pop("status", 200 if result.get("ok") else 400))
         return JSONResponse(result, status_code=status)

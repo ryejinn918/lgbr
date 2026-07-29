@@ -42,7 +42,7 @@ export type SessionView = {
   requestingStop: boolean
   startCrawl: (
     mode?: CrawlMode,
-    opts?: { debug?: boolean },
+    opts?: { debug?: boolean; catalog?: string },
   ) => Promise<void>
   requestLogout: () => Promise<void>
 }
@@ -134,13 +134,18 @@ export function useSessionStatus(opts?: {
 
   async function startCrawl(
     mode: CrawlMode = 'ai',
-    opts?: { debug?: boolean },
+    opts?: { debug?: boolean; catalog?: string },
   ) {
     setRequestingStart(true)
     try {
-      const body: { mode: CrawlMode; debug?: boolean } = { mode }
+      const body: { mode: CrawlMode; debug?: boolean; catalog?: string } = {
+        mode,
+      }
       if (isSearchProfileMode(mode) && opts?.debug) {
         body.debug = true
+      }
+      if (mode === 'pwc' && opts?.catalog) {
+        body.catalog = opts.catalog
       }
       const res = await fetch('/api/crawl/start', {
         method: 'POST',

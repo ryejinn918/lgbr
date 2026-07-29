@@ -622,7 +622,8 @@ a.report-original-link {
   color: var(--muted);
 }
 
-.limit-field input {
+.limit-field input,
+.limit-field select {
   width: 4.5rem;
   font: inherit;
   padding: 0.45rem 0.5rem;
@@ -631,7 +632,13 @@ a.report-original-link {
   color: var(--ink);
 }
 
-.limit-field input:disabled {
+.limit-field select {
+  width: auto;
+  min-width: 5.5rem;
+}
+
+.limit-field input:disabled,
+.limit-field select:disabled {
   opacity: 0.45;
 }
 
