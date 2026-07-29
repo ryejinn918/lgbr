@@ -24,12 +24,20 @@ from crawler.fnguide_session import (
     DEFAULT_TTL_SECONDS,
     FnguideSession,
 )
+from crawler.adhoc_session import AdhocBrowserSession
 from crawler.jobs.search_report import SEARCH_MODES, get_profile, run_search_report_job
-from crawler.pwc_session import PwcSession
 from crawler.session import LoginPageError
+from crawler.sources.registry import get_source, is_adhoc_source
 
-# Modes that open CDP and hold the browser for remote inspection.
-ADHOC_HOLD_MODES = frozenset({"adhoc", "pwc"})
+
+def _adhoc_hold_modes() -> frozenset[str]:
+    from crawler.sources.registry import adhoc_source_ids
+
+    return frozenset({"adhoc"}) | adhoc_source_ids()
+
+
+# Legacy name: modes that open CDP and hold the browser for remote inspection.
+ADHOC_HOLD_MODES = _adhoc_hold_modes()
 
 _stop_flag = threading.Event()
 _handlers_installed = False
@@ -74,10 +82,11 @@ def run_crawl(
     crawl = crawls_store.claim_crawl(crawl_id)
     crawl_id = str(crawl["id"])
     mode = str(crawl.get("mode") or "auto")
-    if mode == "pwc":
-        return _run_pwc_adhoc(
+    if is_adhoc_source(mode):
+        return _run_source_adhoc(
             crawl_id=crawl_id,
             crawl=crawl,
+            mode=mode,
             ttl_seconds=ttl_seconds,
             idle_seconds=idle_seconds,
             headless=headless,
@@ -225,54 +234,67 @@ def run_crawl(
         return _fail_closed(crawl_id, sess, log, message=str(exc))
 
 
-def _run_pwc_adhoc(
+def _resolve_adhoc_hub_url(mode: str) -> str:
+    override = (os.environ.get("ADHOC_START_URL") or "").strip()
+    if override:
+        return override
+    src = get_source(mode)
+    if mode == "pwc":
+        from crawler.sources.pwc_http import get_catalog
+
+        catalog_id = os.environ.get("PWC_CATALOG") or "kr"
+        try:
+            return get_catalog(catalog_id).hub_url
+        except ValueError:
+            return get_catalog("kr").hub_url
+    return src.hub_url
+
+
+def _run_source_adhoc(
     *,
     crawl_id: str,
     crawl: dict[str, Any],
+    mode: str,
     ttl_seconds: int,
     idle_seconds: int,
     headless: bool | None,
     poll_seconds: float,
 ) -> dict[str, Any]:
-    """PwC adhoc: real Patchright Chrome + CDP, no FnGuide login."""
+    """Media-source adhoc: Patchright Chrome + CDP, no FnGuide login."""
     asset_id = str(crawl.get("asset_id") or "")
     if not asset_id:
         raise CrawlStateError(f"Crawl {crawl_id} missing asset_id")
+    src = get_source(mode)
     log = CrawlLogger(crawl_id)
     log.emit(
         level="info",
         stage="crawl",
         event="claimed",
-        mode="pwc",
+        mode=mode,
         asset_id=asset_id,
     )
     cdp_port = allocate_cdp_port()
     download_dir = downloads_dir(asset_id)
     download_dir.mkdir(parents=True, exist_ok=True)
-    from crawler.sources.pwc_http import get_catalog
-
-    catalog_id = os.environ.get("PWC_CATALOG") or "kr"
-    try:
-        hub_url = get_catalog(catalog_id).hub_url
-    except ValueError:
-        hub_url = get_catalog("kr").hub_url
-    sess = PwcSession(
+    hub_url = _resolve_adhoc_hub_url(mode)
+    sess = AdhocBrowserSession(
+        source_id=src.id,
+        start_url=hub_url,
         ttl_seconds=ttl_seconds,
         idle_seconds=idle_seconds,
         headless=headless,
         cdp_port=cdp_port,
         downloads_path=download_dir,
-        start_url=hub_url,
     )
     try:
-        log.emit(level="info", stage="browser", event="stage_start", mode="pwc")
-        log.set_progress(stage="browser", mode="pwc", asset_id=asset_id)
+        log.emit(level="info", stage="browser", event="stage_start", mode=mode)
+        log.set_progress(stage="browser", mode=mode, asset_id=asset_id)
         started = sess.start()
         log.emit(
             level="info",
             stage="browser",
             event="stage_end",
-            mode="pwc",
+            mode=mode,
             url=started.get("url"),
         )
         if _signal_requested():
@@ -290,13 +312,13 @@ def _run_pwc_adhoc(
             level="info",
             stage="crawl",
             event="active",
-            mode="pwc",
+            mode=mode,
             asset_id=asset_id,
             url=started.get("url"),
         )
         log.set_progress(
             stage="adhoc_hold",
-            mode="pwc",
+            mode=mode,
             asset_id=asset_id,
             cdp_port=cdp_port,
             url=started.get("url"),
@@ -305,7 +327,7 @@ def _run_pwc_adhoc(
             crawl_id,
             sess,
             log,
-            touch_step="pwc",
+            touch_step=mode,
             poll_seconds=poll_seconds,
         )
     except KeyboardInterrupt:
@@ -417,7 +439,7 @@ def _handoff_to_adhoc(
 
 def _hold_until_stop(
     crawl_id: str,
-    sess: FnguideSession | PwcSession,
+    sess: FnguideSession | AdhocBrowserSession,
     log: CrawlLogger,
     *,
     touch_step: str,
@@ -450,7 +472,7 @@ def _hold_until_stop(
 
 def _graceful_end(
     crawl_id: str,
-    sess: FnguideSession | PwcSession,
+    sess: FnguideSession | AdhocBrowserSession,
     log: CrawlLogger,
     *,
     reason: str,
@@ -507,7 +529,7 @@ def _graceful_end(
 
 def _fail_closed(
     crawl_id: str,
-    sess: FnguideSession | PwcSession,
+    sess: FnguideSession | AdhocBrowserSession,
     log: CrawlLogger | None,
     *,
     message: str,
@@ -549,12 +571,12 @@ def _fail_closed(
 
 
 def _best_effort_stop_session(
-    sess: FnguideSession | PwcSession, *, message: str
+    sess: FnguideSession | AdhocBrowserSession, *, message: str
 ) -> None:
     if not sess.session_id and not sess.page:
         return
     try:
-        if isinstance(sess, PwcSession):
+        if isinstance(sess, AdhocBrowserSession):
             sess.stop("error", message=message)
             return
         if sess.session_id:

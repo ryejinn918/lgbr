@@ -1,4 +1,4 @@
-"""PwC browser session — no account login; CDP-friendly hold for adhoc analysis."""
+"""Generic CDP browser hold for adhoc media sources (no account login)."""
 
 from __future__ import annotations
 
@@ -13,29 +13,26 @@ from patchright.sync_api import BrowserContext, Page
 
 from crawler.browser import launch_context
 
-DEFAULT_TTL_SECONDS = int(os.environ.get("PWC_SESSION_TTL_SECONDS", "28800"))
-DEFAULT_IDLE_SECONDS = int(os.environ.get("PWC_SESSION_IDLE_SECONDS", "3600"))
-DEFAULT_START_URL = os.environ.get(
-    "PWC_START_URL",
-    "https://www.pwc.com/kr/ko/insights.html",
-)
-PROFILE_DIR = Path(".crawler/browser-profile-pwc")
+DEFAULT_TTL_SECONDS = int(os.environ.get("ADHOC_SESSION_TTL_SECONDS", "28800"))
+DEFAULT_IDLE_SECONDS = int(os.environ.get("ADHOC_SESSION_IDLE_SECONDS", "3600"))
 
 
 @dataclass
-class PwcSession:
-    """Launch Chrome, open PwC, keep alive until stop/idle/ttl.
+class AdhocBrowserSession:
+    """Launch Chrome, open ``start_url``, keep alive until stop/idle/ttl.
 
-    Uses the same Patchright ``launch_context`` + CDP path as FnGuide adhoc,
-    but never touches fnguide login / ``fnguide_sessions``.
+    Same Patchright ``launch_context`` + CDP path as FnGuide adhoc, but never
+    touches fnguide login / ``fnguide_sessions``.
     """
 
+    source_id: str
+    start_url: str
     ttl_seconds: int = DEFAULT_TTL_SECONDS
     idle_seconds: int = DEFAULT_IDLE_SECONDS
     headless: bool | None = True
     cdp_port: int | None = None
     downloads_path: Path | None = None
-    start_url: str = DEFAULT_START_URL
+    profile_dir: Path | None = None
 
     page: Page | None = None
     session_id: str | None = None  # always None; crawl attach skipped
@@ -45,6 +42,10 @@ class PwcSession:
     _stack: ExitStack | None = field(default=None, repr=False)
     _stop_requested: bool = False
 
+    def __post_init__(self) -> None:
+        if self.profile_dir is None:
+            self.profile_dir = Path(f".crawler/browser-profile-{self.source_id}")
+
     def start(self) -> dict[str, Any]:
         if self.page is not None:
             return {"url": self.page.url, "state": "active"}
@@ -53,7 +54,7 @@ class PwcSession:
         self._context = self._stack.enter_context(
             launch_context(
                 headless=self.headless,
-                user_data_dir=PROFILE_DIR,
+                user_data_dir=self.profile_dir,
                 cdp_port=self.cdp_port,
                 downloads_path=self.downloads_path,
             )
@@ -75,7 +76,7 @@ class PwcSession:
     ) -> dict[str, Any]:
         _ = current_url, step
         if self.page is None:
-            raise RuntimeError("PwC session is not started")
+            raise RuntimeError(f"{self.source_id} adhoc session is not started")
         self.last_used_at = datetime.now(timezone.utc)
         return {"url": self.page.url, "last_used_at": self.last_used_at.isoformat()}
 
@@ -112,7 +113,7 @@ class PwcSession:
         self._context = None
         self.page = None
 
-    def __enter__(self) -> PwcSession:
+    def __enter__(self) -> AdhocBrowserSession:
         self.start()
         return self
 

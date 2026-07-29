@@ -8,7 +8,9 @@ import {
 import { CrawlPage } from '../CrawlPage'
 import { ArgFeedRunPage } from './ArgFeedRunPage'
 import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
+import { getMediaSource } from '../../lib/mediaSources'
 import { PwcAdhocRunPage } from './PwcAdhocRunPage'
+import { SourceAdhocRunPage } from './SourceAdhocRunPage'
 
 type Ctx = {
   source: CollectSource
@@ -34,6 +36,15 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'pwc' && ctx.stage === 'list' && ctx.means === 'search') {
     return <PwcAdhocRunPage />
+  }
+  const media = getMediaSource(ctx.source)
+  if (
+    media &&
+    !media.hasSearch &&
+    ctx.stage === 'list' &&
+    ctx.means === 'search'
+  ) {
+    return <SourceAdhocRunPage />
   }
   return <Navigate to={defaultCollectPath(ctx.source)} replace />
 }

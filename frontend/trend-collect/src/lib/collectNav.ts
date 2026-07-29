@@ -1,6 +1,7 @@
 import { THEME_LABEL } from './themes'
+import { MEDIA_SOURCES, getMediaSource, isMediaSourceId } from './mediaSources'
 
-export type CollectSource = 'fnguide' | 'arg' | 'pwc'
+export type CollectSource = 'fnguide' | 'arg' | (typeof MEDIA_SOURCES)[number]['id']
 export type CollectStage = 'list' | 'body'
 export type ListMeans = 'feed' | 'search'
 export type BodyMeans = 'download' | 'fetch'
@@ -9,36 +10,42 @@ export type CollectMeans = ListMeans | BodyMeans
 export const SOURCES: { id: CollectSource; label: string }[] = [
   { id: 'fnguide', label: 'FnGuide' },
   { id: 'arg', label: 'ARG' },
-  { id: 'pwc', label: 'PwC' },
+  ...MEDIA_SOURCES.map((s) => ({ id: s.id as CollectSource, label: s.label })),
 ]
 
-export const SOURCE_LABEL: Record<CollectSource, string> = {
+export const SOURCE_LABEL: Record<string, string> = {
   fnguide: 'FnGuide',
   arg: 'ARG',
-  pwc: 'PwC',
+  ...Object.fromEntries(MEDIA_SOURCES.map((s) => [s.id, s.label])),
 }
 
 /**
  * Means each source exposes in the collect UI.
- * Only ARG separates list discovery from body fill — FnGuide/PwC run both in one job,
- * so they expose list means only (no 리스트/본문 stage tabs).
+ * Only ARG separates list discovery from body fill — media sources with search
+ * (and adhoc-only media) expose list/search only (no 리스트/본문 stage tabs).
  */
 export const SOURCE_MEANS: Record<
-  CollectSource,
+  string,
   { list: ListMeans[]; body: BodyMeans[] }
 > = {
   fnguide: { list: ['search'], body: [] },
   arg: { list: ['feed'], body: ['fetch'] },
-  pwc: { list: ['search'], body: [] },
+  ...Object.fromEntries(
+    MEDIA_SOURCES.map((s) => [s.id, { list: ['search' as const], body: [] }]),
+  ),
+}
+
+export function isCollectSource(value: string | undefined): value is CollectSource {
+  return value === 'fnguide' || value === 'arg' || isMediaSourceId(value)
 }
 
 /** True when list and body can be started as separate jobs. */
 export function hasSeparateBodyStage(source: CollectSource): boolean {
-  return SOURCE_MEANS[source].body.length > 0
+  return (SOURCE_MEANS[source]?.body.length ?? 0) > 0
 }
 
 export function defaultCollectPath(source: CollectSource): string {
-  const means = SOURCE_MEANS[source]
+  const means = SOURCE_MEANS[source] ?? { list: ['search'], body: [] }
   if (means.list.includes('search')) {
     return `/collect/${source}/list/search`
   }
@@ -59,18 +66,22 @@ export function isMeansSupported(
   stage: CollectStage,
   means: CollectMeans,
 ): boolean {
+  const entry = SOURCE_MEANS[source]
+  if (!entry) return false
   if (stage === 'list') {
-    return SOURCE_MEANS[source].list.includes(means as ListMeans)
+    return entry.list.includes(means as ListMeans)
   }
-  return SOURCE_MEANS[source].body.includes(means as BodyMeans)
+  return entry.body.includes(means as BodyMeans)
 }
 
 export function isStageSupported(
   source: CollectSource,
   stage: CollectStage,
 ): boolean {
-  if (stage === 'list') return SOURCE_MEANS[source].list.length > 0
-  return SOURCE_MEANS[source].body.length > 0
+  const entry = SOURCE_MEANS[source]
+  if (!entry) return false
+  if (stage === 'list') return entry.list.length > 0
+  return entry.body.length > 0
 }
 
 export function supportedStages(source: CollectSource): CollectStage[] {
@@ -84,8 +95,10 @@ export function supportedMeans(
   source: CollectSource,
   stage: CollectStage,
 ): CollectMeans[] {
-  if (stage === 'list') return [...SOURCE_MEANS[source].list]
-  return [...SOURCE_MEANS[source].body]
+  const entry = SOURCE_MEANS[source]
+  if (!entry) return []
+  if (stage === 'list') return [...entry.list]
+  return [...entry.body]
 }
 
 export function defaultMeansPath(
@@ -128,7 +141,16 @@ export function discoveryTypeLabel(
 export function crawlModeTypeLabel(mode: string | null | undefined): string {
   if (!mode) return '—'
   if (mode === 'adhoc') return '애드혹'
-  if (mode === 'pwc') return 'PwC 애드혹'
   if (mode === 'auto') return '자동'
+  const media = getMediaSource(mode)
+  if (media) return `${media.label} 애드혹`
   return THEME_LABEL[mode] ?? mode
+}
+
+export function mediaHasSearch(source: CollectSource): boolean {
+  return getMediaSource(source)?.hasSearch === true
+}
+
+export function mediaHasCatalogs(source: CollectSource): boolean {
+  return getMediaSource(source)?.hasCatalogs === true
 }

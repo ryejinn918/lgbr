@@ -18,11 +18,10 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-VALID_MODES = frozenset(
+FNGUIDE_MODES = frozenset(
     {
         "auto",
         "adhoc",
-        "pwc",
         "ai",
         "physical_ai",
         "appliance",
@@ -41,6 +40,16 @@ LIMITED_MODES = frozenset(
         "petrochemical",
     }
 )
+
+
+def _valid_modes() -> frozenset[str]:
+    from crawler.sources.registry import adhoc_source_ids
+
+    return FNGUIDE_MODES | adhoc_source_ids()
+
+
+# Evaluated at import; registry changes require process restart (API/worker).
+VALID_MODES = _valid_modes()
 
 
 def create_crawl(

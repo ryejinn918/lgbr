@@ -8,19 +8,26 @@ from zoneinfo import ZoneInfo
 
 _SEOUL = ZoneInfo("Asia/Seoul")
 
-MODE_ABBREV = {
-    # Legacy crawl folders (fn-dc-*); not an active search mode.
-    "datacenter": "dc",
-    "ai": "ai",
-    "physical_ai": "pai",
-    "appliance": "ap",
-    "display": "dp",
-    "automotive": "am",
-    "petrochemical": "pc",
-    "adhoc": "ad",
-    "auto": "au",
-    "pwc": "pw",
-}
+def _mode_abbrev() -> dict[str, str]:
+    from lgbr_api.source_registry import source_mode_abbrev
+
+    base = {
+        # Legacy crawl folders (fn-dc-*); not an active search mode.
+        "datacenter": "dc",
+        "ai": "ai",
+        "physical_ai": "pai",
+        "appliance": "ap",
+        "display": "dp",
+        "automotive": "am",
+        "petrochemical": "pc",
+        "adhoc": "ad",
+        "auto": "au",
+    }
+    base.update(source_mode_abbrev())
+    return base
+
+
+MODE_ABBREV = _mode_abbrev()
 LIMITED_MODES = frozenset(
     {
         "ai",

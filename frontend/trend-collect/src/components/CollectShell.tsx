@@ -5,9 +5,12 @@ import {
   defaultMeansPath,
   discoveryTypeLabel,
   hasSeparateBodyStage,
+  isCollectSource,
   isMeansSupported,
   isStageSupported,
   meansLabel,
+  mediaHasCatalogs,
+  mediaHasSearch,
   stageLabel,
   supportedMeans,
   supportedStages,
@@ -17,8 +20,7 @@ import {
 } from '../lib/collectNav'
 
 function asSource(value: string | undefined): CollectSource | null {
-  if (value === 'fnguide' || value === 'arg' || value === 'pwc') return value
-  return null
+  return isCollectSource(value) ? value : null
 }
 
 function asStage(value: string | undefined): CollectStage | null {
@@ -65,19 +67,24 @@ export function CollectShell() {
 
   const stages = supportedStages(source)
   const meansOptions = supportedMeans(source, stage)
-  const showTypes = stage === 'list'
+  const showTypes =
+    stage === 'list' &&
+    (source === 'fnguide' || source === 'arg' || mediaHasCatalogs(source))
   const showMeansNav = meansOptions.length > 1
   const showStageNav = stages.length > 1
   const separateBody = hasSeparateBodyStage(source)
+  const adhocOnlyMedia = !separateBody && !mediaHasSearch(source) && source !== 'fnguide'
 
   return (
     <div className="collect-shell">
       <header className="monitor-header">
         <h1>수집</h1>
         <p className="lede">
-          {separateBody
-            ? '리스트 발굴과 본문 채우기를 나눠 실행합니다. 리스트 발굴 타입은 각 수단의 프로필입니다.'
-            : '검색 실행이 목록 수집과 PDF 다운로드를 함께 처리합니다. 프로필·목록 타입은 아래 탭에서 고릅니다.'}
+          {adhocOnlyMedia
+            ? 'CDP 애드혹으로 허브를 엽니다. 목록/PDF 자동 수집은 이후 단계에서 붙입니다.'
+            : separateBody
+              ? '리스트 발굴과 본문 채우기를 나눠 실행합니다. 리스트 발굴 타입은 각 수단의 프로필입니다.'
+              : '검색 실행이 목록 수집과 PDF 다운로드를 함께 처리합니다. 프로필·목록 타입은 아래 탭에서 고릅니다.'}
         </p>
       </header>
 

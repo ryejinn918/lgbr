@@ -13,7 +13,13 @@ from crawler import crawls_store, sessions_store
 
 
 # Modes that expose CDP for remote control (FnGuide adhoc + PwC adhoc).
-CDP_MODES = frozenset({"adhoc", "pwc"})
+def _cdp_modes() -> frozenset[str]:
+    from crawler.sources.registry import adhoc_source_ids
+
+    return frozenset({"adhoc"}) | adhoc_source_ids()
+
+
+CDP_MODES = _cdp_modes()
 
 
 def resolve_cdp_endpoint() -> tuple[dict[str, Any], str]:
@@ -23,7 +29,8 @@ def resolve_cdp_endpoint() -> tuple[dict[str, Any], str]:
     mode = str(crawl.get("mode") or "")
     if mode not in CDP_MODES and not crawl.get("debug"):
         raise RuntimeError(
-            f"Open crawl mode {mode!r} is not CDP-enabled (need adhoc/pwc/debug)"
+            f"Open crawl mode {mode!r} is not CDP-enabled "
+            f"(need adhoc/source-adhoc/debug)"
         )
     port = crawl.get("cdp_port")
     if not port:

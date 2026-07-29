@@ -344,12 +344,15 @@ def main() -> None:
         if crawl_command == "run":
             preview = crawls_store.get_crawl(args.crawl_id)
             preview_mode = str((preview or {}).get("mode") or "")
-            if preview_mode != "pwc" and (
+            from crawler.sources.registry import is_adhoc_source
+
+            if not is_adhoc_source(preview_mode) and (
                 not args.user_id or not args.password
             ):
                 parser.error(
                     "crawl run requires --user-id/--password or "
-                    "FNGUIDE_USER_ID/FNGUIDE_PASSWORD (except mode=pwc)"
+                    "FNGUIDE_USER_ID/FNGUIDE_PASSWORD "
+                    "(except adhoc media sources)"
                 )
             try:
                 result = run_crawl(

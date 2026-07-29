@@ -22,6 +22,11 @@ from uuid import UUID
 from lgbr_api.asset_id import make_asset_id
 from lgbr_api.db import CRAWL_STATE_LABELS, connect, database_url
 from lgbr_api.sessions import get_current_session, request_logout
+from lgbr_api.source_registry import (
+    cdp_modes,
+    no_account_modes,
+    valid_crawl_modes,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 CRAWL_LOG = ROOT / ".crawler" / "crawl.log"
@@ -300,19 +305,9 @@ def shutdown_open_crawl(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
     }
 
 
-VALID_MODES = frozenset(
-    {
-        "auto",
-        "adhoc",
-        "pwc",
-        "ai",
-        "physical_ai",
-        "appliance",
-        "display",
-        "automotive",
-        "petrochemical",
-    }
-)
+VALID_MODES = valid_crawl_modes()
+NO_ACCOUNT_MODES = no_account_modes()
+CDP_STATUS_MODES = cdp_modes()
 LIMITED_MODES = frozenset(
     {
         "ai",
@@ -344,8 +339,8 @@ def start_crawl(
             "status": 400,
             "label": "오류",
             "message": (
-                "mode must be one of: auto, adhoc, pwc, ai, physical_ai, "
-                "appliance, display, automotive, petrochemical"
+                "mode must be one of: "
+                + ", ".join(sorted(VALID_MODES))
             ),
             "crawl": None,
             "session": get_current_session(),
@@ -400,8 +395,8 @@ def start_crawl(
             **directions,
         }
 
-    # PwC adhoc does not use fnguide_sessions; skip account-session guard.
-    if mode != "pwc":
+    # PwC / Accenture adhoc do not use fnguide_sessions.
+    if mode not in NO_ACCOUNT_MODES:
         account = get_current_session()
         if account.get("session") is not None:
             return {
@@ -684,15 +679,12 @@ def get_cdp_status() -> dict[str, Any]:
             "message": "열린 크롤이 없습니다.",
         }
     crawl = _serialize(row)
-    # After search debug handoff mode becomes adhoc; PwC adhoc also exposes CDP.
-    if (
-        crawl.get("mode") not in ("adhoc", "pwc")
-        and not crawl.get("debug")
-    ):
+    # After search debug handoff mode becomes adhoc; source adhoc also exposes CDP.
+    if crawl.get("mode") not in CDP_STATUS_MODES and not crawl.get("debug"):
         return {
             "ok": False,
             "status": 409,
-            "message": "adhoc/pwc(또는 search debug) 크롤이 아닙니다.",
+            "message": "adhoc/source-adhoc(또는 search debug) 크롤이 아닙니다.",
             "crawl": crawl,
         }
     port = crawl.get("cdp_port")

@@ -1,3 +1,4 @@
+import type { MediaSourceId } from './lib/mediaSources'
 import type { SearchProfileMode } from './lib/themes'
 
 export type SessionState =
@@ -27,7 +28,7 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
-export type CrawlMode = 'auto' | 'adhoc' | 'pwc' | SearchProfileMode
+export type CrawlMode = 'auto' | 'adhoc' | MediaSourceId | SearchProfileMode
 
 export type CrawlProfileMode = SearchProfileMode
 
