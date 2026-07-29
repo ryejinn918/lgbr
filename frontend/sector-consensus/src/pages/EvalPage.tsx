@@ -407,7 +407,7 @@ export function EvalPage() {
             <div className="section-head">
               <h2>관점 지식그래프</h2>
               <p className="section-note">
-                축 · 주장 · 파란 링크=심화 · 빨간 링크=이견
+                축을 루트로 두고 주장을 묶음 · 심화/이견 관계 표시
               </p>
             </div>
             <div className="chip-row eval-graph-tabs">

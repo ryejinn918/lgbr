@@ -21,7 +21,6 @@ import {
   type AppTab,
 } from './lib/theme'
 import { AxesPage } from './pages/AxesPage'
-import { EvalPage } from './pages/EvalPage'
 import { FramesPage } from './pages/FramesPage'
 import { THEME_LABEL, type ConsensusTheme } from './types'
 import './App.css'
@@ -87,7 +86,6 @@ function AppShell() {
           <nav className="app-nav" aria-label="주요 메뉴">
             <NavLink to={themePath(theme, 'axes')}>{NAV.axes}</NavLink>
             <NavLink to={themePath(theme, 'frames')}>{NAV.frames}</NavLink>
-            <NavLink to={themePath(theme, 'eval')}>{NAV.eval}</NavLink>
           </nav>
         </header>
         <AppStatus />
@@ -118,7 +116,8 @@ function App() {
         <Route path="axes" element={<AxesPage />} />
         <Route path="select" element={<RedirectToAxesKeepSearch />} />
         <Route path="frames" element={<FramesPage />} />
-        <Route path="eval" element={<EvalPage />} />
+        {/* Eval UI hidden until ready; keep route redirect so old links don't 404. */}
+        <Route path="eval" element={<Navigate to="../axes" replace />} />
         <Route path="ops" element={<Navigate to="../axes" replace />} />
         <Route path="compare" element={<Navigate to="../axes" replace />} />
         <Route path="*" element={<Navigate to="axes" replace />} />
