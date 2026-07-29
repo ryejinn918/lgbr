@@ -444,19 +444,21 @@ export function ReportsPage({
                         </span>
                       </td>
                       <td className="col-title report-title" title={item.title}>
+                        {item.title}
                         {originalUrl ? (
-                          <a
-                            className="report-file-link"
-                            href={originalUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={onFileClick}
-                          >
-                            {item.title}
-                          </a>
-                        ) : (
-                          item.title
-                        )}
+                          <>
+                            {' '}
+                            <a
+                              className="report-file-link report-original-link"
+                              href={originalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={onFileClick}
+                            >
+                              원문
+                            </a>
+                          </>
+                        ) : null}
                       </td>
                       {showProvider ? (
                         <td

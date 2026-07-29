@@ -397,6 +397,13 @@
   color: var(--ink);
 }
 
+a.report-original-link {
+  display: inline;
+  margin-left: 0.35rem;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 .report-table td.mono,
 .report-table .mono {
   white-space: nowrap;

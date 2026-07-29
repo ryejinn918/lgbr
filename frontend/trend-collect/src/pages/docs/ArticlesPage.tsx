@@ -177,19 +177,21 @@ export function ArticlesPage() {
                         {item.section || item.publisher || '—'}
                       </td>
                       <td className="col-title report-title" title={item.title}>
+                        {item.title}
                         {originalUrl ? (
-                          <a
-                            className="report-file-link"
-                            href={originalUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={onLinkClick}
-                          >
-                            {item.title}
-                          </a>
-                        ) : (
-                          item.title
-                        )}
+                          <>
+                            {' '}
+                            <a
+                              className="report-file-link report-original-link"
+                              href={originalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={onLinkClick}
+                            >
+                              원문
+                            </a>
+                          </>
+                        ) : null}
                       </td>
                       <td className="col-status">
                         <span

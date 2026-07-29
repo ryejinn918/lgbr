@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import date, datetime
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
@@ -186,8 +189,6 @@ def fetch_detail_pdf_url(url: str, *, timeout: float = 30.0) -> str | None:
 
 def download_pdf(url: str, dest_path: Any, *, timeout: float = 120.0) -> int:
     """Download PDF bytes to ``dest_path``. Returns byte length."""
-    from pathlib import Path
-
     path = Path(dest_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = _get_bytes(url, timeout=timeout)
@@ -195,6 +196,27 @@ def download_pdf(url: str, dest_path: Any, *, timeout: float = 120.0) -> int:
         raise RuntimeError(f"not a PDF ({url}): magic={data[:8]!r}")
     path.write_bytes(data)
     return len(data)
+
+
+def pdf_page_count(path: Path | str) -> int | None:
+    """Return page count via pdfinfo, or None if unavailable."""
+    p = Path(path)
+    if not p.is_file() or shutil.which("pdfinfo") is None:
+        return None
+    proc = subprocess.run(
+        ["pdfinfo", str(p)],
+        capture_output=True,
+        check=False,
+    )
+    text = proc.stdout.decode("utf-8", errors="replace")
+    m = re.search(r"^Pages:\s+(\d+)\s*$", text, re.M)
+    if not m:
+        return None
+    try:
+        n = int(m.group(1))
+    except ValueError:
+        return None
+    return n if n > 0 else None
 
 
 def _get_json(url: str, *, timeout: float) -> dict[str, Any]:

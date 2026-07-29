@@ -18,6 +18,7 @@ from crawler.sources.pwc_http import (
     fetch_detail_pdf_url,
     fetch_list_page,
     months_ago_cutoff,
+    pdf_page_count,
 )
 
 DEFAULT_PERIOD_MONTHS = 3
@@ -243,11 +244,13 @@ def _process_item(
     dest = download_dir / f"{safe}.pdf"
     try:
         size = download_pdf(pdf_url, dest)
+        pages = pdf_page_count(dest)
         reports_store.mark_downloaded(
             source=SOURCE,
             source_key=item.source_key,
             title=item.title,
             published_at=item.published_at,
+            page_count=pages,
             file_path=str(dest),
             file_name=dest.name,
             attrs={**attrs, "pdf_url": pdf_url, "bytes": size},
