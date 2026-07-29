@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,8 @@ MIN_PERIOD_MONTHS = 1
 MAX_PERIOD_MONTHS = 24
 DEFAULT_MAX_PAGES = 20
 MAX_MAX_PAGES = 50
+# Polite pacing between list items (detail/PDF fetches).
+ITEM_DELAY_SECONDS = 2.0
 
 
 @dataclass
@@ -166,6 +169,10 @@ def run_accenture_search_job(
                     dated_on_page += 1
                 elif outcome == "ok":
                     dated_on_page += 1
+                if stop():
+                    summary.stopped = True
+                    break
+                time.sleep(ITEM_DELAY_SECONDS)
 
             summary.pages_done += 1
             progress["pages_done"] = summary.pages_done
