@@ -45,7 +45,19 @@ function stringList(value: unknown): string[] {
   return value.map((x) => String(x)).filter(Boolean)
 }
 
-export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
+const SOURCE_LABEL: Record<string, string> = {
+  all: '보고서',
+  fnguide: 'FnGuide',
+  pwc: 'PwC',
+}
+
+export function ReportsPage({
+  embedded = false,
+  source = 'all',
+}: {
+  embedded?: boolean
+  source?: string
+}) {
   const [params, setParams] = useSearchParams()
   const searchKey = params.toString()
   const filters = useMemo(
@@ -73,6 +85,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
 
   const query = useMemo(
     () => ({
+      source,
       status: filters.status,
       quality: filters.quality,
       theme: filters.theme,
@@ -82,7 +95,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
       offset: filters.offset,
       poll: true,
     }),
-    [filters],
+    [filters, source],
   )
   const reports = useReports(query)
 
@@ -177,24 +190,32 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
   const qj: QualityJson = detail?.quality_json || {}
   const failReasons = stringList(qj.fail_reasons)
   const passSignals = stringList(qj.pass_signals)
+  const sourceKey = source || 'all'
+  const isAll = sourceKey === 'all'
+  const sourceTitle = SOURCE_LABEL[sourceKey] ?? sourceKey
+  const sourceLede = isAll
+    ? '매체별 보고서를 한곳에서 봅니다. FnGuide·PwC 탭으로 나눌 수도 있습니다.'
+    : sourceKey === 'pwc'
+      ? 'PwC 인사이트·리포트 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
+      : '증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가 함께 표시됩니다.'
+  const collectHref = isAll
+    ? '/collect'
+    : `/collect/${sourceKey}/list/search`
 
   return (
     <>
       {embedded ? (
         <div className="section-head" style={{ marginBottom: '0.75rem' }}>
-          <h2>FnGuide 보고서</h2>
+          <h2>{sourceTitle}</h2>
           <span className="section-note">
             목록·다운로드·품질 감사 ·{' '}
-            <Link to="/collect/fnguide/list/search">검색 실행</Link>
+            <Link to={collectHref}>{isAll ? '수집' : '검색 실행'}</Link>
           </span>
         </div>
       ) : (
         <header className="monitor-header">
-          <h1>FnGuide 보고서</h1>
-          <p className="lede">
-            증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가
-            함께 표시됩니다.
-          </p>
+          <h1>{sourceTitle}</h1>
+          <p className="lede">{sourceLede}</p>
         </header>
       )}
 
@@ -372,7 +393,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
                       페이지{filters.sort === 'page_count' ? ' ↓' : ''}
                     </button>
                   </th>
-                  <th className="col-rpt">rpt_id</th>
+                  {isAll ? <th className="col-source">매체</th> : null}
                   <th className="col-file">파일</th>
                   <th className="col-qat">감사일</th>
                   <th className="col-seen">
@@ -423,9 +444,13 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
                       <td className="col-pages mono report-pages">
                         {item.page_count != null ? item.page_count : '—'}
                       </td>
-                      <td className="col-rpt mono" title={item.source_key}>
-                        {item.source_key}
-                      </td>
+                      {isAll ? (
+                        <td className="col-source">
+                          {SOURCE_LABEL[item.source || ''] ||
+                            item.source ||
+                            '—'}
+                        </td>
+                      ) : null}
                       <td className="col-file">
                         {item.has_file ? (
                           <a

@@ -18,6 +18,7 @@ import httpx
 from psycopg.types.json import Jsonb
 
 from crawler.db import connect, load_database_env
+from crawler.reports_store import SOURCE_FNGUIDE
 
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -80,6 +81,7 @@ Rules:
 @dataclass(frozen=True)
 class AuditTarget:
     id: UUID
+    source: str
     source_key: str
     title: str
     file_path: Path
@@ -88,6 +90,17 @@ class AuditTarget:
     @property
     def text_len(self) -> int:
         return len(self.text)
+
+
+def apply_source_pass_policy(
+    result: dict[str, Any], source: str
+) -> dict[str, Any]:
+    """Non-FnGuide sources always pass; keep summary / short_title fields."""
+    if str(source or "").strip().lower() == SOURCE_FNGUIDE:
+        return result
+    out = dict(result)
+    out["pass"] = True
+    return out
 
 
 def _now() -> datetime:
@@ -206,7 +219,7 @@ def fetch_targets(
             params.append(str(theme))
     where_sql = " AND ".join(where)
     sql = f"""
-        SELECT id, source_key, title, file_path
+        SELECT id, source, source_key, title, file_path
         FROM reports
         WHERE {where_sql}
         ORDER BY last_seen_at DESC NULLS LAST, id DESC
@@ -247,6 +260,7 @@ def prepare_targets(
         ready.append(
             AuditTarget(
                 id=rid,
+                source=str(row.get("source") or ""),
                 source_key=str(row.get("source_key") or ""),
                 title=str(row.get("title") or ""),
                 file_path=path,
@@ -360,6 +374,7 @@ async def _classify_one(
     if not isinstance(parsed, dict):
         raise ValueError("model response is not a JSON object")
     result = normalize_result(parsed)
+    result = apply_source_pass_policy(result, target.source)
     result["_usage"] = data.get("usage") or {}
     result["_model"] = data.get("model") or model
     return result

@@ -1,6 +1,6 @@
 import { THEME_LABEL } from './themes'
 
-export type CollectSource = 'fnguide' | 'arg'
+export type CollectSource = 'fnguide' | 'arg' | 'pwc'
 export type CollectStage = 'list' | 'body'
 export type ListMeans = 'feed' | 'search'
 export type BodyMeans = 'download' | 'fetch'
@@ -9,11 +9,13 @@ export type CollectMeans = ListMeans | BodyMeans
 export const SOURCES: { id: CollectSource; label: string }[] = [
   { id: 'fnguide', label: 'FnGuide' },
   { id: 'arg', label: 'ARG' },
+  { id: 'pwc', label: 'PwC' },
 ]
 
 export const SOURCE_LABEL: Record<CollectSource, string> = {
   fnguide: 'FnGuide',
   arg: 'ARG',
+  pwc: 'PwC',
 }
 
 /** Means each source exposes in the collect UI (unsupported means are hidden). */
@@ -23,6 +25,7 @@ export const SOURCE_MEANS: Record<
 > = {
   fnguide: { list: ['search'], body: ['download'] },
   arg: { list: ['feed'], body: ['fetch'] },
+  pwc: { list: ['search'], body: ['download'] },
 }
 
 export function defaultCollectPath(source: CollectSource): string {
@@ -112,6 +115,7 @@ export function discoveryTypeLabel(means?: CollectMeans | null): string {
 export function crawlModeTypeLabel(mode: string | null | undefined): string {
   if (!mode) return '—'
   if (mode === 'adhoc') return '애드혹'
+  if (mode === 'pwc') return 'PwC 애드혹'
   if (mode === 'auto') return '자동'
   return THEME_LABEL[mode] ?? mode
 }

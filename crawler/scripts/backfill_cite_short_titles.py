@@ -65,7 +65,7 @@ def fetch_missing_short_title(
         params.append(str(theme))
     where_sql = " AND ".join(where)
     sql = f"""
-        SELECT id, source_key, title, file_path, quality_json
+        SELECT id, source, source_key, title, file_path, quality_json
         FROM reports
         WHERE {where_sql}
         ORDER BY last_seen_at DESC NULLS LAST, id DESC
@@ -114,6 +114,7 @@ def prepare_targets(
                 continue
         target = AuditTarget(
             id=rid,
+            source=str(row.get("source") or ""),
             source_key=str(row.get("source_key") or ""),
             title=title,
             file_path=path,

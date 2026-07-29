@@ -12,12 +12,19 @@ from patchright.sync_api import Browser, Page, sync_playwright
 from crawler import crawls_store, sessions_store
 
 
+# Modes that expose CDP for remote control (FnGuide adhoc + PwC adhoc).
+CDP_MODES = frozenset({"adhoc", "pwc"})
+
+
 def resolve_cdp_endpoint() -> tuple[dict[str, Any], str]:
     crawl = crawls_store.get_open_crawl()
     if not crawl:
         raise RuntimeError("No open crawl")
-    if crawl.get("mode") != "adhoc":
-        raise RuntimeError("Open crawl is not adhoc")
+    mode = str(crawl.get("mode") or "")
+    if mode not in CDP_MODES and not crawl.get("debug"):
+        raise RuntimeError(
+            f"Open crawl mode {mode!r} is not CDP-enabled (need adhoc/pwc/debug)"
+        )
     port = crawl.get("cdp_port")
     if not port:
         raise RuntimeError("CDP port not set on crawl yet")

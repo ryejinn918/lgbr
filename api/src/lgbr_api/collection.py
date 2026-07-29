@@ -1,6 +1,6 @@
-"""Source-agnostic collection jobs (list expansion / body fill).
+"""Source-agnostic collection jobs (list expansion / body fill / search).
 
-Separate from fnguide_crawls. Feed + ARG fetch_body.
+Separate from fnguide_crawls. Feed + ARG fetch_body + PwC search (list-while-download).
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from lgbr_api.db import connect
 ROOT = Path(__file__).resolve().parents[3]
 FEED_LOG = ROOT / ".crawler" / "feed.log"
 FETCH_BODY_LOG = ROOT / ".crawler" / "fetch_body.log"
+SEARCH_LOG = ROOT / ".crawler" / "search.log"
 
 JOB_STATE_LABELS = {
     "starting": "시작 중",
@@ -29,6 +30,7 @@ JOB_STATE_LABELS = {
 }
 
 FEED_ALLOWLIST = frozenset({"arg"})
+SEARCH_ALLOWLIST = frozenset({"pwc"})
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
 CAPABILITY_LABELS = {
     "feed": "리스트 발굴",
@@ -288,6 +290,174 @@ def start_feed(
         "state": job["state"],
         "label": job["label"],
         "message": f"{source_s} feed 목록 확장을 시작했습니다.",
+        "job": job,
+        "progress": job.get("progress") or {},
+        "can_start": False,
+    }
+
+
+DEFAULT_SEARCH_MAX_PAGES = 20
+DEFAULT_SEARCH_LIMIT: int | None = None
+
+
+def start_search(
+    *,
+    source: str = "pwc",
+    max_pages: int | None = None,
+    period_months: int | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Start list-while-download search job (PwC)."""
+    source_s = (source or "").strip().lower()
+    if source_s not in SEARCH_ALLOWLIST:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                "source must be one of: "
+                + ", ".join(sorted(SEARCH_ALLOWLIST))
+            ),
+            "job": None,
+            "can_start": False,
+        }
+
+    pages = (
+        DEFAULT_SEARCH_MAX_PAGES if max_pages is None else int(max_pages)
+    )
+    if pages < 1 or pages > 50:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": "max_pages must be between 1 and 50",
+            "job": None,
+            "can_start": False,
+        }
+
+    months = (
+        DEFAULT_PERIOD_MONTHS if period_months is None else int(period_months)
+    )
+    if months < MIN_PERIOD_MONTHS or months > MAX_PERIOD_MONTHS:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                f"period_months must be between "
+                f"{MIN_PERIOD_MONTHS} and {MAX_PERIOD_MONTHS}"
+            ),
+            "job": None,
+            "can_start": False,
+        }
+
+    lim: int | None
+    if limit is None:
+        lim = DEFAULT_SEARCH_LIMIT
+    else:
+        lim = int(limit)
+        if lim < 1 or lim > 200:
+            return {
+                "ok": False,
+                "status": 400,
+                "label": "오류",
+                "message": "limit must be between 1 and 200",
+                "job": None,
+                "can_start": False,
+            }
+
+    reconcile_stale_jobs()
+    open_job = _conflict_open_job(source_s)
+    if open_job:
+        job = _serialize(open_job)
+        kind = _capability_label(str(open_job.get("capability") or ""))
+        return {
+            "ok": False,
+            "status": 409,
+            "label": job["label"],
+            "message": f"이미 {source_s.upper()} 수집 작업이 실행 중입니다 ({kind}).",
+            "job": job,
+            "can_start": False,
+        }
+
+    try:
+        job = _create_job(source=source_s, capability="search")
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": 500,
+            "label": "오류",
+            "message": f"잡 행 생성 실패: {exc}",
+            "job": None,
+            "can_start": False,
+        }
+
+    python = ROOT / ".venv" / "bin" / "python"
+    if not python.is_file():
+        python = Path(sys.executable)
+
+    SEARCH_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log_f = open(SEARCH_LOG, "a", encoding="utf-8")  # noqa: SIM115
+    cmd = [
+        str(python),
+        "-m",
+        "crawler",
+        "search",
+        "run",
+        "--job-id",
+        job["id"],
+        "--max-pages",
+        str(pages),
+        "--period-months",
+        str(months),
+    ]
+    if lim is not None:
+        cmd.extend(["--limit", str(lim)])
+    try:
+        log_f.write(
+            f"\n--- search start {_now().isoformat()} "
+            f"id={job['id']} source={source_s} "
+            f"period_months={months} max_pages={pages} limit={lim} ---\n"
+        )
+        log_f.flush()
+        subprocess.Popen(
+            cmd,
+            cwd=str(ROOT),
+            stdout=log_f,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env=os.environ.copy(),
+        )
+    except Exception as exc:
+        log_f.close()
+        try:
+            _fail_job(job["id"], message=str(exc))
+        except Exception as db_exc:
+            return {
+                "ok": False,
+                "status": 500,
+                "label": "오류",
+                "message": f"search 시작 실패: {exc}; DB mark failed: {db_exc}",
+                "job": job,
+                "can_start": False,
+            }
+        return {
+            "ok": False,
+            "status": 500,
+            "label": "오류",
+            "message": f"search 시작 실패: {exc}",
+            "job": None,
+            "can_start": False,
+        }
+
+    return {
+        "ok": True,
+        "status": 202,
+        "state": job["state"],
+        "label": job["label"],
+        "message": (
+            f"{source_s} search(list-while-download)를 시작했습니다."
+        ),
         "job": job,
         "progress": job.get("progress") or {},
         "can_start": False,

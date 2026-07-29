@@ -87,6 +87,7 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     quality = _quality_label(row)
     return {
         "id": str(row["id"]),
+        "source": row.get("source"),
         "source_key": row.get("source_key"),
         "title": row.get("title"),
         "status": row.get("status") or "listed",
@@ -113,14 +114,28 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _theme_where(theme: str | None) -> tuple[str, list[Any]]:
-    if not theme:
+def _list_where(
+    *,
+    source: str | None = None,
+    theme: str | None = None,
+) -> tuple[str, list[Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if source:
+        clauses.append("source = %s")
+        params.append(source)
+    if theme:
+        clauses.append("attrs->>'theme' = %s")
+        params.append(theme)
+    if not clauses:
         return "", []
-    return " WHERE attrs->>'theme' = %s", [theme]
+    return " WHERE " + " AND ".join(clauses), params
 
 
-def _status_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
-    where_sql, params = _theme_where(theme)
+def _status_counts(
+    cur: Any, *, source: str | None = None, theme: str | None = None
+) -> dict[str, int]:
+    where_sql, params = _list_where(source=source, theme=theme)
     cur.execute(
         f"""
         SELECT status, count(*)::int AS n
@@ -142,8 +157,10 @@ def _status_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
     return counts
 
 
-def _quality_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
-    where_sql, params = _theme_where(theme)
+def _quality_counts(
+    cur: Any, *, source: str | None = None, theme: str | None = None
+) -> dict[str, int]:
+    where_sql, params = _list_where(source=source, theme=theme)
     cur.execute(
         f"""
         SELECT
@@ -165,14 +182,17 @@ def _quality_counts(cur: Any, *, theme: str | None = None) -> dict[str, int]:
     }
 
 
-def _theme_counts(cur: Any) -> dict[str, int]:
+def _theme_counts(cur: Any, *, source: str | None = None) -> dict[str, int]:
+    where_sql, params = _list_where(source=source)
+    extra = " AND attrs->>'theme' IS NOT NULL" if where_sql else " WHERE attrs->>'theme' IS NOT NULL"
     cur.execute(
-        """
+        f"""
         SELECT attrs->>'theme' AS theme, count(*)::int AS n
         FROM reports
-        WHERE attrs->>'theme' IS NOT NULL
+        {where_sql}{extra}
         GROUP BY attrs->>'theme'
-        """
+        """,
+        params,
     )
     counts = {t: 0 for t in VALID_THEMES}
     total = 0
@@ -188,6 +208,7 @@ def _theme_counts(cur: Any) -> dict[str, int]:
 
 def list_reports(
     *,
+    source: str | None = None,
     status: str | None = None,
     quality: str | None = None,
     theme: str | None = None,
@@ -251,6 +272,12 @@ def list_reports(
 
     where: list[str] = []
     params: list[Any] = []
+    source_s = (source or "").strip().lower() or None
+    if source_s in (None, "", "all"):
+        source_s = None
+    if source_s:
+        where.append("source = %s")
+        params.append(source_s)
     if status_filter:
         where.append("status = %s")
         params.append(status_filter)
@@ -279,9 +306,13 @@ def list_reports(
 
     with connect() as conn:
         with conn.cursor() as cur:
-            counts = _status_counts(cur, theme=theme_filter)
-            quality_counts = _quality_counts(cur, theme=theme_filter)
-            theme_counts = _theme_counts(cur)
+            counts = _status_counts(
+                cur, source=source_s, theme=theme_filter
+            )
+            quality_counts = _quality_counts(
+                cur, source=source_s, theme=theme_filter
+            )
+            theme_counts = _theme_counts(cur, source=source_s)
             cur.execute(
                 f"SELECT count(*)::int AS n FROM reports{where_sql}",
                 params,
@@ -289,7 +320,7 @@ def list_reports(
             total = int(cur.fetchone()["n"])
             cur.execute(
                 f"""
-                SELECT id, source_key, title, status, file_path, file_name,
+                SELECT id, source, source_key, title, status, file_path, file_name,
                        last_seen_at, downloaded_at, published_at, page_count,
                        crawl_id, attrs,
                        quality_pass, quality_scope, quality_confidence, quality_at
@@ -300,7 +331,7 @@ def list_reports(
                 """,
                 [*params, limit, offset],
             )
-            items = [_serialize(r) for r in cur.fetchall()]
+            items = [_serialize(dict(r)) for r in cur.fetchall()]
 
     return {
         "ok": True,
@@ -330,7 +361,7 @@ def get_report(report_id: str) -> dict[str, Any]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, source_key, title, status, file_path, file_name,
+                SELECT id, source, source_key, title, status, file_path, file_name,
                        last_seen_at, downloaded_at, published_at, page_count,
                        crawl_id, attrs,
                        quality_pass, quality_scope, quality_confidence,

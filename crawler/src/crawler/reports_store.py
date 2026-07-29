@@ -13,6 +13,7 @@ from crawler.asset_id import DOWNLOADS_ROOT
 from crawler.db import connect
 
 SOURCE_FNGUIDE = "fnguide"
+SOURCE_PWC = "pwc"
 _FILENAME_RPT = re.compile(r"^(\d+)-(\d+)-")
 
 STATUS_LISTED = "listed"

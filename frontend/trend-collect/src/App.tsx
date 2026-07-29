@@ -59,7 +59,18 @@ function App() {
         <Route path="/docs" element={<DocsShell />}>
           <Route index element={<Navigate to="articles" replace />} />
           <Route path="articles" element={<ArticlesPage />} />
-          <Route path="reports/fnguide" element={<ReportsPage embedded />} />
+          <Route
+            path="reports"
+            element={<ReportsPage embedded source="all" />}
+          />
+          <Route
+            path="reports/fnguide"
+            element={<ReportsPage embedded source="fnguide" />}
+          />
+          <Route
+            path="reports/pwc"
+            element={<ReportsPage embedded source="pwc" />}
+          />
           {/* legacy docs paths */}
           <Route
             path="fnguide"

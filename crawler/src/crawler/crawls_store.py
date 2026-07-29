@@ -22,6 +22,7 @@ VALID_MODES = frozenset(
     {
         "auto",
         "adhoc",
+        "pwc",
         "ai",
         "physical_ai",
         "appliance",
@@ -188,25 +189,44 @@ def attach_session(crawl_id: UUID | str, session_id: UUID | str) -> dict[str, An
     return _serialize(dict(row))
 
 
-def mark_active(crawl_id: UUID | str) -> dict[str, Any]:
+def mark_active(
+    crawl_id: UUID | str,
+    *,
+    require_session: bool = True,
+) -> dict[str, Any]:
+    """Mark crawl active. PwC adhoc has no fnguide session → require_session=False."""
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE fnguide_crawls
-                SET state = 'active', pid = %s
-                WHERE id = %s
-                  AND ended_at IS NULL
-                  AND state = 'starting'
-                  AND session_id IS NOT NULL
-                RETURNING *
-                """,
-                (os.getpid(), str(crawl_id)),
-            )
+            if require_session:
+                cur.execute(
+                    """
+                    UPDATE fnguide_crawls
+                    SET state = 'active', pid = %s
+                    WHERE id = %s
+                      AND ended_at IS NULL
+                      AND state = 'starting'
+                      AND session_id IS NOT NULL
+                    RETURNING *
+                    """,
+                    (os.getpid(), str(crawl_id)),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE fnguide_crawls
+                    SET state = 'active', pid = %s
+                    WHERE id = %s
+                      AND ended_at IS NULL
+                      AND state = 'starting'
+                    RETURNING *
+                    """,
+                    (os.getpid(), str(crawl_id)),
+                )
             row = cur.fetchone()
             if not row:
                 raise RuntimeError(
-                    f"Cannot mark active: crawl {crawl_id} not starting with session"
+                    f"Cannot mark active: crawl {crawl_id} not starting"
+                    + (" with session" if require_session else "")
                 )
         conn.commit()
     return _serialize(dict(row))

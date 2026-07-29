@@ -38,6 +38,7 @@ const EMPTY_THEME: ThemeCounts = {
 export type ReportSort = 'published_at' | 'page_count' | 'last_seen_at'
 
 export type ReportsQuery = {
+  source?: string
   status?: string
   quality?: string
   theme?: string
@@ -63,6 +64,8 @@ export type ReportsView = {
 }
 
 export function useReports(query: ReportsQuery): ReportsView {
+  const sourceRaw = query.source?.trim() || ''
+  const source = sourceRaw && sourceRaw !== 'all' ? sourceRaw : ''
   const status = query.status && query.status !== 'all' ? query.status : ''
   const quality =
     query.quality && query.quality !== 'all' ? query.quality : ''
@@ -90,6 +93,7 @@ export function useReports(query: ReportsQuery): ReportsView {
     const params = new URLSearchParams()
     params.set('limit', String(limit))
     params.set('offset', String(offset))
+    if (source) params.set('source', source)
     if (status) params.set('status', status)
     if (quality) params.set('quality', quality)
     if (theme) params.set('theme', theme)
@@ -113,7 +117,7 @@ export function useReports(query: ReportsQuery): ReportsView {
     } finally {
       setLoading(false)
     }
-  }, [status, quality, theme, q, crawlId, sort, limit, offset])
+  }, [source, status, quality, theme, q, crawlId, sort, limit, offset])
 
   useEffect(() => {
     let cancelled = false

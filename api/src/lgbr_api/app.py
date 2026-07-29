@@ -19,6 +19,7 @@ from lgbr_api.collection import (
     request_stop as collection_request_stop,
     start_feed,
     start_fetch_body,
+    start_search,
 )
 from lgbr_api.consensus_api import (
     compare_chat,
@@ -238,12 +239,64 @@ async def collection_start(request: Request) -> JSONResponse:
         status = int(result.pop("status", 200 if result.get("ok") else 400))
         return JSONResponse(result, status_code=status)
 
+    if capability == "search":
+        max_pages = body.get("max_pages")
+        period_months = body.get("period_months")
+        limit_raw = body.get("limit")
+        try:
+            pages = int(max_pages) if max_pages is not None else None
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "label": "오류",
+                    "message": "max_pages must be an integer",
+                    "job": None,
+                    "can_start": False,
+                },
+                status_code=400,
+            )
+        try:
+            months = int(period_months) if period_months is not None else None
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "label": "오류",
+                    "message": "period_months must be an integer",
+                    "job": None,
+                    "can_start": False,
+                },
+                status_code=400,
+            )
+        try:
+            lim = int(limit_raw) if limit_raw is not None else None
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "label": "오류",
+                    "message": "limit must be an integer",
+                    "job": None,
+                    "can_start": False,
+                },
+                status_code=400,
+            )
+        result = start_search(
+            source=source,
+            max_pages=pages,
+            period_months=months,
+            limit=lim,
+        )
+        status = int(result.pop("status", 200 if result.get("ok") else 400))
+        return JSONResponse(result, status_code=status)
+
     if capability != "feed":
         return JSONResponse(
             {
                 "ok": False,
                 "label": "오류",
-                "message": "capability must be 'feed' or 'fetch_body'",
+                "message": "capability must be 'feed', 'search', or 'fetch_body'",
                 "job": None,
                 "can_start": False,
             },
@@ -330,6 +383,7 @@ async def reports(request: Request) -> JSONResponse:
     except ValueError:
         offset = 0
     result = list_reports(
+        source=request.query_params.get("source"),
         status=request.query_params.get("status"),
         quality=request.query_params.get("quality"),
         theme=request.query_params.get("theme"),

@@ -9,6 +9,8 @@ import { CrawlPage } from '../CrawlPage'
 import { ArgFeedRunPage } from './ArgFeedRunPage'
 import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
 import { FnGuideDownloadPage } from './FnGuideDownloadPage'
+import { PwcAdhocRunPage } from './PwcAdhocRunPage'
+import { PwcDownloadPage } from './PwcDownloadPage'
 
 type Ctx = {
   source: CollectSource
@@ -38,6 +40,16 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'arg' && ctx.stage === 'body' && ctx.means === 'fetch') {
     return <ArgFetchBodyRunPage />
+  }
+  if (ctx.source === 'pwc' && ctx.stage === 'list' && ctx.means === 'search') {
+    return <PwcAdhocRunPage />
+  }
+  if (
+    ctx.source === 'pwc' &&
+    ctx.stage === 'body' &&
+    ctx.means === 'download'
+  ) {
+    return <PwcDownloadPage />
   }
   return <Navigate to={defaultCollectPath(ctx.source)} replace />
 }

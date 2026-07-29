@@ -33,6 +33,7 @@ MODE_ABBREV = {
     "petrochemical": "pc",
     "adhoc": "ad",
     "auto": "au",
+    "pwc": "pw",
 }
 LIMITED_MODES = frozenset(
     {

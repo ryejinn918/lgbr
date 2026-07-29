@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from crawler.quality_audit import normalize_result
+from crawler.quality_audit import apply_source_pass_policy, normalize_result
 
 
 def test_normalize_result_short_title():
@@ -61,3 +61,48 @@ def test_normalize_result_missing_short_title():
         }
     )
     assert out["short_title"] == ""
+
+
+def test_apply_source_pass_policy_keeps_fnguide_fail():
+    raw = normalize_result(
+        {
+            "pass": False,
+            "confidence": 0.2,
+            "has_coherent_framework": False,
+            "has_broad_sector_coverage": False,
+            "scope": "company",
+            "topic": "개별 종목",
+            "short_title": "종목 노트",
+            "framework_summary": "요약 유지",
+            "fail_reasons": ["equity"],
+            "pass_signals": [],
+            "rationale": "거절",
+        }
+    )
+    out = apply_source_pass_policy(raw, "fnguide")
+    assert out["pass"] is False
+    assert out["short_title"] == "종목 노트"
+    assert out["framework_summary"] == "요약 유지"
+
+
+def test_apply_source_pass_policy_forces_pwc_pass():
+    raw = normalize_result(
+        {
+            "pass": False,
+            "confidence": 0.2,
+            "has_coherent_framework": False,
+            "has_broad_sector_coverage": False,
+            "scope": "company",
+            "topic": "개별 종목",
+            "short_title": "종목 노트",
+            "framework_summary": "요약 유지",
+            "fail_reasons": ["equity"],
+            "pass_signals": [],
+            "rationale": "거절",
+        }
+    )
+    out = apply_source_pass_policy(raw, "pwc")
+    assert out["pass"] is True
+    assert out["short_title"] == "종목 노트"
+    assert out["framework_summary"] == "요약 유지"
+    assert out["topic"] == "개별 종목"

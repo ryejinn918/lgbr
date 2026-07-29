@@ -101,6 +101,46 @@ export function useCollectionJob(opts?: {
     }
   }
 
+  async function startSearch(opts?: {
+    maxPages?: number
+    periodMonths?: number
+    limit?: number
+  }) {
+    const maxPages = opts?.maxPages ?? 20
+    const periodMonths = opts?.periodMonths ?? 3
+    setRequestingStart(true)
+    try {
+      const body: Record<string, unknown> = {
+        source,
+        capability: 'search',
+        max_pages: maxPages,
+        period_months: periodMonths,
+      }
+      if (opts?.limit != null) body.limit = opts.limit
+      const res = await fetch('/api/collection/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = (await res.json()) as CollectionJobResponse & {
+        ok?: boolean
+        message?: string
+      }
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.message || `start failed (${res.status})`)
+      }
+      setStatus({
+        state: data.state ?? data.job?.state ?? 'starting',
+        label: data.label ?? data.job?.label ?? '시작 중',
+        job: data.job ?? null,
+        progress: data.progress ?? data.job?.progress ?? {},
+        can_start: false,
+      })
+    } finally {
+      setRequestingStart(false)
+    }
+  }
+
   async function startFetchBody(opts?: {
     limit?: number
     delaySeconds?: number
@@ -173,6 +213,7 @@ export function useCollectionJob(opts?: {
     requestingStart,
     requestingStop,
     startFeed,
+    startSearch,
     startFetchBody,
     stopFeed,
   }

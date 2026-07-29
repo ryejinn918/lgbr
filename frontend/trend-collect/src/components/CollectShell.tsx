@@ -16,7 +16,7 @@ import {
 } from '../lib/collectNav'
 
 function asSource(value: string | undefined): CollectSource | null {
-  if (value === 'fnguide' || value === 'arg') return value
+  if (value === 'fnguide' || value === 'arg' || value === 'pwc') return value
   return null
 }
 

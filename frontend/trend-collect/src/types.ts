@@ -27,7 +27,7 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
-export type CrawlMode = 'auto' | 'adhoc' | SearchProfileMode
+export type CrawlMode = 'auto' | 'adhoc' | 'pwc' | SearchProfileMode
 
 export type CrawlProfileMode = SearchProfileMode
 
@@ -194,6 +194,7 @@ export type QualityJson = {
 
 export type ReportRecord = {
   id: string
+  source?: string | null
   source_key: string
   title: string
   status: ReportStatus | string

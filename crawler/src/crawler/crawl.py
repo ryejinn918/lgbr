@@ -24,7 +24,11 @@ from crawler.fnguide_session import (
     FnguideSession,
 )
 from crawler.jobs.search_report import SEARCH_MODES, get_profile, run_search_report_job
+from crawler.pwc_session import PwcSession
 from crawler.session import LoginPageError
+
+# Modes that open CDP and hold the browser for remote inspection.
+ADHOC_HOLD_MODES = frozenset({"adhoc", "pwc"})
 
 _stop_flag = threading.Event()
 _handlers_installed = False
@@ -69,6 +73,16 @@ def run_crawl(
     crawl = crawls_store.claim_crawl(crawl_id)
     crawl_id = str(crawl["id"])
     mode = str(crawl.get("mode") or "auto")
+    if mode == "pwc":
+        return _run_pwc_adhoc(
+            crawl_id=crawl_id,
+            crawl=crawl,
+            ttl_seconds=ttl_seconds,
+            idle_seconds=idle_seconds,
+            headless=headless,
+            poll_seconds=poll_seconds,
+        )
+
     debug = bool(crawl.get("debug"))
     asset_id = str(crawl.get("asset_id") or "")
     if not asset_id:
@@ -84,7 +98,7 @@ def run_crawl(
     )
     log.set_progress(stage="login", mode=mode, asset_id=asset_id, debug=debug)
 
-    want_cdp = mode == "adhoc" or (mode in SEARCH_MODES and debug)
+    want_cdp = mode in ADHOC_HOLD_MODES or (mode in SEARCH_MODES and debug)
     cdp_port = allocate_cdp_port() if want_cdp else None
     touch_step = "adhoc" if mode == "adhoc" else "crawl"
     if mode in SEARCH_MODES:
@@ -210,6 +224,94 @@ def run_crawl(
         return _fail_closed(crawl_id, sess, log, message=str(exc))
 
 
+def _run_pwc_adhoc(
+    *,
+    crawl_id: str,
+    crawl: dict[str, Any],
+    ttl_seconds: int,
+    idle_seconds: int,
+    headless: bool | None,
+    poll_seconds: float,
+) -> dict[str, Any]:
+    """PwC adhoc: real Patchright Chrome + CDP, no FnGuide login."""
+    asset_id = str(crawl.get("asset_id") or "")
+    if not asset_id:
+        raise CrawlStateError(f"Crawl {crawl_id} missing asset_id")
+    log = CrawlLogger(crawl_id)
+    log.emit(
+        level="info",
+        stage="crawl",
+        event="claimed",
+        mode="pwc",
+        asset_id=asset_id,
+    )
+    cdp_port = allocate_cdp_port()
+    download_dir = downloads_dir(asset_id)
+    download_dir.mkdir(parents=True, exist_ok=True)
+    sess = PwcSession(
+        ttl_seconds=ttl_seconds,
+        idle_seconds=idle_seconds,
+        headless=headless,
+        cdp_port=cdp_port,
+        downloads_path=download_dir,
+    )
+    try:
+        log.emit(level="info", stage="browser", event="stage_start", mode="pwc")
+        log.set_progress(stage="browser", mode="pwc", asset_id=asset_id)
+        started = sess.start()
+        log.emit(
+            level="info",
+            stage="browser",
+            event="stage_end",
+            mode="pwc",
+            url=started.get("url"),
+        )
+        if _signal_requested():
+            return _graceful_end(
+                crawl_id,
+                sess,
+                log,
+                reason="shutdown",
+                message="shutdown signal",
+            )
+        crawls_store.set_cdp_port(crawl_id, cdp_port)
+        log.emit(level="info", stage="crawl", event="cdp_ready", cdp_port=cdp_port)
+        crawls_store.mark_active(crawl_id, require_session=False)
+        log.emit(
+            level="info",
+            stage="crawl",
+            event="active",
+            mode="pwc",
+            asset_id=asset_id,
+            url=started.get("url"),
+        )
+        log.set_progress(
+            stage="adhoc_hold",
+            mode="pwc",
+            asset_id=asset_id,
+            cdp_port=cdp_port,
+            url=started.get("url"),
+        )
+        return _hold_until_stop(
+            crawl_id,
+            sess,
+            log,
+            touch_step="pwc",
+            poll_seconds=poll_seconds,
+        )
+    except KeyboardInterrupt:
+        return _graceful_end(
+            crawl_id,
+            sess,
+            log,
+            reason="shutdown",
+            message="shutdown signal",
+        )
+    except Exception as exc:
+        log.emit(level="error", stage="crawl", event="error", error=str(exc))
+        return _fail_closed(crawl_id, sess, log, message=str(exc))
+
+
 def _run_search_job(
     crawl_id: str,
     crawl: dict[str, Any],
@@ -306,7 +408,7 @@ def _handoff_to_adhoc(
 
 def _hold_until_stop(
     crawl_id: str,
-    sess: FnguideSession,
+    sess: FnguideSession | PwcSession,
     log: CrawlLogger,
     *,
     touch_step: str,
@@ -339,7 +441,7 @@ def _hold_until_stop(
 
 def _graceful_end(
     crawl_id: str,
-    sess: FnguideSession,
+    sess: FnguideSession | PwcSession,
     log: CrawlLogger,
     *,
     reason: str,
@@ -396,7 +498,7 @@ def _graceful_end(
 
 def _fail_closed(
     crawl_id: str,
-    sess: FnguideSession,
+    sess: FnguideSession | PwcSession,
     log: CrawlLogger | None,
     *,
     message: str,
@@ -437,10 +539,15 @@ def _fail_closed(
         ) from exc
 
 
-def _best_effort_stop_session(sess: FnguideSession, *, message: str) -> None:
+def _best_effort_stop_session(
+    sess: FnguideSession | PwcSession, *, message: str
+) -> None:
     if not sess.session_id and not sess.page:
         return
     try:
+        if isinstance(sess, PwcSession):
+            sess.stop("error", message=message)
+            return
         if sess.session_id:
             sess.stop("error", message=message)
         else:
@@ -460,4 +567,5 @@ def _best_effort_stop_session(sess: FnguideSession, *, message: str) -> None:
             sess._close_browser()
         except Exception:
             pass
-        sess.session_id = None
+        if isinstance(sess, FnguideSession):
+            sess.session_id = None

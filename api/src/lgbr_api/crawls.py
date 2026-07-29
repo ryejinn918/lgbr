@@ -304,6 +304,7 @@ VALID_MODES = frozenset(
     {
         "auto",
         "adhoc",
+        "pwc",
         "ai",
         "physical_ai",
         "appliance",
@@ -342,7 +343,7 @@ def start_crawl(
             "status": 400,
             "label": "오류",
             "message": (
-                "mode must be one of: auto, adhoc, ai, physical_ai, "
+                "mode must be one of: auto, adhoc, pwc, ai, physical_ai, "
                 "appliance, display, automotive, petrochemical"
             ),
             "crawl": None,
@@ -398,17 +399,19 @@ def start_crawl(
             **directions,
         }
 
-    account = get_current_session()
-    if account.get("session") is not None:
-        return {
-            "ok": False,
-            "status": 409,
-            "label": "오류",
-            "message": "열린 계정 세션이 남아 있어 시작할 수 없습니다.",
-            "crawl": None,
-            "session": account,
-            "can_start": False,
-        }
+    # PwC adhoc does not use fnguide_sessions; skip account-session guard.
+    if mode != "pwc":
+        account = get_current_session()
+        if account.get("session") is not None:
+            return {
+                "ok": False,
+                "status": 409,
+                "label": "오류",
+                "message": "열린 계정 세션이 남아 있어 시작할 수 없습니다.",
+                "crawl": None,
+                "session": account,
+                "can_start": False,
+            }
 
     try:
         crawl = _create_starting_crawl(
@@ -663,12 +666,15 @@ def get_cdp_status() -> dict[str, Any]:
             "message": "열린 크롤이 없습니다.",
         }
     crawl = _serialize(row)
-    # After datacenter debug handoff mode becomes adhoc; mid-job debug also has CDP.
-    if crawl.get("mode") != "adhoc" and not crawl.get("debug"):
+    # After search debug handoff mode becomes adhoc; PwC adhoc also exposes CDP.
+    if (
+        crawl.get("mode") not in ("adhoc", "pwc")
+        and not crawl.get("debug")
+    ):
         return {
             "ok": False,
             "status": 409,
-            "message": "adhoc(또는 search debug) 크롤이 아닙니다.",
+            "message": "adhoc/pwc(또는 search debug) 크롤이 아닙니다.",
             "crawl": crawl,
         }
     port = crawl.get("cdp_port")
