@@ -32,6 +32,7 @@ export function KpmgRunPage() {
   const [periodMonths, setPeriodMonths] = useState(3)
   const [maxPages, setMaxPages] = useState(20)
   const [limit, setLimit] = useState('')
+  const [itemDelaySeconds, setItemDelaySeconds] = useState(2)
   const session = useSessionStatus()
   const collection = useCollectionJob({
     source: 'kpmg',
@@ -95,9 +96,10 @@ export function KpmgRunPage() {
         ? undefined
         : Math.min(200, Math.max(1, Number(limRaw) || 0)) || undefined
     const limLabel = lim == null ? '제한 없음' : String(lim)
+    const delay = Math.min(10, Math.max(0, Number(itemDelaySeconds) || 0))
     if (
       !window.confirm(
-        `KPMG US 검색(Insights · report)을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel}`,
+        `KPMG US 검색(Insights · report)을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -107,6 +109,7 @@ export function KpmgRunPage() {
         maxPages: pages,
         periodMonths: months,
         catalog: 'us',
+        itemDelaySeconds: delay,
         ...(lim != null ? { limit: lim } : {}),
       })
     } catch (err) {
@@ -204,6 +207,18 @@ export function KpmgRunPage() {
             value={limit}
             disabled={searchBusy}
             onChange={(e) => setLimit(e.target.value)}
+          />
+        </label>
+        <label className="limit-field">
+          간격(초)
+          <input
+            type="number"
+            min={0}
+            max={10}
+            step={0.5}
+            value={itemDelaySeconds}
+            disabled={searchBusy}
+            onChange={(e) => setItemDelaySeconds(Number(e.target.value))}
           />
         </label>
         <button

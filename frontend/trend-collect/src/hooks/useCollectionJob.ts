@@ -106,6 +106,7 @@ export function useCollectionJob(opts?: {
     periodMonths?: number
     limit?: number
     catalog?: string
+    itemDelaySeconds?: number
   }) {
     const maxPages = opts?.maxPages ?? 20
     const periodMonths = opts?.periodMonths ?? 3
@@ -119,6 +120,9 @@ export function useCollectionJob(opts?: {
       }
       if (opts?.limit != null) body.limit = opts.limit
       if (opts?.catalog) body.catalog = opts.catalog
+      if (opts?.itemDelaySeconds != null) {
+        body.item_delay_seconds = opts.itemDelaySeconds
+      }
       const res = await fetch('/api/collection/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

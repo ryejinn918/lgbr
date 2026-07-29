@@ -260,6 +260,7 @@ async def collection_start(request: Request) -> JSONResponse:
         period_months = body.get("period_months")
         limit_raw = body.get("limit")
         catalog_raw = body.get("catalog")
+        delay_raw = body.get("item_delay_seconds")
         try:
             pages = int(max_pages) if max_pages is not None else None
         except (TypeError, ValueError):
@@ -299,6 +300,19 @@ async def collection_start(request: Request) -> JSONResponse:
                 },
                 status_code=400,
             )
+        try:
+            delay = float(delay_raw) if delay_raw is not None else None
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "label": "오류",
+                    "message": "item_delay_seconds must be a number",
+                    "job": None,
+                    "can_start": False,
+                },
+                status_code=400,
+            )
         catalog = (
             str(catalog_raw).strip() if catalog_raw is not None else None
         )
@@ -308,6 +322,7 @@ async def collection_start(request: Request) -> JSONResponse:
             period_months=months,
             limit=lim,
             catalog=catalog,
+            item_delay_seconds=delay,
         )
         status = int(result.pop("status", 200 if result.get("ok") else 400))
         return JSONResponse(result, status_code=status)

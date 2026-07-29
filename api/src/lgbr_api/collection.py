@@ -298,6 +298,9 @@ def start_feed(
 
 DEFAULT_SEARCH_MAX_PAGES = 20
 DEFAULT_SEARCH_LIMIT: int | None = None
+DEFAULT_ITEM_DELAY_SECONDS = 2.0
+MIN_ITEM_DELAY_SECONDS = 0.0
+MAX_ITEM_DELAY_SECONDS = 10.0
 
 
 PWC_CATALOGS = frozenset({"kr", "gx"})
@@ -329,6 +332,7 @@ def start_search(
     period_months: int | None = None,
     limit: int | None = None,
     catalog: str | None = None,
+    item_delay_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Start list-while-download search job (PwC / Accenture / KPMG / EY)."""
     source_s = (source or "").strip().lower()
@@ -408,6 +412,24 @@ def start_search(
                 "can_start": False,
             }
 
+    delay = (
+        DEFAULT_ITEM_DELAY_SECONDS
+        if item_delay_seconds is None
+        else float(item_delay_seconds)
+    )
+    if delay < MIN_ITEM_DELAY_SECONDS or delay > MAX_ITEM_DELAY_SECONDS:
+        return {
+            "ok": False,
+            "status": 400,
+            "label": "오류",
+            "message": (
+                f"item_delay_seconds must be between "
+                f"{MIN_ITEM_DELAY_SECONDS} and {MAX_ITEM_DELAY_SECONDS}"
+            ),
+            "job": None,
+            "can_start": False,
+        }
+
     reconcile_stale_jobs()
     open_job = _conflict_open_job(source_s)
     if open_job:
@@ -454,6 +476,8 @@ def start_search(
         str(months),
         "--catalog",
         catalog_s,
+        "--item-delay-seconds",
+        str(delay),
     ]
     if lim is not None:
         cmd.extend(["--limit", str(lim)])
@@ -461,7 +485,8 @@ def start_search(
         log_f.write(
             f"\n--- search start {_now().isoformat()} "
             f"id={job['id']} source={source_s} catalog={catalog_s} "
-            f"period_months={months} max_pages={pages} limit={lim} ---\n"
+            f"period_months={months} max_pages={pages} limit={lim} "
+            f"item_delay_seconds={delay} ---\n"
         )
         log_f.flush()
         subprocess.Popen(

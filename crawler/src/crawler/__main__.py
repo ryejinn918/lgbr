@@ -32,6 +32,7 @@ from crawler.fetch_body_job import (
 from crawler.jobs.accenture_report import run_accenture_search_job
 from crawler.jobs.ey_report import run_ey_search_job
 from crawler.jobs.kpmg_report import run_kpmg_search_job
+from crawler.jobs.media_pace import DEFAULT_ITEM_DELAY_SECONDS
 from crawler.jobs.pwc_report import (
     DEFAULT_MAX_PAGES as PWC_DEFAULT_MAX_PAGES,
     DEFAULT_PERIOD_MONTHS as PWC_DEFAULT_PERIOD_MONTHS,
@@ -239,6 +240,15 @@ def main() -> None:
         "--catalog",
         default="kr",
         help="PwC list catalog: kr (Korea) or gx (Global)",
+    )
+    search_run.add_argument(
+        "--item-delay-seconds",
+        type=float,
+        default=DEFAULT_ITEM_DELAY_SECONDS,
+        help=(
+            "Seconds to wait after each detail/PDF item "
+            f"(default {DEFAULT_ITEM_DELAY_SECONDS})"
+        ),
     )
     search_current = search_sub.add_parser(
         "current",
@@ -511,6 +521,7 @@ def main() -> None:
                     max_pages=args.max_pages,
                     period_months=args.period_months,
                     limit=args.limit,
+                    item_delay_seconds=args.item_delay_seconds,
                 )
             except Exception as exc:
                 print(

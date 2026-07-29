@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,11 @@ from uuid import UUID
 
 from crawler import collection_jobs_store, reports_store
 from crawler.asset_id import DOWNLOADS_ROOT, downloads_dir, make_asset_id
+from crawler.jobs.media_pace import (
+    DEFAULT_ITEM_DELAY_SECONDS,
+    clamp_item_delay_seconds,
+    pace_after_item,
+)
 from crawler.sources.ey_http import (
     DEFAULT_CATALOG,
     EyListItem,
@@ -30,7 +34,6 @@ MAX_PERIOD_MONTHS = 24
 DEFAULT_MAX_PAGES = 20
 MAX_MAX_PAGES = 50
 STALE_PAGES_TO_STOP = 2
-ITEM_DELAY_SECONDS = 2.0
 
 
 @dataclass
@@ -59,6 +62,7 @@ def run_ey_search_job(
     period_months: int = DEFAULT_PERIOD_MONTHS,
     max_pages: int = DEFAULT_MAX_PAGES,
     limit: int | None = None,
+    item_delay_seconds: float = DEFAULT_ITEM_DELAY_SECONDS,
     download_root: Path | None = None,
 ) -> dict[str, Any]:
     job = collection_jobs_store.claim_job(job_id)
@@ -88,6 +92,7 @@ def run_ey_search_job(
 
     period_months = max(MIN_PERIOD_MONTHS, min(int(period_months), MAX_PERIOD_MONTHS))
     max_pages = max(1, min(int(max_pages), MAX_MAX_PAGES))
+    item_delay_seconds = clamp_item_delay_seconds(item_delay_seconds)
     if limit is not None and limit < 1:
         limit = None
 
@@ -109,6 +114,7 @@ def run_ey_search_job(
         "catalog_label": cat.label,
         "query": cat.query,
         "period_months": period_months,
+        "item_delay_seconds": item_delay_seconds,
         "cutoff": cutoff.isoformat(),
         "asset_id": asset_id,
         "page": 1,
@@ -125,7 +131,8 @@ def run_ey_search_job(
     collection_jobs_store.set_message(
         job_id,
         f"ey search 시작 ({cat.label}, query={cat.query!r}, "
-        f"최근 {period_months}개월, max_pages={max_pages})",
+        f"최근 {period_months}개월, max_pages={max_pages}, "
+        f"item_delay={item_delay_seconds}s)",
     )
 
     def stop() -> bool:
@@ -173,7 +180,7 @@ def run_ey_search_job(
                 if stop():
                     summary.stopped = True
                     break
-                time.sleep(ITEM_DELAY_SECONDS)
+                pace_after_item(item_delay_seconds)
 
             summary.pages_done += 1
             progress["pages_done"] = summary.pages_done
