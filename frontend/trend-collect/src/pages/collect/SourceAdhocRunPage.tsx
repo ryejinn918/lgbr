@@ -75,7 +75,7 @@ export function SourceAdhocRunPage() {
         </a>
       </p>
 
-      {crawl.crawl?.started_at && !session.fetchError ? (
+      {isThisSource && crawl.crawl?.started_at && !session.fetchError ? (
         <p className="account-line">
           시작 {formatTime(crawl.crawl.started_at)}
           {crawl.crawl.ended_at
@@ -90,7 +90,7 @@ export function SourceAdhocRunPage() {
           {typeof progress.url === 'string' ? ` · ${progress.url}` : ''}
         </p>
       ) : null}
-      {!session.fetchError && crawlBusy ? (
+      {!session.fetchError && crawlBusy && isThisSource ? (
         <p className="account-line">{formatProgress(progress)}</p>
       ) : null}
 

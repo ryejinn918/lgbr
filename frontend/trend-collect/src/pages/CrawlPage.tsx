@@ -15,7 +15,7 @@ import {
   THEME_LABEL,
   isSearchProfileMode,
 } from '../lib/themes'
-import { crawlModeTypeLabel } from '../lib/collectNav'
+import { crawlModeTypeLabel, isFnguideCrawlMode } from '../lib/collectNav'
 
 export function CrawlPage() {
   const {
@@ -30,24 +30,44 @@ export function CrawlPage() {
   } = useSessionStatus()
   const profiles = useCrawlProfiles()
   const [debugMode, setDebugMode] = useState(false)
-  const resultLine = formatCrawlResult(
-    crawl.progress ?? crawl.crawl?.progress ?? undefined,
-    crawl.crawl?.message,
-  )
 
+  const crawlMode = crawl.crawl?.mode ?? null
+  const isMine = isFnguideCrawlMode(crawlMode)
   const crawlBusy =
     crawl.state === 'starting' ||
     crawl.state === 'active' ||
     crawl.state === 'stopping'
+  const fnguideBusy = crawlBusy && isMine
+  const otherBusy = crawlBusy && !isMine
   const sessionOpen = status.session != null
-  const blockedByError = crawl.state === 'error'
+  const blockedByError = isMine && crawl.state === 'error'
+  const showRunMeta = fnguideBusy || blockedByError
   const canStart = crawl.can_start === true && !crawlBusy
   const canStop = crawlBusy || sessionOpen
+  const resultLine = showRunMeta
+    ? formatCrawlResult(
+        crawl.progress ?? crawl.crawl?.progress ?? undefined,
+        crawl.crawl?.message,
+      )
+    : null
   const badgeState = fetchError
     ? 'offline'
-    : stale
+    : fnguideBusy && stale
       ? 'stale'
-      : CRAWL_CLASS[crawl.state]
+      : fnguideBusy || blockedByError
+        ? CRAWL_CLASS[crawl.state]
+        : 'ended'
+  const badgeValue = fetchError
+    ? 'API Offline'
+    : fnguideBusy && stale
+      ? '응답 없음'
+      : fnguideBusy
+        ? `FnGuide · ${crawl.label}`
+        : otherBusy
+          ? 'FnGuide · 대기 (다른 세션이 브라우저 사용 중)'
+          : blockedByError
+            ? `FnGuide · ${crawl.label}`
+            : 'FnGuide · 유휴'
 
   async function onStart(mode: CrawlMode = 'ai') {
     const searchLabel = crawlModeTypeLabel(mode)
@@ -81,13 +101,11 @@ export function CrawlPage() {
     <>
       <section className={`panel badge-panel state-${badgeState}`}>
         <p className="badge-label">검색 · 실행</p>
-        <p className="badge-value">
-          {fetchError ? 'API Offline' : stale ? '응답 없음' : crawl.label}
-        </p>
+        <p className="badge-value">{badgeValue}</p>
         <p className={`account-line state-${SESSION_CLASS[status.state]}`}>
           계정: {fetchError ? '—' : status.label}
         </p>
-        {crawl.crawl?.mode && !fetchError ? (
+        {showRunMeta && crawl.crawl?.mode && !fetchError ? (
           <p className="account-line">
             모드: {crawlModeTypeLabel(crawl.crawl.mode)}
             {isSearchProfileMode(crawl.crawl.mode) && crawl.crawl.period_months
@@ -101,16 +119,22 @@ export function CrawlPage() {
                 : ''}
           </p>
         ) : null}
-        {crawl.crawl?.asset_id && !fetchError ? (
+        {showRunMeta && crawl.crawl?.asset_id && !fetchError ? (
           <p className="account-line">애셋: {crawl.crawl.asset_id}</p>
         ) : null}
-        {resultLine && !fetchError ? (
+        {showRunMeta && resultLine && !fetchError ? (
           <p className="account-line">결과: {resultLine}</p>
         ) : null}
-        {crawl.crawl?.cdp_http_url && !fetchError ? (
+        {showRunMeta && crawl.crawl?.cdp_http_url && !fetchError ? (
           <p className="account-line">CDP: {crawl.crawl.cdp_http_url}</p>
         ) : null}
-        {crawl.state === 'active' && !fetchError ? (
+        {otherBusy && !fetchError ? (
+          <p className="account-line">
+            다른 매체가 브라우저 세션을 사용 중입니다. FnGuide 검색은 종료 후
+            시작할 수 있습니다.
+          </p>
+        ) : null}
+        {fnguideBusy && crawl.state === 'active' && !fetchError ? (
           <p className="warn">
             크롤이 계정을 사용 중입니다. 같은 계정으로 들어가면 세션이 끊길 수
             있습니다.
@@ -132,29 +156,14 @@ export function CrawlPage() {
         {!canStart && !crawlBusy && !blockedByError && !fetchError ? (
           <p className="warn">열린 세션이 남아 있어 실행할 수 없습니다.</p>
         ) : null}
-        {stale && !fetchError ? (
+        {fnguideBusy && stale && !fetchError ? (
           <p className="warn">최근 활동 갱신이 없습니다.</p>
         ) : null}
         {fetchError ? <p className="warn">API 연결 실패: {fetchError}</p> : null}
 
-        {!profiles.error && profiles.items.length > 0 ? (
-          <p className="account-line profile-summary">
-            필터:{' '}
-            {profiles.items
-              .filter((p) => isSearchProfileMode(p.mode))
-              .map((p) => {
-                const label = THEME_LABEL[p.mode] ?? p.mode
-                const kw = p.keywords[0] ?? '—'
-                const extra =
-                  p.keywords.length > 1 ? ` 외 ${p.keywords.length - 1}` : ''
-                const sectors =
-                  p.sectors.length > 0 ? ` · 섹터 ${p.sectors.length}` : ''
-                return `${label} 「${kw}${extra}」 ${p.period_months}개월 · ${p.page_min_label}${sectors}`
-              })
-              .join(' / ')}{' '}
-            <Link to="/collect/fnguide/list/search/types">프로필</Link>
-          </p>
-        ) : null}
+        <p className="account-line">
+          <Link to="/collect/fnguide/list/search/types">프로필·필터 설정</Link>
+        </p>
 
         <div className="actions">
           <label className="limit-field">
@@ -197,7 +206,11 @@ export function CrawlPage() {
           <div>
             <dt>시작</dt>
             <dd>
-              {formatTime(crawl.crawl?.started_at ?? status.session?.started_at)}
+              {formatTime(
+                showRunMeta
+                  ? (crawl.crawl?.started_at ?? status.session?.started_at)
+                  : status.session?.started_at,
+              )}
             </dd>
           </div>
           <div>
@@ -206,7 +219,11 @@ export function CrawlPage() {
           </div>
           <div>
             <dt>진행</dt>
-            <dd>{fetchError ? '—' : formatProgress(crawl.progress)}</dd>
+            <dd>
+              {fetchError || !showRunMeta
+                ? '—'
+                : formatProgress(crawl.progress)}
+            </dd>
           </div>
         </dl>
       </section>
