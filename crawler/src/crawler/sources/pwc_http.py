@@ -18,17 +18,21 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urljoin, urlparse
-from urllib.request import Request, urlopen
+
+from curl_cffi import requests
+
+from crawler.sources.browser_http import (
+    DEFAULT_TIMEOUT,
+    get_bytes,
+    get_json,
+    get_text,
+    make_session as _make_session,
+)
 
 SOURCE = "pwc"
 BASE = "https://www.pwc.com"
 DEFAULT_IMAGE_PATH = "/content/dam/pwc/network/collection-fallback-images"
 DEFAULT_CATALOG = "kr"
-DEFAULT_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
 
 
 @dataclass(frozen=True)
@@ -86,6 +90,12 @@ def get_catalog(catalog_id: str | None = None) -> PwcCatalog:
 
 def list_catalogs() -> list[PwcCatalog]:
     return [CATALOGS[k] for k in ("kr", "gx") if k in CATALOGS]
+
+
+def make_session(catalog: str | PwcCatalog | None = None) -> requests.Session:
+    cat = catalog if isinstance(catalog, PwcCatalog) else get_catalog(catalog)
+    return _make_session(referer=cat.hub_url, origin=BASE, accept="*/*")
+
 
 _MONTHS = {
     "january": 1,
@@ -160,7 +170,8 @@ def fetch_list_page(
     page_offset: int = 0,
     *,
     catalog: str | PwcCatalog | None = None,
-    timeout: float = 30.0,
+    session: requests.Session | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[list[PwcListItem], int]:
     """Return (items, number_hits) for one list page."""
     if page_offset < 0:
@@ -176,7 +187,18 @@ def fetch_list_page(
         }
     )
     url = f"{cat.collection_url}?{qs}"
-    payload = _get_json(url, timeout=timeout)
+    sess = session or make_session(cat)
+    payload = get_json(
+        sess,
+        url,
+        headers={
+            "Accept": "application/json,*/*",
+            "Referer": cat.hub_url,
+        },
+        timeout=timeout,
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"expected JSON object from {url}")
     number_hits = int(payload.get("numberHits") or 0)
     elements = payload.get("elements")
     if isinstance(elements, str):
@@ -234,16 +256,49 @@ def find_pdf_url(detail_html: str, *, page_url: str) -> str | None:
     return resolved[0]
 
 
-def fetch_detail_pdf_url(url: str, *, timeout: float = 30.0) -> str | None:
-    html = _get_text(url, timeout=timeout)
+def fetch_detail_pdf_url(
+    url: str,
+    *,
+    catalog: str | PwcCatalog | None = None,
+    session: requests.Session | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> str | None:
+    cat = catalog if isinstance(catalog, PwcCatalog) else get_catalog(catalog)
+    sess = session or make_session(cat)
+    html = get_text(
+        sess,
+        url,
+        headers={
+            "Accept": "text/html,application/xhtml+xml",
+            "Referer": cat.hub_url,
+        },
+        timeout=timeout,
+    )
     return find_pdf_url(html, page_url=url)
 
 
-def download_pdf(url: str, dest_path: Any, *, timeout: float = 120.0) -> int:
+def download_pdf(
+    url: str,
+    dest_path: Any,
+    *,
+    catalog: str | PwcCatalog | None = None,
+    session: requests.Session | None = None,
+    timeout: float = 120.0,
+) -> int:
     """Download PDF bytes to ``dest_path``. Returns byte length."""
     path = Path(dest_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = _get_bytes(url, timeout=timeout)
+    cat = catalog if isinstance(catalog, PwcCatalog) else get_catalog(catalog)
+    sess = session or make_session(cat)
+    data = get_bytes(
+        sess,
+        url,
+        headers={
+            "Accept": "application/pdf,*/*",
+            "Referer": cat.hub_url,
+        },
+        timeout=timeout,
+    )
     if not data.startswith(b"%PDF"):
         raise RuntimeError(f"not a PDF ({url}): magic={data[:8]!r}")
     path.write_bytes(data)
@@ -269,30 +324,6 @@ def pdf_page_count(path: Path | str) -> int | None:
     except ValueError:
         return None
     return n if n > 0 else None
-
-
-def _get_json(url: str, *, timeout: float) -> dict[str, Any]:
-    raw = _get_text(url, timeout=timeout)
-    data = json.loads(raw)
-    if not isinstance(data, dict):
-        raise RuntimeError(f"expected JSON object from {url}")
-    return data
-
-
-def _get_text(url: str, *, timeout: float) -> str:
-    return _get_bytes(url, timeout=timeout).decode("utf-8", "ignore")
-
-
-def _get_bytes(url: str, *, timeout: float) -> bytes:
-    req = Request(
-        url,
-        headers={
-            "User-Agent": DEFAULT_UA,
-            "Accept": "*/*",
-        },
-    )
-    with urlopen(req, timeout=timeout) as resp:  # noqa: S310 — trusted PwC hosts
-        return resp.read()
 
 
 class _PdfHrefParser(HTMLParser):

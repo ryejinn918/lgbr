@@ -19,13 +19,19 @@ from urllib.parse import urljoin, urlparse
 
 from curl_cffi import requests
 
+from crawler.sources.browser_http import (
+    DEFAULT_TIMEOUT,
+    get_bytes,
+    get_json,
+    get_text,
+    make_session as _make_session,
+)
+
 SOURCE = "ey"
 BASE = "https://www.ey.com"
 DEFAULT_CATALOG = "us"
 DEFAULT_QUERY = "report"
 PAGE_SIZE = 10
-IMPERSONATE = "chrome"
-DEFAULT_TIMEOUT = 30.0
 SEARCH_INDEX = "asengine-en-us"
 SEARCH_QUERY_URL = (
     "https://api-search.ey.com/usepinthi2azf04_Prod/orchestrators/search/query"
@@ -103,15 +109,11 @@ _MONTHS = {
 
 
 def make_session() -> requests.Session:
-    sess = requests.Session(impersonate=IMPERSONATE)
-    sess.headers.update(
-        {
-            "Accept": "application/json,text/html,*/*",
-            "Origin": BASE,
-            "Referer": HUB_URL,
-        }
+    return _make_session(
+        referer=HUB_URL,
+        origin=BASE,
+        accept="application/json,text/html,*/*",
     )
-    return sess
 
 
 def source_key_from_url(url: str) -> str:
@@ -143,7 +145,8 @@ def fetch_list_page(
         "s": "latest",
         "f": ARTICLE_TYPE_FILTER,
     }
-    resp = sess.get(
+    payload = get_json(
+        sess,
         SEARCH_QUERY_URL,
         params=params,
         headers={
@@ -152,10 +155,7 @@ def fetch_list_page(
             "Referer": f"{BASE}/en_us/search",
         },
         timeout=timeout,
-        proxy=None,
     )
-    resp.raise_for_status()
-    payload = resp.json()
     if not isinstance(payload, dict):
         raise RuntimeError(f"EY list expected JSON object, got {type(payload)}")
     rows = payload.get("search_results")
@@ -261,17 +261,15 @@ def fetch_detail_meta(
     timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[str | None, date | None]:
     sess = session or make_session()
-    resp = sess.get(
+    html = get_text(
+        sess,
         url,
         headers={
             "Accept": "text/html,application/xhtml+xml",
             "Referer": HUB_URL,
         },
         timeout=timeout,
-        proxy=None,
     )
-    resp.raise_for_status()
-    html = resp.text
     return find_pdf_url(html, page_url=url), parse_publish_date_from_html(html)
 
 
@@ -285,17 +283,15 @@ def download_pdf(
     path = Path(dest_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     sess = session or make_session()
-    resp = sess.get(
+    data = get_bytes(
+        sess,
         url,
         headers={
             "Accept": "application/pdf,*/*",
             "Referer": HUB_URL,
         },
         timeout=timeout,
-        proxy=None,
     )
-    resp.raise_for_status()
-    data = resp.content
     if not data.startswith(b"%PDF"):
         raise RuntimeError(f"not a PDF ({url}): magic={data[:8]!r}")
     path.write_bytes(data)

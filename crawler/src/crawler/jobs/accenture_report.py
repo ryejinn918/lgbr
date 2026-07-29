@@ -19,6 +19,7 @@ from crawler.sources.accenture_http import (
     fetch_detail_meta,
     fetch_list_page,
     get_catalog,
+    make_session,
     months_ago_cutoff,
     pdf_page_count,
 )
@@ -97,6 +98,7 @@ def run_accenture_search_job(
     already = reports_store.downloaded_keys(SOURCE)
     summary = AccentureJobSummary()
     page_size = cat.page_size
+    session = make_session(cat)
 
     progress: dict[str, Any] = {
         "stage": "list_download",
@@ -140,7 +142,9 @@ def run_accenture_search_job(
             progress["page_offset"] = page_offset
             collection_jobs_store.set_progress(job_id, progress)
 
-            items, has_more = fetch_list_page(page_offset, catalog=cat)
+            items, has_more = fetch_list_page(
+                page_offset, catalog=cat, session=session
+            )
             if not items:
                 progress["stop_reason"] = "empty_page"
                 break
@@ -157,12 +161,14 @@ def run_accenture_search_job(
                 outcome = _process_item(
                     item,
                     catalog_id=cat.id,
+                    catalog=cat,
                     cutoff=cutoff,
                     summary=summary,
                     already=already,
                     download_dir=download_dir,
                     progress=progress,
                     job_id=job_id,
+                    session=session,
                 )
                 if outcome == "old":
                     older_than_cutoff += 1
@@ -209,12 +215,14 @@ def _process_item(
     item: AccentureListItem,
     *,
     catalog_id: str,
+    catalog,
     cutoff,
     summary: AccentureJobSummary,
     already: set[str],
     download_dir: Path,
     progress: dict[str, Any],
     job_id: UUID | str,
+    session,
 ) -> str:
     """Return 'ok' | 'old' | 'skip' for paging cutoffs."""
     attrs: dict[str, Any] = {
@@ -243,7 +251,9 @@ def _process_item(
         return "skip"
 
     try:
-        pdf_url, published_at = fetch_detail_meta(item.url)
+        pdf_url, published_at = fetch_detail_meta(
+            item.url, catalog=catalog, session=session
+        )
     except Exception as exc:
         summary.failed += 1
         progress["failed"] = summary.failed
@@ -283,7 +293,9 @@ def _process_item(
     safe = _safe_filename(item.source_key)
     dest = download_dir / f"{safe}.pdf"
     try:
-        size = download_pdf(pdf_url, dest)
+        size = download_pdf(
+            pdf_url, dest, catalog=catalog, session=session
+        )
         pages = pdf_page_count(dest)
         reports_store.mark_downloaded(
             source=SOURCE,

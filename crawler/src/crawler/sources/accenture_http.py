@@ -7,7 +7,6 @@ Detail PDF: ``a[href*=".pdf"]`` under ``/content/dam/accenture/...``.
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
@@ -17,17 +16,21 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
+
+from curl_cffi import requests
+
+from crawler.sources.browser_http import (
+    DEFAULT_TIMEOUT,
+    get_bytes,
+    get_text,
+    make_session as _make_session,
+    post,
+)
 
 SOURCE = "accenture"
 BASE = "https://www.accenture.com"
 FILTERCARD_URL = f"{BASE}/api/accenture/tilegrid/filtercard"
 DEFAULT_CATALOG = "us"
-DEFAULT_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
 DEFAULT_TAGS = ("universal:filter-types/research-report",)
 PAGE_SIZE = 12  # client requests size=page_size+1 to detect has_more
 
@@ -70,6 +73,17 @@ def get_catalog(catalog_id: str | None = None) -> AccentureCatalog:
             f"expected one of: {', '.join(sorted(CATALOGS))}"
         )
     return cat
+
+
+def make_session(
+    catalog: str | AccentureCatalog | None = None,
+) -> requests.Session:
+    cat = catalog if isinstance(catalog, AccentureCatalog) else get_catalog(catalog)
+    return _make_session(
+        referer=cat.index_url,
+        origin=BASE,
+        accept="application/json, text/plain, */*",
+    )
 
 
 @dataclass(frozen=True)
@@ -116,7 +130,8 @@ def fetch_list_page(
     *,
     catalog: str | AccentureCatalog | None = None,
     tags: tuple[str, ...] = DEFAULT_TAGS,
-    timeout: float = 30.0,
+    session: requests.Session | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[list[AccentureListItem], bool]:
     """Return (items, has_more) for one list page."""
     if offset < 0:
@@ -137,7 +152,8 @@ def fetch_list_page(
     }
     if tags:
         fields["tags"] = ",".join(tags)
-    payload = _post_multipart(FILTERCARD_URL, fields, timeout=timeout)
+    sess = session or make_session(cat)
+    payload = _post_multipart(sess, FILTERCARD_URL, fields, timeout=timeout)
     if payload.get("error"):
         raise RuntimeError(f"Accenture list error: {payload.get('error')}")
     rows = payload.get("contentFragmentItems")
@@ -229,16 +245,36 @@ def parse_publish_date_from_html(html: str) -> date | None:
 
 
 def fetch_detail_meta(
-    url: str, *, timeout: float = 30.0
+    url: str,
+    *,
+    catalog: str | AccentureCatalog | None = None,
+    session: requests.Session | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[str | None, date | None]:
-    html = _get_text(url, timeout=timeout)
+    cat = catalog if isinstance(catalog, AccentureCatalog) else get_catalog(catalog)
+    sess = session or make_session(cat)
+    html = get_text(
+        sess,
+        url,
+        headers={"Accept": "text/html,application/xhtml+xml,*/*"},
+        timeout=timeout,
+    )
     return find_pdf_url(html, page_url=url), parse_publish_date_from_html(html)
 
 
-def download_pdf(url: str, dest_path: Any, *, timeout: float = 120.0) -> int:
+def download_pdf(
+    url: str,
+    dest_path: Any,
+    *,
+    catalog: str | AccentureCatalog | None = None,
+    session: requests.Session | None = None,
+    timeout: float = 120.0,
+) -> int:
     path = Path(dest_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = _get_bytes(url, timeout=timeout)
+    cat = catalog if isinstance(catalog, AccentureCatalog) else get_catalog(catalog)
+    sess = session or make_session(cat)
+    data = get_bytes(sess, url, timeout=timeout)
     if not data.startswith(b"%PDF"):
         raise RuntimeError(f"not a PDF ({url}): magic={data[:8]!r}")
     path.write_bytes(data)
@@ -293,7 +329,11 @@ def _parse_iso_date(raw: str) -> date | None:
 
 
 def _post_multipart(
-    url: str, fields: dict[str, str], *, timeout: float
+    sess: requests.Session,
+    url: str,
+    fields: dict[str, str],
+    *,
+    timeout: float,
 ) -> dict[str, Any]:
     boundary = "----lgbrAccentureBoundary7MA4YWxkTrZu0gW"
     chunks: list[bytes] = []
@@ -306,41 +346,20 @@ def _post_multipart(
         chunks.append(b"\r\n")
     chunks.append(f"--{boundary}--\r\n".encode())
     body = b"".join(chunks)
-    req = Request(
+    data = post(
+        sess,
         url,
         data=body,
-        method="POST",
         headers={
-            "User-Agent": DEFAULT_UA,
             "Accept": "application/json, text/plain, */*",
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "CSRF-Token": "",
-            "Origin": BASE,
-            "Referer": f"{BASE}/us-en/insights-index",
         },
+        timeout=timeout,
     )
-    with urlopen(req, timeout=timeout) as resp:  # noqa: S310
-        raw = resp.read().decode("utf-8", "ignore")
-    data = json.loads(raw)
     if not isinstance(data, dict):
         raise RuntimeError(f"expected JSON object from {url}")
     return data
-
-
-def _get_text(url: str, *, timeout: float) -> str:
-    return _get_bytes(url, timeout=timeout).decode("utf-8", "ignore")
-
-
-def _get_bytes(url: str, *, timeout: float) -> bytes:
-    req = Request(
-        url,
-        headers={
-            "User-Agent": DEFAULT_UA,
-            "Accept": "*/*",
-        },
-    )
-    with urlopen(req, timeout=timeout) as resp:  # noqa: S310
-        return resp.read()
 
 
 class _PdfHrefParser(HTMLParser):

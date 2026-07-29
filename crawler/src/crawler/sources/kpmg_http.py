@@ -7,7 +7,6 @@ Detail PDF: ``a[href*=".pdf"]`` under ``/kpmg-us/content/dam/kpmg/pdf/``.
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
@@ -16,17 +15,21 @@ from datetime import date, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode, urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.parse import urljoin, urlparse
+
+from curl_cffi import requests
+
+from crawler.sources.browser_http import (
+    DEFAULT_TIMEOUT,
+    get_bytes,
+    get_json,
+    get_text,
+    make_session as _make_session,
+)
 
 SOURCE = "kpmg"
 BASE = "https://kpmg.com"
 DEFAULT_CATALOG = "us"
-DEFAULT_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
 DEFAULT_QUERY = "report"
 PAGE_SIZE = 12
 CLUDO_PATH = (
@@ -66,6 +69,15 @@ def get_catalog(catalog_id: str | None = None) -> KpmgCatalog:
             f"expected one of: {', '.join(sorted(CATALOGS))}"
         )
     return cat
+
+
+def make_session(catalog: str | KpmgCatalog | None = None) -> requests.Session:
+    cat = catalog if isinstance(catalog, KpmgCatalog) else get_catalog(catalog)
+    return _make_session(
+        referer=cat.hub_url,
+        origin=BASE,
+        accept="application/json, text/plain, */*",
+    )
 
 
 @dataclass(frozen=True)
@@ -114,7 +126,8 @@ def fetch_list_page(
     page: int = 1,
     *,
     catalog: str | KpmgCatalog | None = None,
-    timeout: float = 30.0,
+    session: requests.Session | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[list[KpmgListItem], bool]:
     """Return (items, has_more) for one Cludo search page (1-based)."""
     if page < 1:
@@ -128,8 +141,14 @@ def fetch_list_page(
         "perPage": str(page_size),
         "contentType": "Insight",
     }
-    url = f"{cat.list_url}?{urlencode(params)}"
-    payload = _get_json(url, timeout=timeout)
+    sess = session or make_session(cat)
+    payload = get_json(sess, cat.list_url, params=params, timeout=timeout)
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"expected JSON object from {cat.list_url}")
+    if payload.get("status") == "500" or payload.get("error"):
+        raise RuntimeError(
+            f"KPMG list error: {payload.get('error') or payload.get('status')}"
+        )
     rows = payload.get("TypedDocuments")
     if not isinstance(rows, list):
         raise RuntimeError(
@@ -232,16 +251,36 @@ def parse_publish_date_from_html(html: str) -> date | None:
 
 
 def fetch_detail_meta(
-    url: str, *, timeout: float = 30.0
+    url: str,
+    *,
+    catalog: str | KpmgCatalog | None = None,
+    session: requests.Session | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[str | None, date | None]:
-    html = _get_text(url, timeout=timeout)
+    cat = catalog if isinstance(catalog, KpmgCatalog) else get_catalog(catalog)
+    sess = session or make_session(cat)
+    html = get_text(
+        sess,
+        url,
+        headers={"Accept": "text/html,application/xhtml+xml,*/*"},
+        timeout=timeout,
+    )
     return find_pdf_url(html, page_url=url), parse_publish_date_from_html(html)
 
 
-def download_pdf(url: str, dest_path: Any, *, timeout: float = 120.0) -> int:
+def download_pdf(
+    url: str,
+    dest_path: Any,
+    *,
+    catalog: str | KpmgCatalog | None = None,
+    session: requests.Session | None = None,
+    timeout: float = 120.0,
+) -> int:
     path = Path(dest_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = _get_bytes(url, timeout=timeout)
+    cat = catalog if isinstance(catalog, KpmgCatalog) else get_catalog(catalog)
+    sess = session or make_session(cat)
+    data = get_bytes(sess, url, timeout=timeout)
     if not data.startswith(b"%PDF"):
         raise RuntimeError(f"not a PDF ({url}): magic={data[:8]!r}")
     path.write_bytes(data)
@@ -324,35 +363,6 @@ def _parse_iso_date(raw: str) -> date | None:
         return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     except ValueError:
         return None
-
-
-def _get_json(url: str, *, timeout: float) -> dict[str, Any]:
-    raw = _get_bytes(url, timeout=timeout).decode("utf-8", "ignore")
-    data = json.loads(raw)
-    if not isinstance(data, dict):
-        raise RuntimeError(f"expected JSON object from {url}")
-    if data.get("status") == "500" or data.get("error"):
-        raise RuntimeError(
-            f"KPMG list error: {data.get('error') or data.get('status')}"
-        )
-    return data
-
-
-def _get_text(url: str, *, timeout: float) -> str:
-    return _get_bytes(url, timeout=timeout).decode("utf-8", "ignore")
-
-
-def _get_bytes(url: str, *, timeout: float) -> bytes:
-    req = Request(
-        url,
-        headers={
-            "User-Agent": DEFAULT_UA,
-            "Accept": "*/*",
-            "Referer": f"{BASE}/us/en/insights-and-resources.html",
-        },
-    )
-    with urlopen(req, timeout=timeout) as resp:  # noqa: S310
-        return resp.read()
 
 
 class _PdfHrefParser(HTMLParser):

@@ -6,23 +6,22 @@ from typing import Any
 
 from curl_cffi import requests
 
+from crawler.sources.browser_http import (
+    DEFAULT_TIMEOUT,
+    get_json as _get_json,
+    make_session as _make_session,
+)
+
 BASE = "https://www.arg.co.kr"
 LIST_URL = f"{BASE}/news/articleList.html?view_type=sm"
 AJAX_URL = f"{BASE}/news/ajaxArticlePaging.php"
+# Re-export for existing imports.
 IMPERSONATE = "chrome"
-DEFAULT_TIMEOUT = 30.0
 
 
 def make_session(*, accept: str = "application/json") -> requests.Session:
     """Chrome-impersonating session with ARG referer defaults."""
-    sess = requests.Session(impersonate=IMPERSONATE)
-    sess.headers.update(
-        {
-            "Accept": accept,
-            "Referer": LIST_URL,
-        }
-    )
-    return sess
+    return _make_session(referer=LIST_URL, accept=accept)
 
 
 def get_json(
@@ -32,7 +31,8 @@ def get_json(
     params: dict[str, Any] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> Any:
-    resp = sess.get(
+    return _get_json(
+        sess,
         url,
         params=params,
         headers={
@@ -42,8 +42,6 @@ def get_json(
         },
         timeout=timeout,
     )
-    resp.raise_for_status()
-    return resp.json()
 
 
 def get_html(
@@ -60,5 +58,6 @@ def get_html(
             "Referer": referer or BASE + "/",
         },
         timeout=timeout,
+        proxy=None,
     )
     return resp.status_code, resp.text
