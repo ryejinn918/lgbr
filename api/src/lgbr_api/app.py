@@ -52,7 +52,12 @@ from lgbr_api.db import load_database_env
 from lgbr_api.news_articles import list_articles
 from lgbr_api.profiles import list_profiles, update_profile
 from lgbr_api.audits import get_audit_status, start_audit
-from lgbr_api.reports import get_report, get_report_file, list_reports
+from lgbr_api.reports import (
+    coverage_by_week,
+    get_report,
+    get_report_file,
+    list_reports,
+)
 from lgbr_api.sessions import get_current_session, list_history
 from lgbr_api.timeline import list_session_timeline, list_timeline
 
@@ -405,6 +410,14 @@ async def reports(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
+async def reports_coverage(request: Request) -> JSONResponse:
+    try:
+        weeks = int(request.query_params.get("weeks", "13"))
+    except ValueError:
+        weeks = 13
+    return JSONResponse(coverage_by_week(weeks=weeks))
+
+
 async def report_detail(request: Request) -> JSONResponse:
     result = get_report(str(request.path_params.get("report_id") or ""))
     status = int(result.pop("status", 200 if result.get("ok") else 400))
@@ -685,6 +698,7 @@ def create_app() -> Starlette:
             Route("/api/collection/stop", collection_stop, methods=["POST"]),
             Route("/api/news-articles", news_articles),
             Route("/api/reports", reports),
+            Route("/api/reports/coverage", reports_coverage),
             Route("/api/reports/{report_id}", report_detail),
             Route("/api/reports/{report_id}/file", report_file),
             Route("/api/audit", audit_status),

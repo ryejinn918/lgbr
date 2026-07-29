@@ -39,3 +39,8 @@ export function getMediaSource(id: string | null | undefined): MediaSource | nul
 export function isMediaSourceId(id: string | null | undefined): id is MediaSourceId {
   return !!id && BY_ID.has(id)
 }
+
+/** Crawl modes owned by media adhoc (not FnGuide). */
+export function isMediaAdhocMode(mode: string | null | undefined): boolean {
+  return isMediaSourceId(mode)
+}

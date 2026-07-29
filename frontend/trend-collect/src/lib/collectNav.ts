@@ -1,5 +1,17 @@
-import { THEME_LABEL } from './themes'
-import { MEDIA_SOURCES, getMediaSource, isMediaSourceId } from './mediaSources'
+import { THEME_LABEL, isSearchProfileMode } from './themes'
+import {
+  MEDIA_SOURCES,
+  getMediaSource,
+  isMediaAdhocMode,
+  isMediaSourceId,
+} from './mediaSources'
+
+/** Crawl modes that belong on the FnGuide dashboard card. */
+export function isFnguideCrawlMode(mode: string | null | undefined): boolean {
+  if (!mode) return false
+  if (isMediaAdhocMode(mode)) return false
+  return mode === 'auto' || mode === 'adhoc' || isSearchProfileMode(mode)
+}
 
 export type CollectSource = 'fnguide' | 'arg' | (typeof MEDIA_SOURCES)[number]['id']
 export type CollectStage = 'list' | 'body'

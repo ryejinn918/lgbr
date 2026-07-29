@@ -86,6 +86,104 @@
   gap: 0.85rem;
 }
 
+.coverage-grass {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.coverage-grid {
+  display: grid;
+  gap: 3px;
+  align-items: center;
+  min-width: 0;
+}
+
+.coverage-corner {
+  min-height: 1rem;
+}
+
+.coverage-week-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.1;
+  min-height: 1rem;
+}
+
+.coverage-source-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0.35rem;
+}
+
+.coverage-cell {
+  aspect-ratio: 1;
+  min-height: 14px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--line) 70%, #fff);
+}
+
+.coverage-cell.level-1 {
+  background: color-mix(in srgb, var(--active) 22%, #fff);
+}
+
+.coverage-cell.level-2 {
+  background: color-mix(in srgb, var(--active) 40%, #fff);
+}
+
+.coverage-cell.level-3 {
+  background: color-mix(in srgb, var(--active) 62%, #fff);
+}
+
+.coverage-cell.level-4 {
+  background: var(--active);
+}
+
+.coverage-cell.legend {
+  width: 12px;
+  height: 12px;
+  min-height: 12px;
+  aspect-ratio: auto;
+}
+
+.coverage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.4rem;
+}
+
+.dash-count-rows {
+  display: grid;
+  gap: 1rem;
+}
+
+.dash-count-row {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dash-count-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.dash-count-label a {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dash-count-tiles {
+  justify-content: flex-start;
+}
+
 .job-card {
   padding: 1rem 1.1rem;
   border: 1px solid var(--line);

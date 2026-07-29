@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
+import { CoverageGrass } from '../components/CoverageGrass'
 import { useCollectionJob } from '../hooks/useCollectionJob'
-import { useNewsArticles } from '../hooks/useNewsArticles'
+import { useCoverage } from '../hooks/useCoverage'
 import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import {
@@ -8,16 +9,32 @@ import {
   STATUS_LABEL,
   formatProgress,
   formatPublishedAt,
-  formatRelative,
   formatTime,
-  latestReportTitle,
 } from '../lib/format'
-import { crawlModeTypeLabel } from '../lib/collectNav'
+import { crawlModeTypeLabel, isFnguideCrawlMode } from '../lib/collectNav'
 import type { CollectionJobRecord, CollectionJobResponse } from '../types'
 
-const COUNT_KEYS = [
+const SOURCE_LABEL: Record<string, string> = {
+  fnguide: 'FnGuide',
+  pwc: 'PwC',
+  accenture: 'Accenture',
+}
+
+function sourceLabel(source: string | null | undefined) {
+  if (!source) return '—'
+  return SOURCE_LABEL[source] ?? source
+}
+
+const COUNT_KEYS_FN = [
   'downloaded',
   'blind',
+  'listed',
+  'no_download',
+  'failed',
+] as const
+
+const COUNT_KEYS_MEDIA = [
+  'downloaded',
   'listed',
   'no_download',
   'failed',
@@ -49,8 +66,8 @@ function pickArgView(
 
 function argBadgeLabel(kind: 'feed' | 'fetch_body') {
   return kind === 'fetch_body'
-    ? 'ARG · 본문 채우기/본문읽기'
-    : 'ARG · 리스트 발굴/피드 · 전체'
+    ? 'ARG · 본문 채우기'
+    : 'ARG · 피드'
 }
 
 function formatArgProgress(
@@ -79,6 +96,35 @@ function formatArgProgress(
     .join(' · ')
 }
 
+function formatSearchProgress(progress: Record<string, unknown> | undefined) {
+  if (!progress) return null
+  const bits: string[] = []
+  if (progress.pages_done != null)
+    bits.push(`pages ${String(progress.pages_done)}`)
+  if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
+  if (progress.downloaded != null)
+    bits.push(`downloaded ${String(progress.downloaded)}`)
+  if (progress.skipped_no_download != null)
+    bits.push(`no_pdf ${String(progress.skipped_no_download)}`)
+  if (progress.current_title)
+    bits.push(String(progress.current_title).slice(0, 48))
+  return bits.length ? bits.join(' · ') : null
+}
+
+function jobBadgeClass(
+  offline: boolean,
+  busy: boolean,
+  state: string,
+): string {
+  if (offline) return 'offline'
+  if (busy) {
+    return (
+      CRAWL_CLASS[state as keyof typeof CRAWL_CLASS] ?? 'active'
+    )
+  }
+  return 'ended'
+}
+
 export function DashboardPage() {
   const { crawl, status, stale, fetchError, requestingStop, requestLogout } =
     useSessionStatus()
@@ -87,47 +133,87 @@ export function DashboardPage() {
     source: 'arg',
     capability: 'fetch_body',
   })
+  const pwcSearch = useCollectionJob({ source: 'pwc', capability: 'search' })
+  const accentureSearch = useCollectionJob({
+    source: 'accenture',
+    capability: 'search',
+  })
+
+  const crawlMode = crawl.crawl?.mode ?? null
+  const fnguideOwned =
+    isBusy(crawl.state) && isFnguideCrawlMode(crawlMode)
+  const pwcAdhoc =
+    isBusy(crawl.state) && crawlMode === 'pwc'
+  const accentureAdhoc =
+    isBusy(crawl.state) && crawlMode === 'accenture'
+
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
-  const crawlBusy = isBusy(crawl.state)
   const argBusy = isBusy(argView.status.state)
-  const openId =
-    crawlBusy && crawl.crawl?.id && !crawl.crawl.ended_at
-      ? crawl.crawl.id
-      : null
-  const progress = crawl.progress ?? {}
-  const currentRpt =
-    progress.current_rpt_id != null ? String(progress.current_rpt_id) : null
-  const currentTitle = latestReportTitle(crawl.events, currentRpt)
+  const pwcSearchBusy = isBusy(pwcSearch.status.state)
+  const accentureSearchBusy = isBusy(accentureSearch.status.state)
+  const pwcBusy = pwcSearchBusy || pwcAdhoc
+  const accentureBusy = accentureSearchBusy || accentureAdhoc
 
-  const activeReports = useReports({
-    crawlId: openId,
-    limit: 10,
+  const crawlProgress = crawl.progress ?? {}
+  const pwcProgress = (pwcSearch.status.progress ??
+    pwcSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const accentureProgress = (accentureSearch.status.progress ??
+    accentureSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const argProgress = (argView.status.progress ??
+    argView.status.job?.progress ??
+    {}) as Record<string, unknown>
+
+  const coverage = useCoverage(13)
+  const recent = useReports({
+    limit: 4,
     offset: 0,
     poll: true,
   })
-  const pipeline = useReports({
+  const countsFg = useReports({
+    source: 'fnguide',
     limit: 1,
     offset: 0,
     poll: true,
   })
-  const recentArg = useNewsArticles({
-    source: 'arg',
-    limit: 8,
+  const countsPwc = useReports({
+    source: 'pwc',
+    limit: 1,
     offset: 0,
+    poll: true,
+  })
+  const countsAc = useReports({
+    source: 'accenture',
+    limit: 1,
+    offset: 0,
+    poll: true,
   })
 
-  const crawlBadge = fetchError
+  const fnguideBadge = fetchError
     ? 'offline'
-    : stale
+    : stale && fnguideOwned
       ? 'stale'
-      : CRAWL_CLASS[crawl.state]
-  const argOffline = argFeed.fetchError || argBody.fetchError
-  const argBadge = argOffline
-    ? 'offline'
-    : CRAWL_CLASS[argView.status.state] ?? 'ended'
+      : jobBadgeClass(!!fetchError, fnguideOwned, crawl.state)
+  const argOffline = !!(argFeed.fetchError || argBody.fetchError)
+  const argBadge = jobBadgeClass(
+    argOffline,
+    argBusy,
+    argView.status.state,
+  )
+  const pwcBadge = jobBadgeClass(
+    !!(pwcSearch.fetchError || (pwcAdhoc && fetchError)),
+    pwcBusy,
+    pwcSearchBusy ? pwcSearch.status.state : crawl.state,
+  )
+  const accentureBadge = jobBadgeClass(
+    !!(accentureSearch.fetchError || (accentureAdhoc && fetchError)),
+    accentureBusy,
+    accentureSearchBusy ? accentureSearch.status.state : crawl.state,
+  )
 
-  async function onStopCrawl() {
+  async function onStopFnguide() {
     if (!window.confirm('FnGuide 크롤을 종료하고 로그아웃할까요?')) return
     try {
       await requestLogout()
@@ -147,85 +233,112 @@ export function DashboardPage() {
     }
   }
 
-  const argProgress = (argView.status.progress ??
-    argView.status.job?.progress ??
-    {}) as Record<string, unknown>
-  const argProgressLine = formatArgProgress(
-    argView.kind,
-    argView.status.job,
-    argProgress,
-  )
+  async function onStopMedia(
+    source: 'pwc' | 'accenture',
+    searchBusy: boolean,
+    adhoc: boolean,
+    stopSearch: () => Promise<unknown>,
+  ) {
+    if (searchBusy) {
+      if (!window.confirm(`${source} 검색 작업을 중단할까요?`)) return
+      try {
+        await stopSearch()
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : '중단 실패')
+      }
+      return
+    }
+    if (adhoc) {
+      if (!window.confirm(`${source} 애드혹 브라우저를 종료할까요?`)) return
+      try {
+        await requestLogout()
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : '종료 요청 실패')
+      }
+    }
+  }
+
+  const fnguideValue = fetchError
+    ? 'API Offline'
+    : !fnguideOwned
+      ? '유휴'
+      : stale
+        ? '응답 없음'
+        : crawl.label
+
+  const pwcValue = pwcSearch.fetchError
+    ? 'API Offline'
+    : pwcSearchBusy
+      ? pwcSearch.status.label
+      : pwcAdhoc
+        ? crawl.label
+        : pwcSearch.status.job
+          ? pwcSearch.status.label
+          : '유휴'
+
+  const accentureValue = accentureSearch.fetchError
+    ? 'API Offline'
+    : accentureSearchBusy
+      ? accentureSearch.status.label
+      : accentureAdhoc
+        ? crawl.label
+        : accentureSearch.status.job
+          ? accentureSearch.status.label
+          : '유휴'
 
   return (
     <>
       <header className="monitor-header">
         <h1>운영 대시보드</h1>
         <p className="lede">
-          모든 수집 작업을 한곳에서 봅니다. 시작은 각 매체 수집 화면에서 합니다.
+          매체별 수집 상태와 최근 결과입니다. 시작은 각 수집 화면에서 합니다.
         </p>
       </header>
 
       <section className="panel">
         <div className="section-head">
           <h2>수집 작업</h2>
-          <span className="section-note">매체 · 현재 수집</span>
+          <span className="section-note">FnGuide · ARG · PwC · Accenture</span>
         </div>
         <div className="job-board">
-          <article className={`job-card state-${crawlBadge}`}>
+          <article className={`job-card state-${fnguideBadge}`}>
             <p className="badge-label">
-              FnGuide · 리스트 발굴/검색
-              {crawlBusy ? '+다운로드' : ''} ·{' '}
-              {crawlModeTypeLabel(crawl.crawl?.mode)}
+              FnGuide · 검색
+              {fnguideOwned
+                ? ` · ${crawlModeTypeLabel(crawlMode)}`
+                : ''}
             </p>
-            <p className="badge-value">
-              {fetchError
-                ? 'API Offline'
-                : stale
-                  ? '응답 없음'
-                  : crawlBusy
-                    ? crawl.label
-                    : crawl.crawl
-                      ? crawl.label
-                      : '유휴'}
-            </p>
+            <p className="badge-value">{fnguideValue}</p>
             <p className="account-line">
               계정 {fetchError ? '—' : status.label}
-              {crawl.crawl?.started_at
+              {fnguideOwned && crawl.crawl?.started_at
                 ? ` · ${formatTime(crawl.crawl.started_at)}`
                 : ''}
             </p>
-            {crawlBusy && crawl.crawl ? (
+            {fnguideOwned ? (
               <p className="account-line">
                 {[
-                  crawl.crawl.asset_id,
-                  progress.keyword != null
-                    ? `kw=${String(progress.keyword)}`
+                  crawl.crawl?.asset_id,
+                  crawlProgress.keyword != null
+                    ? `kw=${String(crawlProgress.keyword)}`
                     : null,
-                  formatProgress(progress),
+                  formatProgress(crawlProgress),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
               </p>
             ) : null}
-            {crawlBusy && currentRpt ? (
-              <p className="account-line">
-                현재 <span className="mono">{currentRpt}</span>
-                {currentTitle ? ` · ${currentTitle}` : ''}
-              </p>
-            ) : null}
             <p className="account-line">
               <Link to="/collect/fnguide/list/search">검색 실행</Link>
               {' · '}
-              <Link to="/collect/fnguide/list/search/types">리스트 발굴 타입</Link>
-              {' · '}
-              <Link to="/docs/reports/fnguide">FnGuide 보고서</Link>
+              <Link to="/docs/reports/fnguide">보고서</Link>
             </p>
-            {crawlBusy ? (
+            {fnguideOwned ? (
               <div className="actions">
                 <button
                   type="button"
                   disabled={requestingStop || !!fetchError}
-                  onClick={() => void onStopCrawl()}
+                  onClick={() => void onStopFnguide()}
                 >
                   {requestingStop ? '요청 중…' : '종료'}
                 </button>
@@ -253,14 +366,20 @@ export function DashboardPage() {
               </p>
             ) : null}
             {argBusy || argView.status.job?.message ? (
-              <p className="account-line">{argProgressLine}</p>
+              <p className="account-line">
+                {formatArgProgress(
+                  argView.kind,
+                  argView.status.job,
+                  argProgress,
+                )}
+              </p>
             ) : null}
             <p className="account-line">
-              <Link to="/collect/arg/list/feed">피드 실행</Link>
+              <Link to="/collect/arg/list/feed">피드</Link>
               {' · '}
-              <Link to="/collect/arg/body/fetch">본문 채우기</Link>
+              <Link to="/collect/arg/body/fetch">본문</Link>
               {' · '}
-              <Link to="/docs/articles">기사 통합</Link>
+              <Link to="/docs/articles">기사</Link>
             </p>
             {argBusy ? (
               <div className="actions">
@@ -274,37 +393,196 @@ export function DashboardPage() {
               </div>
             ) : null}
           </article>
+
+          <article className={`job-card state-${pwcBadge}`}>
+            <p className="badge-label">
+              PwC · 검색
+              {pwcAdhoc ? ' · 애드혹' : ''}
+            </p>
+            <p className="badge-value">{pwcValue}</p>
+            {pwcSearchBusy && pwcSearch.status.job?.started_at ? (
+              <p className="account-line">
+                {formatTime(pwcSearch.status.job.started_at)}
+                {pwcSearch.status.job.ended_at
+                  ? ` · ${formatTime(pwcSearch.status.job.ended_at)}`
+                  : ''}
+              </p>
+            ) : null}
+            {pwcAdhoc && crawl.crawl?.started_at ? (
+              <p className="account-line">
+                애드혹 {formatTime(crawl.crawl.started_at)}
+                {crawl.crawl.cdp_port
+                  ? ` · CDP ${crawl.crawl.cdp_port}`
+                  : ''}
+              </p>
+            ) : null}
+            {pwcSearchBusy ? (
+              <p className="account-line">
+                {formatSearchProgress(pwcProgress) ||
+                  pwcSearch.status.job?.message ||
+                  '—'}
+              </p>
+            ) : null}
+            {pwcAdhoc && !pwcSearchBusy ? (
+              <p className="account-line">
+                {typeof crawlProgress.url === 'string'
+                  ? crawlProgress.url
+                  : formatProgress(crawlProgress)}
+              </p>
+            ) : null}
+            <p className="account-line">
+              <Link to="/collect/pwc/list/search">검색 실행</Link>
+              {' · '}
+              <Link to="/docs/reports/pwc">보고서</Link>
+            </p>
+            {pwcBusy ? (
+              <div className="actions">
+                <button
+                  type="button"
+                  disabled={
+                    pwcSearchBusy
+                      ? pwcSearch.requestingStop
+                      : requestingStop || !!fetchError
+                  }
+                  onClick={() =>
+                    void onStopMedia(
+                      'pwc',
+                      pwcSearchBusy,
+                      pwcAdhoc,
+                      () => pwcSearch.stopFeed(),
+                    )
+                  }
+                >
+                  {(pwcSearchBusy
+                    ? pwcSearch.requestingStop
+                    : requestingStop)
+                    ? '요청 중…'
+                    : pwcSearchBusy
+                      ? '검색 중단'
+                      : '애드혹 종료'}
+                </button>
+              </div>
+            ) : null}
+          </article>
+
+          <article className={`job-card state-${accentureBadge}`}>
+            <p className="badge-label">
+              Accenture · 검색
+              {accentureAdhoc ? ' · 애드혹' : ''}
+            </p>
+            <p className="badge-value">{accentureValue}</p>
+            {accentureSearchBusy && accentureSearch.status.job?.started_at ? (
+              <p className="account-line">
+                {formatTime(accentureSearch.status.job.started_at)}
+                {accentureSearch.status.job.ended_at
+                  ? ` · ${formatTime(accentureSearch.status.job.ended_at)}`
+                  : ''}
+              </p>
+            ) : null}
+            {accentureAdhoc && crawl.crawl?.started_at ? (
+              <p className="account-line">
+                애드혹 {formatTime(crawl.crawl.started_at)}
+                {crawl.crawl.cdp_port
+                  ? ` · CDP ${crawl.crawl.cdp_port}`
+                  : ''}
+              </p>
+            ) : null}
+            {accentureSearchBusy ? (
+              <p className="account-line">
+                {formatSearchProgress(accentureProgress) ||
+                  accentureSearch.status.job?.message ||
+                  '—'}
+              </p>
+            ) : null}
+            {accentureAdhoc && !accentureSearchBusy ? (
+              <p className="account-line">
+                {typeof crawlProgress.url === 'string'
+                  ? crawlProgress.url
+                  : formatProgress(crawlProgress)}
+              </p>
+            ) : null}
+            <p className="account-line">
+              <Link to="/collect/accenture/list/search">검색 실행</Link>
+              {' · '}
+              <Link to="/docs/reports/accenture">보고서</Link>
+            </p>
+            {accentureBusy ? (
+              <div className="actions">
+                <button
+                  type="button"
+                  disabled={
+                    accentureSearchBusy
+                      ? accentureSearch.requestingStop
+                      : requestingStop || !!fetchError
+                  }
+                  onClick={() =>
+                    void onStopMedia(
+                      'accenture',
+                      accentureSearchBusy,
+                      accentureAdhoc,
+                      () => accentureSearch.stopFeed(),
+                    )
+                  }
+                >
+                  {(accentureSearchBusy
+                    ? accentureSearch.requestingStop
+                    : requestingStop)
+                    ? '요청 중…'
+                    : accentureSearchBusy
+                      ? '검색 중단'
+                      : '애드혹 종료'}
+                </button>
+              </div>
+            ) : null}
+          </article>
         </div>
       </section>
 
       <section className="panel">
         <div className="section-head">
-          <h2>FnGuide · 이번 리스트 발굴</h2>
-          {openId ? (
-            <span className="section-note">{activeReports.total}건</span>
-          ) : null}
+          <h2>커버리지</h2>
+          <span className="section-note">
+            발행일 기준 · 최근 13주
+          </span>
         </div>
-        {!openId ? (
-          <p className="empty">진행 중인 FnGuide 검색 작업 없음</p>
-        ) : activeReports.error ? (
-          <p className="warn">{activeReports.error}</p>
-        ) : activeReports.items.length === 0 ? (
-          <p className="empty">아직 리스트에 기록된 보고서가 없습니다.</p>
+        <CoverageGrass
+          weeks={coverage.weeks}
+          sources={coverage.sources}
+          error={coverage.error}
+          loading={coverage.loading}
+        />
+      </section>
+
+      <section className="panel">
+        <div className="section-head">
+          <h2>최근 수집</h2>
+          <span className="section-note">
+            <Link to="/docs/reports">전체 보고서</Link>
+            {' · '}
+            최신 4건
+          </span>
+        </div>
+        {recent.error ? (
+          <p className="warn">{recent.error}</p>
+        ) : recent.items.length === 0 ? (
+          <p className="empty">아직 수집된 보고서가 없습니다.</p>
         ) : (
           <div className="report-sheet">
             <table className="report-table">
               <thead>
                 <tr>
+                  <th className="col-provider">매체</th>
                   <th className="col-status">상태</th>
                   <th className="col-title">제목</th>
-                  <th className="col-provider">증권사</th>
-                  <th className="col-published">발행일</th>
-                  <th className="col-seen">최근</th>
+                  <th className="col-published">발행</th>
                 </tr>
               </thead>
               <tbody>
-                {activeReports.items.map((item) => (
+                {recent.items.map((item) => (
                   <tr key={item.id}>
+                    <td className="col-provider">
+                      {sourceLabel(item.source)}
+                    </td>
                     <td className="col-status">
                       <span className={`status-pill status-${item.status}`}>
                         {STATUS_LABEL[item.status] || item.status}
@@ -313,12 +591,8 @@ export function DashboardPage() {
                     <td className="col-title report-title" title={item.title}>
                       {item.title}
                     </td>
-                    <td className="col-provider">{item.provider || '—'}</td>
                     <td className="col-published mono">
                       {formatPublishedAt(item.published_at)}
-                    </td>
-                    <td className="col-seen">
-                      {formatRelative(item.last_seen_at)}
                     </td>
                   </tr>
                 ))}
@@ -330,69 +604,74 @@ export function DashboardPage() {
 
       <section className="panel">
         <div className="section-head">
-          <h2>ARG · 최근 리스트</h2>
-          <span className="section-note">{recentArg.total}건</span>
+          <h2>문서 카운트</h2>
+          <span className="section-note">Docs 탭으로 이동</span>
         </div>
-        {recentArg.fetchError ? (
-          <p className="warn">{recentArg.fetchError}</p>
-        ) : recentArg.items.length === 0 ? (
-          <p className="empty">
-            아직 ARG 리스트가 없습니다.{' '}
-            <Link to="/collect/arg/list/feed">피드 실행</Link>
-          </p>
-        ) : (
-          <div className="report-sheet">
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th className="col-published">발행</th>
-                  <th className="col-provider">섹션</th>
-                  <th className="col-title">제목</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentArg.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="col-published mono">
-                      {formatPublishedAt(item.published_at)}
-                    </td>
-                    <td className="col-provider">
-                      {item.section || item.publisher || '—'}
-                    </td>
-                    <td className="col-title report-title">
-                      <a href={item.url} target="_blank" rel="noreferrer">
-                        {item.title}
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="section-head">
-          <h2>FnGuide 파이프라인</h2>
-          <span className="section-note">
-            전체 {pipeline.counts.all ?? 0}건
-          </span>
-        </div>
-        {pipeline.error ? <p className="warn">{pipeline.error}</p> : null}
-        <div className="count-tiles">
-          {COUNT_KEYS.map((key) => (
-            <Link
-              key={key}
-              to={`/docs/reports/fnguide?status=${key}`}
-              className={`count-tile status-${key}`}
-            >
-              <span className="count-label">{STATUS_LABEL[key]}</span>
-              <span className="count-value">{pipeline.counts[key] ?? 0}</span>
-            </Link>
-          ))}
+        <div className="dash-count-rows">
+          <CountRow
+            label="FnGuide"
+            source="fnguide"
+            counts={countsFg.counts}
+            keys={COUNT_KEYS_FN}
+            error={countsFg.error}
+            total={countsFg.counts.all ?? 0}
+          />
+          <CountRow
+            label="PwC"
+            source="pwc"
+            counts={countsPwc.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsPwc.error}
+            total={countsPwc.counts.all ?? 0}
+          />
+          <CountRow
+            label="Accenture"
+            source="accenture"
+            counts={countsAc.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsAc.error}
+            total={countsAc.counts.all ?? 0}
+          />
         </div>
       </section>
     </>
+  )
+}
+
+function CountRow({
+  label,
+  source,
+  counts,
+  keys,
+  error,
+  total,
+}: {
+  label: string
+  source: string
+  counts: Record<string, number>
+  keys: readonly string[]
+  error: string | null
+  total: number
+}) {
+  return (
+    <div className="dash-count-row">
+      <div className="dash-count-label">
+        <Link to={`/docs/reports/${source}`}>{label}</Link>
+        <span className="section-note">전체 {total}건</span>
+      </div>
+      {error ? <p className="warn">{error}</p> : null}
+      <div className="count-tiles dash-count-tiles">
+        {keys.map((key) => (
+          <Link
+            key={key}
+            to={`/docs/reports/${source}?status=${key}`}
+            className={`count-tile status-${key}`}
+          >
+            <span className="count-label">{STATUS_LABEL[key] || key}</span>
+            <span className="count-value">{counts[key] ?? 0}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
   )
 }

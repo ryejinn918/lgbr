@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -9,6 +10,104 @@ from uuid import UUID
 from starlette.responses import FileResponse, JSONResponse, Response
 
 from lgbr_api.db import connect
+
+COVERAGE_WEEKS_DEFAULT = 13
+COVERAGE_SOURCES: tuple[tuple[str, str], ...] = (
+    ("fnguide", "FnGuide"),
+    ("arg", "ARG"),
+    ("pwc", "PwC"),
+    ("accenture", "Accenture"),
+)
+_REPORT_COVERAGE_SOURCES = ("fnguide", "pwc", "accenture")
+
+
+def _monday_on_or_before(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+def coverage_by_week(weeks: int | None = None) -> dict[str, Any]:
+    """Weekly published_at counts per media for the coverage grass plot."""
+    n = weeks if weeks is not None else COVERAGE_WEEKS_DEFAULT
+    if n < 1:
+        n = COVERAGE_WEEKS_DEFAULT
+    if n > 52:
+        n = 52
+
+    end_monday = _monday_on_or_before(date.today())
+    start_monday = end_monday - timedelta(weeks=n - 1)
+    week_starts = [start_monday + timedelta(weeks=i) for i in range(n)]
+    week_keys = [w.isoformat() for w in week_starts]
+
+    tallies: dict[str, dict[str, int]] = {
+        sid: {wk: 0 for wk in week_keys} for sid, _ in COVERAGE_SOURCES
+    }
+
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT source,
+                       date_trunc('week', published_at::timestamp)::date
+                         AS week_start,
+                       count(*)::int AS n
+                FROM reports
+                WHERE source = ANY(%s)
+                  AND published_at IS NOT NULL
+                  AND published_at >= %s
+                  AND published_at < %s
+                GROUP BY 1, 2
+                """,
+                (
+                    list(_REPORT_COVERAGE_SOURCES),
+                    start_monday,
+                    end_monday + timedelta(weeks=1),
+                ),
+            )
+            for row in cur.fetchall():
+                sid = str(row["source"])
+                wk = row["week_start"]
+                if sid not in tallies or wk is None:
+                    continue
+                key = wk.isoformat() if hasattr(wk, "isoformat") else str(wk)
+                if key in tallies[sid]:
+                    tallies[sid][key] = int(row["n"])
+
+            cur.execute(
+                """
+                SELECT date_trunc('week', published_at)::date AS week_start,
+                       count(*)::int AS n
+                FROM news_articles
+                WHERE source = 'arg'
+                  AND published_at IS NOT NULL
+                  AND published_at >= %s
+                  AND published_at < %s
+                GROUP BY 1
+                """,
+                (
+                    start_monday,
+                    end_monday + timedelta(weeks=1),
+                ),
+            )
+            for row in cur.fetchall():
+                wk = row["week_start"]
+                if wk is None:
+                    continue
+                key = wk.isoformat() if hasattr(wk, "isoformat") else str(wk)
+                if key in tallies["arg"]:
+                    tallies["arg"][key] = int(row["n"])
+
+    return {
+        "ok": True,
+        "weeks": week_keys,
+        "sources": [
+            {
+                "id": sid,
+                "label": label,
+                "counts": [tallies[sid][wk] for wk in week_keys],
+            }
+            for sid, label in COVERAGE_SOURCES
+        ],
+    }
 
 VALID_STATUSES = frozenset(
     {"listed", "blind", "downloaded", "no_download", "failed"}

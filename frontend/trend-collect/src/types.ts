@@ -288,6 +288,19 @@ export type ReportsResponse = {
   message?: string
 }
 
+export type CoverageSourceRow = {
+  id: string
+  label: string
+  counts: number[]
+}
+
+export type CoverageResponse = {
+  ok?: boolean
+  weeks: string[]
+  sources: CoverageSourceRow[]
+  message?: string
+}
+
 export type CollectionCapability =
   | 'feed'
   | 'search'
