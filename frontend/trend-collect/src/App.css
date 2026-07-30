@@ -460,10 +460,6 @@
   width: 5rem;
 }
 
-.report-table .col-file {
-  width: 6.5rem;
-}
-
 .report-table .col-seen {
   width: 4.2rem;
 }
@@ -551,7 +547,6 @@
 .report-table .col-quality,
 .report-table .col-provider,
 .report-table .col-source,
-.report-table .col-file,
 .report-table .col-seen,
 .report-table .col-qat,
 .report-table .col-rpt,
@@ -561,8 +556,7 @@
   text-overflow: ellipsis;
 }
 
-.report-table .col-provider,
-.report-table .col-file {
+.report-table .col-provider {
   color: var(--muted);
 }
 

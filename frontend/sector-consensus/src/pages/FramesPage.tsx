@@ -452,14 +452,12 @@ export function FramesPage() {
                     >
                       {selectedDoc.role === 'fill_extra' ? '보조' : '주요'}
                     </span>
-                    <a
+                    <span
                       className="text-link materials-title"
-                      href={`/api/reports/${selectedDoc.report_id}/file`}
-                      download
-                      title="보고서 받기"
+                      title={selectedDoc.title}
                     >
                       {selectedDoc.title}
-                    </a>
+                    </span>
                   </p>
                   <p className="section-note">
                     {selectedDoc.provider ?? '—'}

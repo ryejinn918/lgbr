@@ -279,14 +279,9 @@ export function SelectPanels() {
                         </span>
                       </td>
                       <td>
-                        <a
-                          className="text-link"
-                          href={`/api/reports/${d.report_id}/file`}
-                          download
-                          title="보고서 받기"
-                        >
+                        <span className="text-link" title={d.title}>
                           {d.title}
-                        </a>
+                        </span>
                       </td>
                       <td>{d.provider ?? '—'}</td>
                       <td>{d.page_count ?? '—'}</td>
@@ -368,14 +363,9 @@ export function SelectPanels() {
                     <span className={`role-badge role-${kind}`}>{badge}</span>
                   </td>
                   <td>
-                    <a
-                      className="text-link"
-                      href={`/api/reports/${r.id}/file`}
-                      download
-                      title="보고서 받기"
-                    >
+                    <span className="text-link" title={r.title}>
                       {r.title}
-                    </a>
+                    </span>
                   </td>
                   <td title={themeLabels}>{themeLabels}</td>
                   <td>{r.provider ?? '—'}</td>

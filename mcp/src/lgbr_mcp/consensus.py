@@ -14,7 +14,7 @@ from lgbr_mcp.formatting import dumps
 CONSENSUS_INSTRUCTIONS = """\
 LG경영연구원 섹터 산업 동향 초안(조회 전용).
 get_consensus(theme) → axes(분석 축) + consensus_frame(골격) + filled_frame(보고서 초안).
-원문·개별 보고서는 lgbr-collect.
+개별 보고서는 lgbr-collect.
 """
 
 _AXES_KEYS = (
@@ -100,7 +100,7 @@ def _consensus_payload(
         "axes": axes,
         "filled_frame": filled_frame,
         "consensus_frame": consensus_frame,
-        "hint": "원문·근거 리포트는 lgbr-collect.search_reports / get_report.",
+        "hint": "근거 리포트는 lgbr-collect.search_reports / get_report.",
     }
 
 

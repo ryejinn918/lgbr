@@ -22,7 +22,7 @@ LGBR 산업 동향 문서 코퍼스(조회 전용).
 
 플로우:
 1) search_reports(theme 및/또는 q, source?, provider?, quality=pass 기본)
-2) 후보 id로 get_report — 품질 심사·pdf_url/source_url
+2) 후보 id로 get_report — 품질 심사·pdf_url
 3) 속보/기사는 search_news(보조). 목록은 메타만, 본문은 include_body=True일 때.
 
 검색 조건 가이드:
@@ -86,7 +86,7 @@ def build_collect_server(
 
     @mcp.tool()
     def get_report(report_id: str) -> str:
-        """보고서 메타·품질 심사 상세와 원문 링크(pdf_url, source_url).
+        """보고서 메타·품질 심사 상세와 PDF 서명 링크(pdf_url).
 
         Args:
             report_id: search_reports 결과의 id
