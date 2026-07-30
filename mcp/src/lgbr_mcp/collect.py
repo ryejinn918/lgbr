@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from lgbr_api.news_articles import list_articles
-from lgbr_api.reports import coverage_by_week, get_report, list_reports
+from lgbr_api.reports import coverage_by_week, get_report as fetch_report, list_reports
 from mcp.server import MCPServer
 from mcp.server.auth.provider import TokenVerifier
 from mcp.server.auth.settings import AuthSettings
@@ -80,7 +80,7 @@ def build_collect_server(
         Args:
             report_id: search_reports 결과의 id
         """
-        result = get_report(report_id)
+        result = fetch_report(report_id)
         return dumps(report_detail_payload(result))
 
     @mcp.tool()

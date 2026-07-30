@@ -11,7 +11,7 @@ https://lgbrmcp.magpielabs.co.kr
 | Path | 용도 |
 |------|------|
 | `POST /mcp/collect` | 보고서·뉴스 코퍼스 |
-| `POST /mcp/consensus` | 섹터 컨센서스 |
+| `POST /mcp/consensus` | 섹터 컨센서스 (`get_consensus` 1차, docs/inputs 드릴다운) |
 | `GET/POST /login` | OAuth 로그인 |
 | `GET /files/reports/{id}?exp=&sig=` | 서명 PDF (HMAC, TTL 기본 15분) |
 | `GET /health` | 헬스 (공개) |
@@ -37,6 +37,11 @@ Settings → Connectors → Add custom connector (×2):
 2. `https://lgbrmcp.magpielabs.co.kr/mcp/consensus`
 
 OAuth Client ID / Secret는 **비움**. Connect 후 `LGBR_MCP_OAUTH_USERNAME` / `LGBR_MCP_OAUTH_PASSWORD`로 로그인.
+
+### Consensus 도구 위계
+
+1. **기본:** `get_consensus(theme)` — 축 + filled/consensus 프레임  
+2. **드릴다운:** `list_runs` → (다른 `run_id`) · `list_run_docs` → `get_doc_compress` · `list_theme_inputs`
 
 ## Local
 
