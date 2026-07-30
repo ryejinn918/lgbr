@@ -475,9 +475,7 @@ export function DashboardPage() {
           </span>
         </div>
 
-        <div className="job-board-group">
-          <p className="job-board-group-label">계정 · 리포트</p>
-          <div className="job-board">
+        <div className="job-board">
             <CollectJobCard
               title="FnGuide"
               meta={[
@@ -510,12 +508,6 @@ export function DashboardPage() {
                   : null
               }
             />
-          </div>
-        </div>
-
-        <div className="job-board-group">
-          <p className="job-board-group-label">무계정 · 리포트</p>
-          <div className="job-board">
             <CollectJobCard
               title="PwC"
               meta={['무계정', '리포트', '검색', pwcAdhoc ? '애드혹' : '']}
@@ -757,12 +749,6 @@ export function DashboardPage() {
                   : null
               }
             />
-          </div>
-        </div>
-
-        <div className="job-board-group">
-          <p className="job-board-group-label">무계정 · 일간지</p>
-          <div className="job-board">
             <CollectJobCard
               title="ARG"
               meta={[
@@ -810,7 +796,6 @@ export function DashboardPage() {
                   : null
               }
             />
-          </div>
         </div>
       </section>
 
