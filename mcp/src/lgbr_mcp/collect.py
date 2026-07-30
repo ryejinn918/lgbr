@@ -7,6 +7,8 @@ from typing import Any
 from lgbr_api.news_articles import list_articles
 from lgbr_api.reports import coverage_by_week, get_report, list_reports
 from mcp.server import MCPServer
+from mcp.server.auth.provider import TokenVerifier
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
 
 from lgbr_mcp.config import allowed_hosts
@@ -20,11 +22,20 @@ LGBR 산업 동향 문서 코퍼스(조회 전용).
 """
 
 
-def build_collect_server() -> MCPServer:
+def build_collect_server(
+    *,
+    auth: AuthSettings | None = None,
+    token_verifier: TokenVerifier | None = None,
+) -> MCPServer:
+    kwargs: dict[str, Any] = {}
+    if auth is not None:
+        kwargs["auth"] = auth
+        kwargs["token_verifier"] = token_verifier
     mcp = MCPServer(
         name="lgbr-collect",
         title="LGBR 문서 코퍼스",
         instructions=COLLECT_INSTRUCTIONS,
+        **kwargs,
     )
 
     @mcp.tool()

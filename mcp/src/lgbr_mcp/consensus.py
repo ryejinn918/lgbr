@@ -15,6 +15,8 @@ from lgbr_api.consensus_api import (
 )
 from lgbr_api.consensus_eval import get_eval as consensus_get_eval
 from mcp.server import MCPServer
+from mcp.server.auth.provider import TokenVerifier
+from mcp.server.auth.settings import AuthSettings
 
 from lgbr_mcp.formatting import dumps
 
@@ -41,11 +43,20 @@ _AXES_KEYS = (
 )
 
 
-def build_consensus_server() -> MCPServer:
+def build_consensus_server(
+    *,
+    auth: AuthSettings | None = None,
+    token_verifier: TokenVerifier | None = None,
+) -> MCPServer:
+    kwargs: dict[str, Any] = {}
+    if auth is not None:
+        kwargs["auth"] = auth
+        kwargs["token_verifier"] = token_verifier
     mcp = MCPServer(
         name="lgbr-consensus",
         title="LGBR 섹터 컨센서스",
         instructions=CONSENSUS_INSTRUCTIONS,
+        **kwargs,
     )
 
     @mcp.tool()

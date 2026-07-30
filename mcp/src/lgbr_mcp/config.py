@@ -25,69 +25,24 @@ def is_production() -> bool:
     return base.startswith("https://")
 
 
-def allow_insecure() -> bool:
-    load_env()
-    return (os.environ.get("LGBR_MCP_ALLOW_INSECURE") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
-
-
 def validate_startup() -> None:
-    """Fail fast when secrets are missing for the current mode."""
+    """Fail fast when required secrets are missing."""
     load_env()
-    prod = is_production()
-    insecure = allow_insecure()
-    key = (os.environ.get("LGBR_MCP_API_KEY") or "").strip()
-    signing = (os.environ.get("LGBR_MCP_SIGNING_SECRET") or "").strip()
-
-    if prod and insecure:
+    missing: list[str] = []
+    if not (os.environ.get("LGBR_MCP_SIGNING_SECRET") or "").strip():
+        missing.append("LGBR_MCP_SIGNING_SECRET")
+    if not (os.environ.get("LGBR_MCP_OAUTH_USERNAME") or "").strip():
+        missing.append("LGBR_MCP_OAUTH_USERNAME")
+    if not (os.environ.get("LGBR_MCP_OAUTH_PASSWORD") or "").strip():
+        missing.append("LGBR_MCP_OAUTH_PASSWORD")
+    if is_production() and not (os.environ.get("LGBR_MCP_PUBLIC_BASE_URL") or "").strip():
+        missing.append("LGBR_MCP_PUBLIC_BASE_URL")
+    if missing:
         print(
-            "lgbr-mcp: LGBR_MCP_ALLOW_INSECURE cannot be used when "
-            "LGBR_MCP_ENV=production or PUBLIC_BASE_URL is https",
+            "lgbr-mcp: missing required secrets: " + ", ".join(missing),
             file=sys.stderr,
         )
         raise SystemExit(2)
-
-    if prod:
-        missing = []
-        if not key:
-            missing.append("LGBR_MCP_API_KEY")
-        if not signing:
-            missing.append("LGBR_MCP_SIGNING_SECRET")
-        if missing:
-            print(
-                "lgbr-mcp: missing required secrets for public/https mode: "
-                + ", ".join(missing),
-                file=sys.stderr,
-            )
-            raise SystemExit(2)
-        return
-
-    # Local: API key and signing secret required unless ALLOW_INSECURE=1
-    if not insecure:
-        missing = []
-        if not key:
-            missing.append("LGBR_MCP_API_KEY")
-        if not signing:
-            missing.append("LGBR_MCP_SIGNING_SECRET")
-        if missing:
-            print(
-                "lgbr-mcp: set "
-                + ", ".join(missing)
-                + " or LGBR_MCP_ALLOW_INSECURE=1 for local-only",
-                file=sys.stderr,
-            )
-            raise SystemExit(2)
-
-
-def require_mcp_api_key() -> bool:
-    """Whether /mcp/* must present a valid API key."""
-    if allow_insecure() and not is_production() and mcp_api_key() is None:
-        return False
-    return True
 
 
 @lru_cache(maxsize=1)
@@ -105,11 +60,9 @@ def public_base_url() -> str:
 def signing_secret() -> bytes:
     load_env()
     raw = (os.environ.get("LGBR_MCP_SIGNING_SECRET") or "").strip()
-    if raw:
-        return raw.encode("utf-8")
-    if allow_insecure() and not is_production():
-        return b"lgbr-mcp-dev-secret"
-    raise RuntimeError("LGBR_MCP_SIGNING_SECRET is not set")
+    if not raw:
+        raise RuntimeError("LGBR_MCP_SIGNING_SECRET is not set")
+    return raw.encode("utf-8")
 
 
 def pdf_ttl_seconds() -> int:
@@ -121,10 +74,14 @@ def pdf_ttl_seconds() -> int:
     return max(60, min(n, 86400))
 
 
-def mcp_api_key() -> str | None:
+def oauth_username() -> str:
     load_env()
-    key = (os.environ.get("LGBR_MCP_API_KEY") or "").strip()
-    return key or None
+    return (os.environ.get("LGBR_MCP_OAUTH_USERNAME") or "").strip()
+
+
+def oauth_password() -> str:
+    load_env()
+    return (os.environ.get("LGBR_MCP_OAUTH_PASSWORD") or "").strip()
 
 
 def allowed_hosts() -> list[str]:
