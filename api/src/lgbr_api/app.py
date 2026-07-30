@@ -45,6 +45,7 @@ from lgbr_api.consensus_eval import start_eval as consensus_start_eval
 from lgbr_api.crawls import (
     get_cdp_status,
     get_current_crawl,
+    get_history_latest,
     list_crawl_events,
     reconcile_stale_crawls,
     request_stop,
@@ -143,6 +144,13 @@ async def crawl(request: Request) -> JSONResponse:
     except ValueError:
         event_limit = 50
     return JSONResponse(get_current_crawl(event_limit=event_limit))
+
+
+async def crawl_history_latest(request: Request) -> JSONResponse:
+    family = request.query_params.get("family", "fnguide")
+    payload = get_history_latest(family=family)
+    status = int(payload.pop("status", 200))
+    return JSONResponse(payload, status_code=status)
 
 
 async def crawl_events(request: Request) -> JSONResponse:
@@ -712,6 +720,7 @@ def create_app() -> Starlette:
             Route("/api/timeline", timeline),
             Route("/api/timeline/sessions/{session_id}", timeline_session),
             Route("/api/crawl", crawl),
+            Route("/api/crawl/history-latest", crawl_history_latest),
             Route("/api/crawl/events", crawl_events),
             Route("/api/crawl/start", crawl_start, methods=["POST"]),
             Route("/api/crawl/stop", crawl_stop, methods=["POST"]),

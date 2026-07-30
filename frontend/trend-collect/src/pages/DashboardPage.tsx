@@ -1,7 +1,10 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CollectJobCard } from '../components/CollectJobCard'
 import { CoverageGrass } from '../components/CoverageGrass'
 import { useCollectionJob } from '../hooks/useCollectionJob'
 import { useCoverage } from '../hooks/useCoverage'
+import { useFnguideLatestCrawl } from '../hooks/useFnguideLatestCrawl'
 import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import {
@@ -9,10 +12,12 @@ import {
   STATUS_LABEL,
   formatProgress,
   formatPublishedAt,
-  formatTime,
 } from '../lib/format'
 import { crawlModeTypeLabel, isFnguideCrawlMode } from '../lib/collectNav'
 import type { CollectionJobRecord, CollectionJobResponse } from '../types'
+
+const RECENT_WINDOW_MS = 12 * 60 * 60 * 1000
+const RECENT_PAGE_SIZE = 15
 
 const SOURCE_LABEL: Record<string, string> = {
   fnguide: 'FnGuide',
@@ -67,10 +72,10 @@ function pickArgView(
   return { kind: 'feed', status: feed }
 }
 
-function argBadgeLabel(kind: 'feed' | 'fetch_body') {
-  return kind === 'fetch_body'
-    ? 'ARG · 본문 채우기'
-    : 'ARG · 피드'
+function jobTimestamp(
+  job: { started_at?: string | null; ended_at?: string | null } | null | undefined,
+): string | null {
+  return job?.ended_at ?? job?.started_at ?? null
 }
 
 function formatArgProgress(
@@ -131,6 +136,7 @@ function jobBadgeClass(
 export function DashboardPage() {
   const { crawl, status, stale, fetchError, requestingStop, requestLogout } =
     useSessionStatus()
+  const fgLatest = useFnguideLatestCrawl()
   const argFeed = useCollectionJob({ source: 'arg', capability: 'feed' })
   const argBody = useCollectionJob({
     source: 'arg',
@@ -202,10 +208,31 @@ export function DashboardPage() {
 
   const coverage = useCoverage(13)
   const recent = useReports({
-    limit: 4,
+    limit: 200,
     offset: 0,
     poll: true,
   })
+  const [recentPage, setRecentPage] = useState(0)
+  const recentFiltered = useMemo(() => {
+    const cutoff = Date.now() - RECENT_WINDOW_MS
+    return recent.items.filter((item) => {
+      if (!item.last_seen_at) return false
+      const t = Date.parse(item.last_seen_at)
+      return !Number.isNaN(t) && t >= cutoff
+    })
+  }, [recent.items])
+  const recentMaxPage = Math.max(
+    0,
+    Math.ceil(recentFiltered.length / RECENT_PAGE_SIZE) - 1,
+  )
+  useEffect(() => {
+    setRecentPage((p) => Math.min(p, recentMaxPage))
+  }, [recentMaxPage])
+  const recentOffset = recentPage * RECENT_PAGE_SIZE
+  const recentPageItems = recentFiltered.slice(
+    recentOffset,
+    recentOffset + RECENT_PAGE_SIZE,
+  )
   const countsFg = useReports({
     source: 'fnguide',
     limit: 1,
@@ -384,6 +411,53 @@ export function DashboardPage() {
           ? deloitteSearch.status.label
           : '유휴'
 
+  const fnguideLastAt = fnguideOwned
+    ? jobTimestamp(crawl.crawl)
+    : jobTimestamp(fgLatest.crawl)
+  const fnguideProgress = fnguideOwned
+    ? [
+        crawl.crawl?.asset_id,
+        crawlProgress.keyword != null
+          ? `kw=${String(crawlProgress.keyword)}`
+          : null,
+        formatProgress(crawlProgress),
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null
+
+  function mediaLastAt(
+    searchJob: CollectionJobRecord | null | undefined,
+    adhoc: boolean,
+  ) {
+    const fromJob = jobTimestamp(searchJob)
+    if (fromJob) return fromJob
+    if (adhoc) return jobTimestamp(crawl.crawl)
+    return null
+  }
+
+  function mediaProgress(
+    searchBusy: boolean,
+    adhoc: boolean,
+    progress: Record<string, unknown>,
+    message: string | null | undefined,
+  ) {
+    if (searchBusy) {
+      return formatSearchProgress(progress) || message || '—'
+    }
+    if (adhoc) {
+      const bits = [
+        typeof crawlProgress.url === 'string' ? crawlProgress.url : null,
+        crawl.crawl?.cdp_port != null
+          ? `CDP ${crawl.crawl.cdp_port}`
+          : null,
+        formatProgress(crawlProgress),
+      ].filter(Boolean)
+      return bits.length ? bits.join(' · ') : null
+    }
+    return null
+  }
+
   return (
     <>
       <header className="monitor-header">
@@ -397,455 +471,346 @@ export function DashboardPage() {
         <div className="section-head">
           <h2>수집 작업</h2>
           <span className="section-note">
-            FnGuide · ARG · PwC · Accenture · KPMG · EY · Deloitte
+            마지막 수집 · 신선도 · 계정/산출물
           </span>
         </div>
-        <div className="job-board">
-          <article className={`job-card state-${fnguideBadge}`}>
-            <p className="badge-label">
-              FnGuide · 검색
-              {fnguideOwned
-                ? ` · ${crawlModeTypeLabel(crawlMode)}`
-                : ''}
-            </p>
-            <p className="badge-value">{fnguideValue}</p>
-            <p className="account-line">
-              계정 {fetchError ? '—' : status.label}
-              {fnguideOwned && crawl.crawl?.started_at
-                ? ` · ${formatTime(crawl.crawl.started_at)}`
-                : ''}
-            </p>
-            {fnguideOwned ? (
-              <p className="account-line">
-                {[
-                  crawl.crawl?.asset_id,
-                  crawlProgress.keyword != null
-                    ? `kw=${String(crawlProgress.keyword)}`
-                    : null,
-                  formatProgress(crawlProgress),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            ) : null}
-            <p className="account-line">
-              <Link to="/collect/fnguide/list/search">검색 실행</Link>
-              {' · '}
-              <Link to="/docs/reports/fnguide">보고서</Link>
-            </p>
-            {fnguideOwned ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={requestingStop || !!fetchError}
-                  onClick={() => void onStopFnguide()}
-                >
-                  {requestingStop ? '요청 중…' : '종료'}
-                </button>
-              </div>
-            ) : null}
-          </article>
 
-          <article className={`job-card state-${argBadge}`}>
-            <p className="badge-label">{argBadgeLabel(argView.kind)}</p>
-            <p className="badge-value">
-              {argOffline
-                ? 'API Offline'
-                : argBusy
-                  ? argView.status.label
-                  : argView.status.job
+        <div className="job-board-group">
+          <p className="job-board-group-label">계정 · 리포트</p>
+          <div className="job-board">
+            <CollectJobCard
+              title="FnGuide"
+              meta={[
+                '계정',
+                '리포트',
+                '검색',
+                fnguideOwned ? crawlModeTypeLabel(crawlMode) : '',
+              ]}
+              statusLabel={fnguideValue}
+              stateClass={fnguideBadge}
+              freshnessKind="report"
+              lastCollectedAt={fnguideLastAt}
+              lastDocAt={countsFg.items[0]?.last_seen_at ?? null}
+              accountLine={`계정 ${fetchError ? '—' : status.label}`}
+              progressLine={fnguideProgress}
+              links={
+                <>
+                  <Link to="/collect/fnguide/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/fnguide">보고서</Link>
+                </>
+              }
+              stop={
+                fnguideOwned
+                  ? {
+                      label: requestingStop ? '요청 중…' : '종료',
+                      disabled: requestingStop || !!fetchError,
+                      onClick: () => void onStopFnguide(),
+                    }
+                  : null
+              }
+            />
+          </div>
+        </div>
+
+        <div className="job-board-group">
+          <p className="job-board-group-label">무계정 · 리포트</p>
+          <div className="job-board">
+            <CollectJobCard
+              title="PwC"
+              meta={['무계정', '리포트', '검색', pwcAdhoc ? '애드혹' : '']}
+              statusLabel={pwcValue}
+              stateClass={pwcBadge}
+              freshnessKind="report"
+              lastCollectedAt={mediaLastAt(pwcSearch.status.job, pwcAdhoc)}
+              lastDocAt={countsPwc.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                pwcSearchBusy,
+                pwcAdhoc,
+                pwcProgress,
+                pwcSearch.status.job?.message,
+              )}
+              links={
+                <>
+                  <Link to="/collect/pwc/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/pwc">보고서</Link>
+                </>
+              }
+              stop={
+                pwcBusy
+                  ? {
+                      label: (pwcSearchBusy
+                        ? pwcSearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : pwcSearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: pwcSearchBusy
+                        ? pwcSearch.requestingStop
+                        : requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'pwc',
+                          pwcSearchBusy,
+                          pwcAdhoc,
+                          () => pwcSearch.stopFeed(),
+                        ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="Accenture"
+              meta={[
+                '무계정',
+                '리포트',
+                '검색',
+                accentureAdhoc ? '애드혹' : '',
+              ]}
+              statusLabel={accentureValue}
+              stateClass={accentureBadge}
+              freshnessKind="report"
+              lastCollectedAt={mediaLastAt(
+                accentureSearch.status.job,
+                accentureAdhoc,
+              )}
+              lastDocAt={countsAc.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                accentureSearchBusy,
+                accentureAdhoc,
+                accentureProgress,
+                accentureSearch.status.job?.message,
+              )}
+              links={
+                <>
+                  <Link to="/collect/accenture/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/accenture">보고서</Link>
+                </>
+              }
+              stop={
+                accentureBusy
+                  ? {
+                      label: (accentureSearchBusy
+                        ? accentureSearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : accentureSearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: accentureSearchBusy
+                        ? accentureSearch.requestingStop
+                        : requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'accenture',
+                          accentureSearchBusy,
+                          accentureAdhoc,
+                          () => accentureSearch.stopFeed(),
+                        ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="KPMG"
+              meta={['무계정', '리포트', '검색', kpmgAdhoc ? '애드혹' : '']}
+              statusLabel={kpmgValue}
+              stateClass={kpmgBadge}
+              freshnessKind="report"
+              lastCollectedAt={mediaLastAt(kpmgSearch.status.job, kpmgAdhoc)}
+              lastDocAt={countsKp.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                kpmgSearchBusy,
+                kpmgAdhoc,
+                kpmgProgress,
+                kpmgSearch.status.job?.message,
+              )}
+              links={
+                <>
+                  <Link to="/collect/kpmg/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/kpmg">보고서</Link>
+                </>
+              }
+              stop={
+                kpmgBusy
+                  ? {
+                      label: (kpmgSearchBusy
+                        ? kpmgSearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : kpmgSearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: kpmgSearchBusy
+                        ? kpmgSearch.requestingStop
+                        : requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'kpmg',
+                          kpmgSearchBusy,
+                          kpmgAdhoc,
+                          () => kpmgSearch.stopFeed(),
+                        ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="EY"
+              meta={['무계정', '리포트', '검색', eyAdhoc ? '애드혹' : '']}
+              statusLabel={eyValue}
+              stateClass={eyBadge}
+              freshnessKind="report"
+              lastCollectedAt={mediaLastAt(eySearch.status.job, eyAdhoc)}
+              lastDocAt={countsEy.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                eySearchBusy,
+                eyAdhoc,
+                eyProgress,
+                eySearch.status.job?.message,
+              )}
+              links={
+                <>
+                  <Link to="/collect/ey/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/ey">보고서</Link>
+                </>
+              }
+              stop={
+                eyBusy
+                  ? {
+                      label: (eySearchBusy
+                        ? eySearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : eySearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: eySearchBusy
+                        ? eySearch.requestingStop
+                        : requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'ey',
+                          eySearchBusy,
+                          eyAdhoc,
+                          () => eySearch.stopFeed(),
+                        ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="Deloitte"
+              meta={[
+                '무계정',
+                '리포트',
+                '검색',
+                deloitteAdhoc ? '애드혹' : '',
+              ]}
+              statusLabel={deloitteValue}
+              stateClass={deloitteBadge}
+              freshnessKind="report"
+              lastCollectedAt={mediaLastAt(
+                deloitteSearch.status.job,
+                deloitteAdhoc,
+              )}
+              lastDocAt={countsDl.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                deloitteSearchBusy,
+                deloitteAdhoc,
+                deloitteProgress,
+                deloitteSearch.status.job?.message,
+              )}
+              links={
+                <>
+                  <Link to="/collect/deloitte/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/deloitte">보고서</Link>
+                </>
+              }
+              stop={
+                deloitteBusy
+                  ? {
+                      label: (deloitteSearchBusy
+                        ? deloitteSearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : deloitteSearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: deloitteSearchBusy
+                        ? deloitteSearch.requestingStop
+                        : requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'deloitte',
+                          deloitteSearchBusy,
+                          deloitteAdhoc,
+                          () => deloitteSearch.stopFeed(),
+                        ),
+                    }
+                  : null
+              }
+            />
+          </div>
+        </div>
+
+        <div className="job-board-group">
+          <p className="job-board-group-label">무계정 · 일간지</p>
+          <div className="job-board">
+            <CollectJobCard
+              title="ARG"
+              meta={[
+                '무계정',
+                '일간지',
+                argView.kind === 'fetch_body' ? '본문' : '피드',
+              ]}
+              statusLabel={
+                argOffline
+                  ? 'API Offline'
+                  : argBusy
                     ? argView.status.label
-                    : '유휴'}
-            </p>
-            {argView.status.job?.started_at ? (
-              <p className="account-line">
-                {formatTime(argView.status.job.started_at)}
-                {argView.status.job.ended_at
-                  ? ` · ${formatTime(argView.status.job.ended_at)}`
-                  : ''}
-              </p>
-            ) : null}
-            {argBusy || argView.status.job?.message ? (
-              <p className="account-line">
-                {formatArgProgress(
-                  argView.kind,
-                  argView.status.job,
-                  argProgress,
-                )}
-              </p>
-            ) : null}
-            <p className="account-line">
-              <Link to="/collect/arg/list/feed">피드</Link>
-              {' · '}
-              <Link to="/collect/arg/body/fetch">본문</Link>
-              {' · '}
-              <Link to="/docs/articles">기사</Link>
-            </p>
-            {argBusy ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={argActive.requestingStop}
-                  onClick={() => void onStopArg()}
-                >
-                  {argActive.requestingStop ? '요청 중…' : '중단'}
-                </button>
-              </div>
-            ) : null}
-          </article>
-
-          <article className={`job-card state-${pwcBadge}`}>
-            <p className="badge-label">
-              PwC · 검색
-              {pwcAdhoc ? ' · 애드혹' : ''}
-            </p>
-            <p className="badge-value">{pwcValue}</p>
-            {pwcSearchBusy && pwcSearch.status.job?.started_at ? (
-              <p className="account-line">
-                {formatTime(pwcSearch.status.job.started_at)}
-                {pwcSearch.status.job.ended_at
-                  ? ` · ${formatTime(pwcSearch.status.job.ended_at)}`
-                  : ''}
-              </p>
-            ) : null}
-            {pwcAdhoc && crawl.crawl?.started_at ? (
-              <p className="account-line">
-                애드혹 {formatTime(crawl.crawl.started_at)}
-                {crawl.crawl.cdp_port
-                  ? ` · CDP ${crawl.crawl.cdp_port}`
-                  : ''}
-              </p>
-            ) : null}
-            {pwcSearchBusy ? (
-              <p className="account-line">
-                {formatSearchProgress(pwcProgress) ||
-                  pwcSearch.status.job?.message ||
-                  '—'}
-              </p>
-            ) : null}
-            {pwcAdhoc && !pwcSearchBusy ? (
-              <p className="account-line">
-                {typeof crawlProgress.url === 'string'
-                  ? crawlProgress.url
-                  : formatProgress(crawlProgress)}
-              </p>
-            ) : null}
-            <p className="account-line">
-              <Link to="/collect/pwc/list/search">검색 실행</Link>
-              {' · '}
-              <Link to="/docs/reports/pwc">보고서</Link>
-            </p>
-            {pwcBusy ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={
-                    pwcSearchBusy
-                      ? pwcSearch.requestingStop
-                      : requestingStop || !!fetchError
-                  }
-                  onClick={() =>
-                    void onStopMedia(
-                      'pwc',
-                      pwcSearchBusy,
-                      pwcAdhoc,
-                      () => pwcSearch.stopFeed(),
-                    )
-                  }
-                >
-                  {(pwcSearchBusy
-                    ? pwcSearch.requestingStop
-                    : requestingStop)
-                    ? '요청 중…'
-                    : pwcSearchBusy
-                      ? '검색 중단'
-                      : '애드혹 종료'}
-                </button>
-              </div>
-            ) : null}
-          </article>
-
-          <article className={`job-card state-${accentureBadge}`}>
-            <p className="badge-label">
-              Accenture · 검색
-              {accentureAdhoc ? ' · 애드혹' : ''}
-            </p>
-            <p className="badge-value">{accentureValue}</p>
-            {accentureSearchBusy && accentureSearch.status.job?.started_at ? (
-              <p className="account-line">
-                {formatTime(accentureSearch.status.job.started_at)}
-                {accentureSearch.status.job.ended_at
-                  ? ` · ${formatTime(accentureSearch.status.job.ended_at)}`
-                  : ''}
-              </p>
-            ) : null}
-            {accentureAdhoc && crawl.crawl?.started_at ? (
-              <p className="account-line">
-                애드혹 {formatTime(crawl.crawl.started_at)}
-                {crawl.crawl.cdp_port
-                  ? ` · CDP ${crawl.crawl.cdp_port}`
-                  : ''}
-              </p>
-            ) : null}
-            {accentureSearchBusy ? (
-              <p className="account-line">
-                {formatSearchProgress(accentureProgress) ||
-                  accentureSearch.status.job?.message ||
-                  '—'}
-              </p>
-            ) : null}
-            {accentureAdhoc && !accentureSearchBusy ? (
-              <p className="account-line">
-                {typeof crawlProgress.url === 'string'
-                  ? crawlProgress.url
-                  : formatProgress(crawlProgress)}
-              </p>
-            ) : null}
-            <p className="account-line">
-              <Link to="/collect/accenture/list/search">검색 실행</Link>
-              {' · '}
-              <Link to="/docs/reports/accenture">보고서</Link>
-            </p>
-            {accentureBusy ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={
-                    accentureSearchBusy
-                      ? accentureSearch.requestingStop
-                      : requestingStop || !!fetchError
-                  }
-                  onClick={() =>
-                    void onStopMedia(
-                      'accenture',
-                      accentureSearchBusy,
-                      accentureAdhoc,
-                      () => accentureSearch.stopFeed(),
-                    )
-                  }
-                >
-                  {(accentureSearchBusy
-                    ? accentureSearch.requestingStop
-                    : requestingStop)
-                    ? '요청 중…'
-                    : accentureSearchBusy
-                      ? '검색 중단'
-                      : '애드혹 종료'}
-                </button>
-              </div>
-            ) : null}
-          </article>
-
-          <article className={`job-card state-${kpmgBadge}`}>
-            <p className="badge-label">
-              KPMG · 검색
-              {kpmgAdhoc ? ' · 애드혹' : ''}
-            </p>
-            <p className="badge-value">{kpmgValue}</p>
-            {kpmgSearchBusy && kpmgSearch.status.job?.started_at ? (
-              <p className="account-line">
-                {formatTime(kpmgSearch.status.job.started_at)}
-                {kpmgSearch.status.job.ended_at
-                  ? ` · ${formatTime(kpmgSearch.status.job.ended_at)}`
-                  : ''}
-              </p>
-            ) : null}
-            {kpmgAdhoc && crawl.crawl?.started_at ? (
-              <p className="account-line">
-                {formatTime(crawl.crawl.started_at)}
-                {crawl.crawl.cdp_port
-                  ? ` · CDP ${crawl.crawl.cdp_port}`
-                  : ''}
-              </p>
-            ) : null}
-            {kpmgSearchBusy ? (
-              <p className="account-line">
-                {formatSearchProgress(kpmgProgress) ||
-                  kpmgSearch.status.job?.message ||
-                  '…'}
-              </p>
-            ) : null}
-            {kpmgAdhoc && !kpmgSearchBusy ? (
-              <p className="account-line">
-                {typeof crawlProgress.url === 'string'
-                  ? crawlProgress.url
-                  : formatProgress(crawlProgress)}
-              </p>
-            ) : null}
-            <p className="account-line">
-              <Link to="/collect/kpmg/list/search">검색 실행</Link>
-              {' · '}
-              <Link to="/docs/reports/kpmg">보고서</Link>
-            </p>
-            {kpmgBusy ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={
-                    kpmgSearchBusy
-                      ? kpmgSearch.requestingStop
-                      : requestingStop || !!fetchError
-                  }
-                  onClick={() =>
-                    void onStopMedia(
-                      'kpmg',
-                      kpmgSearchBusy,
-                      kpmgAdhoc,
-                      () => kpmgSearch.stopFeed(),
-                    )
-                  }
-                >
-                  {(kpmgSearchBusy
-                    ? kpmgSearch.requestingStop
-                    : requestingStop)
-                    ? '요청 중…'
-                    : kpmgSearchBusy
-                      ? '검색 중단'
-                      : '애드혹 종료'}
-                </button>
-              </div>
-            ) : null}
-          </article>
-
-          <article className={`job-card state-${eyBadge}`}>
-            <p className="badge-label">
-              EY · 검색
-              {eyAdhoc ? ' · 애드혹' : ''}
-            </p>
-            <p className="badge-value">{eyValue}</p>
-            {eySearchBusy && eySearch.status.job?.started_at ? (
-              <p className="account-line">
-                {formatTime(eySearch.status.job.started_at)}
-                {eySearch.status.job.ended_at
-                  ? ` · ${formatTime(eySearch.status.job.ended_at)}`
-                  : ''}
-              </p>
-            ) : null}
-            {eyAdhoc && crawl.crawl?.started_at ? (
-              <p className="account-line">
-                {formatTime(crawl.crawl.started_at)}
-                {crawl.crawl.cdp_port
-                  ? ` · CDP ${crawl.crawl.cdp_port}`
-                  : ''}
-              </p>
-            ) : null}
-            {eySearchBusy ? (
-              <p className="account-line">
-                {formatSearchProgress(eyProgress) ||
-                  eySearch.status.job?.message ||
-                  '…'}
-              </p>
-            ) : null}
-            {eyAdhoc && !eySearchBusy ? (
-              <p className="account-line">
-                {typeof crawlProgress.url === 'string'
-                  ? crawlProgress.url
-                  : formatProgress(crawlProgress)}
-              </p>
-            ) : null}
-            <p className="account-line">
-              <Link to="/collect/ey/list/search">검색 실행</Link>
-              {' · '}
-              <Link to="/docs/reports/ey">보고서</Link>
-            </p>
-            {eyBusy ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={
-                    eySearchBusy
-                      ? eySearch.requestingStop
-                      : requestingStop || !!fetchError
-                  }
-                  onClick={() =>
-                    void onStopMedia(
-                      'ey',
-                      eySearchBusy,
-                      eyAdhoc,
-                      () => eySearch.stopFeed(),
-                    )
-                  }
-                >
-                  {(eySearchBusy ? eySearch.requestingStop : requestingStop)
-                    ? '요청 중…'
-                    : eySearchBusy
-                      ? '검색 중단'
-                      : '애드혹 종료'}
-                </button>
-              </div>
-            ) : null}
-          </article>
-
-          <article className={`job-card state-${deloitteBadge}`}>
-            <p className="badge-label">
-              Deloitte · 검색
-              {deloitteAdhoc ? ' · 애드혹' : ''}
-            </p>
-            <p className="badge-value">{deloitteValue}</p>
-            {deloitteSearchBusy && deloitteSearch.status.job?.started_at ? (
-              <p className="account-line">
-                {formatTime(deloitteSearch.status.job.started_at)}
-                {deloitteSearch.status.job.ended_at
-                  ? ` · ${formatTime(deloitteSearch.status.job.ended_at)}`
-                  : ''}
-              </p>
-            ) : null}
-            {deloitteAdhoc && crawl.crawl?.started_at ? (
-              <p className="account-line">
-                {formatTime(crawl.crawl.started_at)}
-                {crawl.crawl.cdp_port
-                  ? ` · CDP ${crawl.crawl.cdp_port}`
-                  : ''}
-              </p>
-            ) : null}
-            {deloitteSearchBusy ? (
-              <p className="account-line">
-                {formatSearchProgress(deloitteProgress) ||
-                  deloitteSearch.status.job?.message ||
-                  '…'}
-              </p>
-            ) : null}
-            {deloitteAdhoc && !deloitteSearchBusy ? (
-              <p className="account-line">
-                {typeof crawlProgress.url === 'string'
-                  ? crawlProgress.url
-                  : formatProgress(crawlProgress)}
-              </p>
-            ) : null}
-            <p className="account-line">
-              <Link to="/collect/deloitte/list/search">검색 실행</Link>
-              {' · '}
-              <Link to="/docs/reports/deloitte">보고서</Link>
-            </p>
-            {deloitteBusy ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  disabled={
-                    deloitteSearchBusy
-                      ? deloitteSearch.requestingStop
-                      : requestingStop || !!fetchError
-                  }
-                  onClick={() =>
-                    void onStopMedia(
-                      'deloitte',
-                      deloitteSearchBusy,
-                      deloitteAdhoc,
-                      () => deloitteSearch.stopFeed(),
-                    )
-                  }
-                >
-                  {(deloitteSearchBusy
-                    ? deloitteSearch.requestingStop
-                    : requestingStop)
-                    ? '요청 중…'
-                    : deloitteSearchBusy
-                      ? '검색 중단'
-                      : '애드혹 종료'}
-                </button>
-              </div>
-            ) : null}
-          </article>
+                    : argView.status.job
+                      ? argView.status.label
+                      : '유휴'
+              }
+              stateClass={argBadge}
+              freshnessKind="daily"
+              lastCollectedAt={jobTimestamp(argView.status.job)}
+              progressLine={
+                argBusy || argView.status.job?.message
+                  ? formatArgProgress(
+                      argView.kind,
+                      argView.status.job,
+                      argProgress,
+                    ) || null
+                  : null
+              }
+              links={
+                <>
+                  <Link to="/collect/arg/list/feed">피드</Link>
+                  {' · '}
+                  <Link to="/collect/arg/body/fetch">본문</Link>
+                  {' · '}
+                  <Link to="/docs/articles">기사</Link>
+                </>
+              }
+              stop={
+                argBusy
+                  ? {
+                      label: argActive.requestingStop ? '요청 중…' : '중단',
+                      disabled: argActive.requestingStop,
+                      onClick: () => void onStopArg(),
+                    }
+                  : null
+              }
+            />
+          </div>
         </div>
       </section>
 
@@ -870,46 +835,75 @@ export function DashboardPage() {
           <span className="section-note">
             <Link to="/docs/reports">전체 보고서</Link>
             {' · '}
-            최신 4건
+            최근 12시간
           </span>
         </div>
         {recent.error ? (
           <p className="warn">{recent.error}</p>
-        ) : recent.items.length === 0 ? (
-          <p className="empty">아직 수집된 보고서가 없습니다.</p>
+        ) : recentFiltered.length === 0 ? (
+          <p className="empty">최근 12시간 내 수집 건이 없습니다.</p>
         ) : (
-          <div className="report-sheet">
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th className="col-provider">매체</th>
-                  <th className="col-status">상태</th>
-                  <th className="col-title">제목</th>
-                  <th className="col-published">발행</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="col-provider">
-                      {sourceLabel(item.source)}
-                    </td>
-                    <td className="col-status">
-                      <span className={`status-pill status-${item.status}`}>
-                        {STATUS_LABEL[item.status] || item.status}
-                      </span>
-                    </td>
-                    <td className="col-title report-title" title={item.title}>
-                      {item.title}
-                    </td>
-                    <td className="col-published mono">
-                      {formatPublishedAt(item.published_at)}
-                    </td>
+          <>
+            <div className="report-sheet">
+              <table className="report-table">
+                <thead>
+                  <tr>
+                    <th className="col-provider">매체</th>
+                    <th className="col-status">상태</th>
+                    <th className="col-title">제목</th>
+                    <th className="col-published">발행</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {recentPageItems.map((item) => (
+                    <tr key={item.id}>
+                      <td className="col-provider">
+                        {sourceLabel(item.source)}
+                      </td>
+                      <td className="col-status">
+                        <span className={`status-pill status-${item.status}`}>
+                          {STATUS_LABEL[item.status] || item.status}
+                        </span>
+                      </td>
+                      <td className="col-title report-title" title={item.title}>
+                        {item.title}
+                      </td>
+                      <td className="col-published mono">
+                        {formatPublishedAt(item.published_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="pager">
+              <button
+                type="button"
+                className="run-btn"
+                disabled={recentPage <= 0}
+                onClick={() => setRecentPage((p) => Math.max(0, p - 1))}
+              >
+                이전
+              </button>
+              <span className="section-note">
+                {recentOffset + 1}–
+                {Math.min(recentOffset + RECENT_PAGE_SIZE, recentFiltered.length)}{' '}
+                / {recentFiltered.length}
+              </span>
+              <button
+                type="button"
+                className="run-btn"
+                disabled={
+                  recentOffset + RECENT_PAGE_SIZE >= recentFiltered.length
+                }
+                onClick={() =>
+                  setRecentPage((p) => Math.min(recentMaxPage, p + 1))
+                }
+              >
+                다음
+              </button>
+            </div>
+          </>
         )}
       </section>
 

@@ -80,6 +80,22 @@
   gap: 0.85rem;
 }
 
+.job-board-group {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.job-board-group + .job-board-group {
+  margin-top: 1rem;
+}
+
+.job-board-group-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .job-board {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -187,6 +203,7 @@
 .job-card {
   padding: 1rem 1.1rem;
   border: 1px solid var(--line);
+  border-left-width: 3px;
   background: color-mix(in srgb, var(--panel) 70%, #fff);
   display: grid;
   gap: 0.35rem;
@@ -194,12 +211,52 @@
 
 .job-card .badge-label {
   margin: 0;
+  font-weight: 600;
+}
+
+.job-card .job-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .job-card .badge-value {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
+}
+
+.job-card.fresh-fresh {
+  border-left-color: var(--active);
+}
+
+.job-card.fresh-aging {
+  border-left-color: var(--busy);
+}
+
+.job-card.fresh-stale {
+  border-left-color: color-mix(in srgb, var(--muted) 55%, var(--line));
+}
+
+.job-card.state-active {
+  border-color: color-mix(in srgb, var(--active) 55%, var(--line));
+  border-left-color: var(--active);
+  background: color-mix(in srgb, var(--active) 14%, var(--panel));
+}
+
+.job-card.state-starting,
+.job-card.state-stopping {
+  border-color: color-mix(in srgb, var(--busy) 55%, var(--line));
+  border-left-color: var(--busy);
+  background: color-mix(in srgb, var(--busy) 12%, var(--panel));
+}
+
+.job-card.state-error,
+.job-card.state-stale,
+.job-card.state-offline {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
 }
 
 .monitor-header {

@@ -23,6 +23,7 @@ from lgbr_api.asset_id import make_asset_id
 from lgbr_api.db import CRAWL_STATE_LABELS, connect, database_url
 from lgbr_api.sessions import get_current_session, request_logout
 from lgbr_api.source_registry import (
+    FNGUIDE_MODES,
     cdp_modes,
     no_account_modes,
     valid_crawl_modes,
@@ -230,6 +231,59 @@ def get_current_crawl(*, event_limit: int = DEFAULT_EVENT_LIMIT) -> dict[str, An
         "events": events,
         "session": account,
         "can_start": account.get("session") is None,
+    }
+
+
+def get_history_latest(*, family: str = "fnguide") -> dict[str, Any]:
+    """Latest crawl for a mode family (dashboard last-collected).
+
+    For family=fnguide: open FnGuide-mode crawl if any, else newest
+    ended/error row whose mode is in FNGUIDE_MODES (excludes media adhoc).
+    """
+    fam = (family or "").strip().lower()
+    if fam != "fnguide":
+        return {
+            "ok": False,
+            "message": "unsupported family",
+            "status": 400,
+            "family": fam,
+            "crawl": None,
+        }
+    modes = sorted(FNGUIDE_MODES)
+    reconcile_stale_crawls()
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM fnguide_crawls
+                WHERE ended_at IS NULL
+                  AND mode = ANY(%s)
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (modes,),
+            )
+            row = cur.fetchone()
+            if not row:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_crawls
+                    WHERE mode = ANY(%s)
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (modes,),
+                )
+                row = cur.fetchone()
+    if not row:
+        return {"ok": True, "family": fam, "crawl": None, "status": 200}
+    return {
+        "ok": True,
+        "family": fam,
+        "crawl": _serialize(dict(row)),
+        "status": 200,
     }
 
 
