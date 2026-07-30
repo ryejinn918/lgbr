@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type MouseEvent,
 } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAudit } from '../hooks/useAudit'
@@ -18,6 +19,7 @@ import {
   formatRelative,
   formatTime,
 } from '../lib/format'
+import { reportPublicOriginalUrl } from '../lib/publicOriginalUrl'
 import {
   QUALITY_FILTERS,
   STATUS_FILTERS,
@@ -173,6 +175,10 @@ export function ReportsPage({
     setSelectedId((prev) => (prev === id ? null : id))
   }
 
+  function onFileClick(e: MouseEvent) {
+    e.stopPropagation()
+  }
+
   async function onStartPending() {
     const ok = await audit.startPending({
       theme: filters.theme !== 'all' ? filters.theme : undefined,
@@ -189,6 +195,10 @@ export function ReportsPage({
   const qj: QualityJson = detail?.quality_json || {}
   const failReasons = stringList(qj.fail_reasons)
   const passSignals = stringList(qj.pass_signals)
+  const detailOriginalUrl = reportPublicOriginalUrl(
+    detail?.source,
+    detail?.url,
+  )
   const sourceKey = source || 'all'
   const isAll = sourceKey === 'all'
   // 증권사 열은 FnGuide 단독 탭만. 통합 보기·Big4에는 숨김.
@@ -425,6 +435,10 @@ export function ReportsPage({
                 {reports.items.map((item) => {
                   const q = item.quality || 'pending'
                   const selected = selectedId === item.id
+                  const originalUrl = reportPublicOriginalUrl(
+                    item.source,
+                    item.url,
+                  )
                   return (
                     <tr
                       key={item.id}
@@ -450,6 +464,17 @@ export function ReportsPage({
                           >
                             {item.title}
                           </span>
+                          {originalUrl ? (
+                            <a
+                              className="report-file-link report-original-link"
+                              href={originalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={onFileClick}
+                            >
+                              원문
+                            </a>
+                          ) : null}
                         </div>
                       </td>
                       {showProvider ? (
@@ -522,6 +547,17 @@ export function ReportsPage({
           <div className="section-head">
             <h2>품질 감사 결과</h2>
             <div className="audit-actions">
+              {detailOriginalUrl ? (
+                <a
+                  className="run-btn"
+                  href={detailOriginalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={onFileClick}
+                >
+                  원문 열기
+                </a>
+              ) : null}
               <button
                 type="button"
                 className="run-btn"
