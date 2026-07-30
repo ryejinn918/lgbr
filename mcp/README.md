@@ -10,8 +10,8 @@ https://lgbrmcp.magpielabs.co.kr
 
 | Path | 용도 |
 |------|------|
-| `POST /mcp/collect` | 보고서·뉴스 코퍼스 |
-| `POST /mcp/consensus` | 섹터 컨센서스 (`get_consensus` 1차, docs/inputs 드릴다운) |
+| `POST /mcp/collect` | 문서 코퍼스 (`search_reports`→`get_report`, 뉴스 보조) |
+| `POST /mcp/consensus` | 섹터 동향 초안 (`get_consensus`) |
 | `GET/POST /login` | OAuth 로그인 |
 | `GET /files/reports/{id}?exp=&sig=` | 서명 PDF (HMAC, TTL 기본 15분) |
 | `GET /health` | 헬스 (공개) |
@@ -38,10 +38,22 @@ Settings → Connectors → Add custom connector (×2):
 
 OAuth Client ID / Secret는 **비움**. Connect 후 `LGBR_MCP_OAUTH_USERNAME` / `LGBR_MCP_OAUTH_PASSWORD`로 로그인.
 
-### Consensus 도구 위계
+### 동향 조사 플로우
 
-1. **기본:** `get_consensus(theme)` — 축 + filled/consensus 프레임  
-2. **드릴다운:** `list_runs` → (다른 `run_id`) · `list_run_docs` → `get_doc_compress` · `list_theme_inputs`
+1. 섹터 동향 → **consensus** `get_consensus(theme)` 먼저  
+2. 개별 보고서 → **collect** `search_reports(theme|q, source?, provider?)` → `get_report`  
+3. 속보 → `search_news` (보조)
+
+`provider` = 선호 하우스/증권사(종목·섹터마다 다를 수 있음). `source` = 채널(fnguide·deloitte 등).
+
+### Consensus
+
+`get_consensus(theme)` — 분석 축 + 골격 + 보고서 초안 (최신 ended)
+
+### Collect 도구 위계
+
+1. **기본:** `search_reports` → `get_report`  
+2. **보조:** `search_news`
 
 ## Local
 

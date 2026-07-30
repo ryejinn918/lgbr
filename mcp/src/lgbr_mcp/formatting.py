@@ -80,13 +80,10 @@ def serp_list_payload(result: dict[str, Any]) -> dict[str, Any]:
         "total": result.get("total"),
         "limit": result.get("limit"),
         "offset": result.get("offset"),
-        "counts": result.get("counts"),
-        "quality_counts": result.get("quality_counts"),
-        "theme_counts": result.get("theme_counts"),
         "items": items,
         "hint": (
-            "원문은 각 항목의 pdf_url(서명) 또는 source_url을 열어 읽으세요. "
-            "본문 텍스트는 이 도구가 반환하지 않습니다."
+            "후보를 고른 뒤 get_report(id)로 품질 상세·링크를 보세요. "
+            "동향 요약이 목표면 lgbr-consensus.get_consensus(theme)을 먼저."
         ),
     }
 
@@ -101,5 +98,9 @@ def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "ok": True,
         "report": linked,
-        "hint": "원문은 report.pdf_url 또는 report.source_url을 여세요.",
+        "hint": (
+            "품질 심사는 report.quality_json. "
+            "원문 링크는 pdf_url/source_url(브라우저). "
+            "섹터 프레임은 lgbr-consensus.get_consensus."
+        ),
     }

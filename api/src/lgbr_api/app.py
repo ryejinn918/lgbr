@@ -429,6 +429,7 @@ async def reports(request: Request) -> JSONResponse:
         quality=request.query_params.get("quality"),
         theme=request.query_params.get("theme"),
         q=request.query_params.get("q"),
+        provider=request.query_params.get("provider"),
         crawl_id=request.query_params.get("crawl_id"),
         sort=request.query_params.get("sort"),
         limit=limit,

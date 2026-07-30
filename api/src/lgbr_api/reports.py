@@ -471,6 +471,7 @@ def list_reports(
     quality: str | None = None,
     theme: str | None = None,
     q: str | None = None,
+    provider: str | None = None,
     crawl_id: str | None = None,
     sort: str | None = None,
     limit: int = 30,
@@ -525,6 +526,9 @@ def list_reports(
             return _error("invalid crawl_id", sort_key=sort_key)
 
     q_pat = f"%{q.strip()}%" if q and q.strip() else None
+    provider_pat = (
+        f"%{provider.strip()}%" if provider and provider.strip() else None
+    )
 
     where: list[str] = []
     params: list[Any] = []
@@ -552,6 +556,9 @@ def list_reports(
     if crawl_uuid:
         where.append("crawl_id = %s")
         params.append(crawl_uuid)
+    if provider_pat:
+        where.append("attrs->>'provider' ILIKE %s")
+        params.append(provider_pat)
     if q_pat:
         where.append(
             "(title ILIKE %s OR source_key ILIKE %s OR attrs->>'provider' ILIKE %s "
