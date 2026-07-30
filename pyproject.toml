@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "crawler",
     "lgbr-api",
+    "lgbr-mcp",
     "consensus",
 ]
 
@@ -18,11 +19,18 @@ required-environments = [
 [tool.uv.sources]
 crawler = { workspace = true }
 lgbr-api = { workspace = true }
+lgbr-mcp = { workspace = true }
 consensus = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "crawler",
     "api",
+    "mcp",
     "consensus",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]

@@ -650,14 +650,21 @@ def get_report(report_id: str) -> dict[str, Any]:
     return {"ok": True, "report": data}
 
 
-def get_report_file(report_id: str) -> Response:
+def lookup_report_file(report_id: str) -> dict[str, Any]:
+    """Resolve on-disk PDF path for a report (no HTTP response).
+
+    Returns ``ok`` plus ``path`` / ``file_name``, or ``message`` + ``status``.
+    """
     try:
         rid = str(UUID(report_id))
     except (TypeError, ValueError):
-        return JSONResponse(
-            {"ok": False, "message": "invalid report id"},
-            status_code=400,
-        )
+        return {
+            "ok": False,
+            "message": "invalid report id",
+            "status": 400,
+            "path": None,
+            "file_name": None,
+        }
 
     with connect() as conn:
         with conn.cursor() as cur:
@@ -672,28 +679,55 @@ def get_report_file(report_id: str) -> Response:
             row = cur.fetchone()
 
     if row is None:
-        return JSONResponse(
-            {"ok": False, "message": "report not found"},
-            status_code=404,
-        )
+        return {
+            "ok": False,
+            "message": "report not found",
+            "status": 404,
+            "path": None,
+            "file_name": None,
+        }
 
     raw_path = row.get("file_path")
     if not raw_path:
-        return JSONResponse(
-            {"ok": False, "message": "no file for report"},
-            status_code=404,
-        )
+        return {
+            "ok": False,
+            "message": "no file for report",
+            "status": 404,
+            "path": None,
+            "file_name": None,
+        }
 
     path = _safe_download_path(str(raw_path))
     if path is None:
-        return JSONResponse(
-            {"ok": False, "message": "file missing or outside downloads root"},
-            status_code=404,
-        )
+        return {
+            "ok": False,
+            "message": "file missing or outside downloads root",
+            "status": 404,
+            "path": None,
+            "file_name": None,
+        }
 
     name = (row.get("file_name") or path.name or "report.pdf").strip()
+    return {
+        "ok": True,
+        "status": 200,
+        "path": path,
+        "file_name": name,
+        "message": None,
+    }
+
+
+def get_report_file(report_id: str) -> Response:
+    looked = lookup_report_file(report_id)
+    if not looked.get("ok"):
+        return JSONResponse(
+            {"ok": False, "message": looked.get("message") or "error"},
+            status_code=int(looked.get("status") or 404),
+        )
+    path = looked["path"]
+    assert isinstance(path, Path)
     return FileResponse(
         path,
-        filename=name,
+        filename=str(looked.get("file_name") or path.name),
         media_type="application/pdf",
     )

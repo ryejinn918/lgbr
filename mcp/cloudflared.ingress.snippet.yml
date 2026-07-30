@@ -1,0 +1,9 @@
+# Merge into ~/.cloudflared/config.yml ingress (before the catch-all 404):
+#   - hostname: lgbrmcp.magpielabs.co.kr
+#     service: http://127.0.0.1:8788
+#
+# Then DNS: cloudflared tunnel route dns <tunnel-id> lgbrmcp.magpielabs.co.kr
+# (or Cloudflare dashboard CNAME → tunnel, same as nest1/chamber1)
+
+- hostname: lgbrmcp.magpielabs.co.kr
+  service: http://127.0.0.1:8788

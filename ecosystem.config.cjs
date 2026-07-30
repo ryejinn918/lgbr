@@ -22,6 +22,18 @@ module.exports = {
       kill_timeout: 90000,
     },
     {
+      name: 'lgbr-mcp',
+      cwd: root,
+      script: python,
+      args: '-m lgbr_mcp --host 127.0.0.1 --port 8788',
+      interpreter: 'none',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '5s',
+    },
+    {
       name: 'trend-collect',
       cwd: trendCollectDir,
       script: './node_modules/vite/bin/vite.js',
