@@ -13,6 +13,7 @@ import { AccentureRunPage } from './AccentureRunPage'
 import { BainRunPage } from './BainRunPage'
 import { DeloitteRunPage } from './DeloitteRunPage'
 import { EyRunPage } from './EyRunPage'
+import { HbrRunPage } from './HbrRunPage'
 import { HbrKoreaRunPage } from './HbrKoreaRunPage'
 import { KpmgRunPage } from './KpmgRunPage'
 import { PwcAdhocRunPage } from './PwcAdhocRunPage'
@@ -72,6 +73,9 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'bain' && ctx.stage === 'list' && ctx.means === 'search') {
     return <BainRunPage />
+  }
+  if (ctx.source === 'hbr' && ctx.stage === 'list' && ctx.means === 'search') {
+    return <HbrRunPage />
   }
   const media = getMediaSource(ctx.source)
   if (

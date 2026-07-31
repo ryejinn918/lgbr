@@ -71,6 +71,16 @@ SOURCES: dict[str, SourceDef] = {
         hub_url="https://www.bain.com/",
         has_search=True,
     ),
+    "hbr": SourceDef(
+        id="hbr",
+        label="HBR",
+        abbrev="hb",
+        hub_url="https://hbr.org/",
+        has_search=True,
+        requires_login=True,
+        # Confirmed: /signin 404; Sign In modal opens from hub.
+        login_url="https://hbr.org/",
+    ),
     "hbrkorea": SourceDef(
         id="hbrkorea",
         label="HBR Korea",

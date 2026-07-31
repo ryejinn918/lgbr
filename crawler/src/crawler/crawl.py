@@ -25,6 +25,7 @@ from crawler.fnguide_session import (
     FnguideSession,
 )
 from crawler.adhoc_session import AdhocBrowserSession
+from crawler.hbr_session import HbrSession
 from crawler.hbrkorea_session import HbrKoreaSession
 from crawler.jobs.search_report import SEARCH_MODES, get_profile, run_search_report_job
 from crawler.nikkei_session import NikkeiSession
@@ -32,7 +33,7 @@ from crawler.nikkeixtech_session import NikkeixtechSession
 from crawler.session import LoginPageError
 from crawler.sources.registry import get_source, is_adhoc_source, source_requires_login
 
-LoggedInAdhocSession = HbrKoreaSession | NikkeiSession | NikkeixtechSession
+LoggedInAdhocSession = HbrSession | HbrKoreaSession | NikkeiSession | NikkeixtechSession
 
 
 def _adhoc_hold_modes() -> frozenset[str]:
@@ -301,8 +302,19 @@ def _run_logged_in_source_adhoc(
     download_dir.mkdir(parents=True, exist_ok=True)
 
     _ = src  # validated via get_source above
-    if mode == "hbrkorea":
-        sess: LoggedInAdhocSession = HbrKoreaSession(
+    if mode == "hbr":
+        sess: LoggedInAdhocSession = HbrSession(
+            user_id=user_id,
+            password=password,
+            ttl_seconds=ttl_seconds,
+            idle_seconds=idle_seconds,
+            headless=headless,
+            force_other_session=force_other_session,
+            cdp_port=cdp_port,
+            downloads_path=download_dir,
+        )
+    elif mode == "hbrkorea":
+        sess = HbrKoreaSession(
             user_id=user_id,
             password=password,
             ttl_seconds=ttl_seconds,
@@ -787,6 +799,13 @@ def _best_effort_stop_session(
         except Exception:
             pass
         if isinstance(
-            sess, (FnguideSession, HbrKoreaSession, NikkeiSession, NikkeixtechSession)
+            sess,
+            (
+                FnguideSession,
+                HbrSession,
+                HbrKoreaSession,
+                NikkeiSession,
+                NikkeixtechSession,
+            ),
         ):
             sess.session_id = None

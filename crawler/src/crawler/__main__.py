@@ -33,6 +33,7 @@ from crawler.jobs.accenture_report import run_accenture_search_job
 from crawler.jobs.deloitte_report import run_deloitte_search_job
 from crawler.jobs.ey_report import run_ey_search_job
 from crawler.jobs.bain_report import run_bain_search_job
+from crawler.jobs.hbr_report import run_hbr_search_job
 from crawler.jobs.hbrkorea_report import run_hbrkorea_search_job
 from crawler.jobs.kpmg_report import run_kpmg_search_job
 from crawler.jobs.media_pace import DEFAULT_ITEM_DELAY_SECONDS
@@ -381,6 +382,7 @@ def main() -> None:
             if source_requires_login(preview_mode):
                 # Prefer site-specific env over argparse FNGUIDE_* defaults.
                 env_map = {
+                    "hbr": ("HBR_USER_ID", "HBR_PASSWORD"),
                     "hbrkorea": ("HBRKOREA_USER_ID", "HBRKOREA_PASSWORD"),
                     "nikkei": ("NIKKEI_USER_ID", "NIKKEI_PASSWORD"),
                     "nikkeixtech": (
@@ -564,6 +566,8 @@ def main() -> None:
                     runner = run_hbrkorea_search_job
                 elif source == "bain":
                     runner = run_bain_search_job
+                elif source == "hbr":
+                    runner = run_hbr_search_job
                 else:
                     runner = run_pwc_search_job
                 catalog = args.catalog
@@ -573,6 +577,7 @@ def main() -> None:
                     "ey",
                     "deloitte",
                     "bain",
+                    "hbr",
                 ) and catalog in (
                     "kr",
                     "gx",

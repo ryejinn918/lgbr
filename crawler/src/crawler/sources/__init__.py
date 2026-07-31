@@ -2,5 +2,5 @@
 
 FEED_ALLOWLIST = frozenset({"arg"})
 SEARCH_ALLOWLIST = frozenset(
-    {"pwc", "accenture", "kpmg", "ey", "deloitte", "hbrkorea", "bain"}
+    {"pwc", "accenture", "kpmg", "ey", "deloitte", "hbrkorea", "bain", "hbr"}
 )

@@ -26,6 +26,7 @@ const SOURCE_LABEL: Record<string, string> = {
   kpmg: 'KPMG',
   ey: 'EY',
   deloitte: 'Deloitte',
+  hbr: 'HBR',
   hbrkorea: 'HBR Korea',
   mckinsey: 'McKinsey',
   bain: 'Bain',
@@ -172,6 +173,10 @@ export function DashboardPage() {
     source: 'bain',
     capability: 'search',
   })
+  const hbrSearch = useCollectionJob({
+    source: 'hbr',
+    capability: 'search',
+  })
 
   const crawlMode = crawl.crawl?.mode ?? null
   const fnguideOwned =
@@ -186,6 +191,7 @@ export function DashboardPage() {
   const deloitteAdhoc = isBusy(crawl.state) && crawlMode === 'deloitte'
   const mckinseyAdhoc = isBusy(crawl.state) && crawlMode === 'mckinsey'
   const bainAdhoc = isBusy(crawl.state) && crawlMode === 'bain'
+  const hbrAdhoc = isBusy(crawl.state) && crawlMode === 'hbr'
   const hbrkoreaAdhoc = isBusy(crawl.state) && crawlMode === 'hbrkorea'
   const nikkeiAdhoc = isBusy(crawl.state) && crawlMode === 'nikkei'
   const nikkeixtechAdhoc = isBusy(crawl.state) && crawlMode === 'nikkeixtech'
@@ -200,6 +206,7 @@ export function DashboardPage() {
   const deloitteSearchBusy = isBusy(deloitteSearch.status.state)
   const hbrkoreaSearchBusy = isBusy(hbrkoreaSearch.status.state)
   const bainSearchBusy = isBusy(bainSearch.status.state)
+  const hbrSearchBusy = isBusy(hbrSearch.status.state)
   const pwcBusy = pwcSearchBusy || pwcAdhoc
   const accentureBusy = accentureSearchBusy || accentureAdhoc
   const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
@@ -207,6 +214,7 @@ export function DashboardPage() {
   const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
   const mckinseyBusy = mckinseyAdhoc
   const bainBusy = bainSearchBusy || bainAdhoc
+  const hbrBusy = hbrSearchBusy || hbrAdhoc
   const hbrkoreaBusy = hbrkoreaSearchBusy || hbrkoreaAdhoc
   const nikkeiBusy = nikkeiAdhoc
   const nikkeixtechBusy = nikkeixtechAdhoc
@@ -232,6 +240,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const bainProgress = (bainSearch.status.progress ??
     bainSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const hbrProgress = (hbrSearch.status.progress ??
+    hbrSearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const argProgress = (argView.status.progress ??
     argView.status.job?.progress ??
@@ -312,6 +323,12 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsHb = useReports({
+    source: 'hbr',
+    limit: 1,
+    offset: 0,
+    poll: true,
+  })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -359,6 +376,11 @@ export function DashboardPage() {
     bainBusy,
     bainSearchBusy ? bainSearch.status.state : crawl.state,
   )
+  const hbrBadge = jobBadgeClass(
+    !!(hbrSearch.fetchError || (hbrAdhoc && fetchError)),
+    hbrBusy,
+    hbrSearchBusy ? hbrSearch.status.state : crawl.state,
+  )
   const hbrkoreaBadge = jobBadgeClass(
     !!(hbrkoreaSearch.fetchError || (hbrkoreaAdhoc && fetchError)),
     hbrkoreaBusy,
@@ -404,6 +426,7 @@ export function DashboardPage() {
       | 'deloitte'
       | 'mckinsey'
       | 'bain'
+      | 'hbr'
       | 'hbrkorea'
       | 'nikkeixtech'
       | 'nikkei',
@@ -487,6 +510,16 @@ export function DashboardPage() {
         ? crawl.label
         : deloitteSearch.status.job
           ? deloitteSearch.status.label
+          : '유휴'
+
+  const hbrValue = hbrSearch.fetchError
+    ? 'API Offline'
+    : hbrSearchBusy
+      ? hbrSearch.status.label
+      : hbrAdhoc
+        ? crawl.label
+        : hbrSearch.status.job
+          ? hbrSearch.status.label
           : '유휴'
 
   const hbrkoreaValue = hbrkoreaSearch.fetchError
@@ -948,6 +981,56 @@ export function DashboardPage() {
                           bainSearchBusy,
                           bainAdhoc,
                           () => bainSearch.stopFeed(),
+                        ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="HBR"
+              meta={[
+                '계정',
+                '리포트',
+                '검색',
+                hbrAdhoc ? '애드혹' : '',
+              ]}
+              statusLabel={hbrValue}
+              stateClass={hbrBadge}
+              freshnessKind="report"
+              lastCollectedAt={mediaLastAt(hbrSearch.status.job, hbrAdhoc)}
+              lastDocAt={countsHb.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                hbrSearchBusy,
+                hbrAdhoc,
+                hbrProgress,
+                hbrSearch.status.job?.message,
+              )}
+              links={
+                <>
+                  <Link to="/collect/hbr/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/hbr">보고서</Link>
+                </>
+              }
+              stop={
+                hbrBusy
+                  ? {
+                      label: (hbrSearchBusy
+                        ? hbrSearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : hbrSearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: hbrSearchBusy
+                        ? hbrSearch.requestingStop
+                        : requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'hbr',
+                          hbrSearchBusy,
+                          hbrAdhoc,
+                          () => hbrSearch.stopFeed(),
                         ),
                     }
                   : null
