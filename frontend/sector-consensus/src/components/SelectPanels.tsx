@@ -62,29 +62,14 @@ export function SelectPanels() {
   const selectOnly =
     (packRun?.state === 'ended' && packCriteria?.until === 'select') ||
     (packRun?.state === 'error' && packDocs.length > 0)
-  const packById = useMemo(() => {
-    const m = new Map<string, RunDoc>()
-    for (const d of runDocs) {
-      if (d.role === 'selected' || d.role === 'fill_extra') {
-        m.set(d.report_id, d)
-      }
-    }
-    return m
-  }, [runDocs])
   const sortedInputs = useMemo(() => {
-    const rank = (r: InputReport) => {
-      const p = packById.get(r.id)
-      if (p?.role === 'selected') return 0
-      if (p?.role === 'fill_extra') return 1
-      if (r.quality_pass === true) return 2
-      return 3
-    }
+    const rank = (r: InputReport) => (r.quality_pass === true ? 0 : 1)
     return [...inputs].sort((a, b) => {
       const d = rank(a) - rank(b)
       if (d !== 0) return d
       return (a.title || '').localeCompare(b.title || '', 'ko')
     })
-  }, [inputs, packById])
+  }, [inputs])
   const hasPackReview =
     !!packCriteria?.coverage_notes ||
     (!!packCriteria?.pillar_sketch && packCriteria.pillar_sketch.length > 0)
@@ -303,53 +288,26 @@ export function SelectPanels() {
           <p className="section-note">
             최근 3개월 · 후보 {inputs.length}
             {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
-            {packDocs.length > 0
-              ? ` · 위 선별과 동일: 주요 ${coreDocs.length} · 보조 ${biblioDocs.length}`
-              : ' · 분석 축 확정 후 선별됩니다'}
+            {' · AI 축 선정에 쓰는 품질감사 요약'}
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}
         <table className="data-table">
           <thead>
             <tr>
-              <th className="col-role">구분</th>
-              <th>제목</th>
-              <th>주제</th>
-              <th>증권사</th>
-              <th>일자</th>
-              <th>쪽</th>
+              <th className="col-title">제목</th>
+              <th className="col-theme">테마</th>
+              <th className="col-provider">증권사</th>
+              <th className="col-date">일자</th>
+              <th className="col-pages">쪽</th>
               <th className="col-quality">품질</th>
-              <th>이유</th>
+              <th className="col-framework">프레임</th>
             </tr>
           </thead>
           <tbody>
             {sortedInputs.map((r) => {
-              const packed = packById.get(r.id)
-              const kind =
-                packed?.role === 'selected'
-                  ? 'core'
-                  : packed?.role === 'fill_extra'
-                    ? 'biblio'
-                    : r.quality_pass === true
-                      ? 'pool'
-                      : 'omit'
-              const badge =
-                kind === 'core'
-                  ? '주요'
-                  : kind === 'biblio'
-                    ? '보조'
-                    : kind === 'pool'
-                      ? '후보'
-                      : '미달'
-              const why = packed?.select_why ?? null
               const rowClass =
-                kind === 'core'
-                  ? 'input-row role-core'
-                  : kind === 'biblio'
-                    ? 'input-row role-biblio'
-                    : kind === 'pool'
-                      ? 'input-row'
-                      : 'input-row role-omit'
+                r.quality_pass === true ? 'input-row' : 'input-row role-omit'
               const themeLabels = labelThemes(
                 r.themes?.length
                   ? r.themes
@@ -357,20 +315,22 @@ export function SelectPanels() {
                     ? [r.theme_tag]
                     : [],
               )
+              const summaryTip = [r.topic, r.framework_summary, r.rationale]
+                .filter(Boolean)
+                .join('\n\n')
               return (
                 <tr key={r.id} className={rowClass}>
-                  <td className="col-role">
-                    <span className={`role-badge role-${kind}`}>{badge}</span>
-                  </td>
-                  <td>
-                    <span className="text-link" title={r.title}>
+                  <td className="col-title">
+                    <span className="text-link cell-clamp" title={r.title}>
                       {r.title}
                     </span>
                   </td>
-                  <td title={themeLabels}>{themeLabels}</td>
-                  <td>{r.provider ?? '—'}</td>
-                  <td>{r.published_at ?? '—'}</td>
-                  <td>{r.page_count ?? '—'}</td>
+                  <td className="col-theme" title={themeLabels}>
+                    {themeLabels}
+                  </td>
+                  <td className="col-provider">{r.provider ?? '—'}</td>
+                  <td className="col-date">{r.published_at ?? '—'}</td>
+                  <td className="col-pages">{r.page_count ?? '—'}</td>
                   <td className="col-quality">
                     {r.quality_pass === true
                       ? '통과'
@@ -384,7 +344,14 @@ export function SelectPanels() {
                           )
                         : '대기'}
                   </td>
-                  <td title={why ?? undefined}>{why ?? '—'}</td>
+                  <td
+                    className="col-framework"
+                    title={summaryTip || undefined}
+                  >
+                    <span className="cell-clamp">
+                      {r.framework_summary ?? '—'}
+                    </span>
+                  </td>
                 </tr>
               )
             })}

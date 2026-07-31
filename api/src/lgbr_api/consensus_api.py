@@ -426,9 +426,28 @@ def _themes_for_input(r: dict[str, Any]) -> list[str]:
     return [s] if s in THEMES else []
 
 
+def _quality_json_dict(r: dict[str, Any]) -> dict[str, Any]:
+    qj = r.get("quality_json")
+    if isinstance(qj, str):
+        try:
+            qj = json.loads(qj)
+        except json.JSONDecodeError:
+            return {}
+    return qj if isinstance(qj, dict) else {}
+
+
+def _qj_str(qj: dict[str, Any], key: str) -> str | None:
+    raw = qj.get(key)
+    if raw is None:
+        return None
+    s = " ".join(str(raw).split())
+    return s or None
+
+
 def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
     pub = r.get("published_at")
     themes = _themes_for_input(r)
+    qj = _quality_json_dict(r)
     return {
         "id": str(r["id"]),
         "source_key": r.get("source_key"),
@@ -441,6 +460,10 @@ def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
         # theme_tag kept for older clients; prefer themes[].
         "theme_tag": themes[0] if themes else r.get("theme"),
         "themes": themes,
+        "short_title": _qj_str(qj, "short_title"),
+        "topic": _qj_str(qj, "topic"),
+        "framework_summary": _qj_str(qj, "framework_summary"),
+        "rationale": _qj_str(qj, "rationale"),
         "will_select": False,
         "will_fill_extra": False,
         "select_role": None,

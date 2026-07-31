@@ -356,6 +356,59 @@ input:disabled {
   overflow-wrap: anywhere;
 }
 
+.data-table th.col-title,
+.data-table td.col-title {
+  width: 18%;
+  min-width: 10rem;
+  max-width: 16rem;
+}
+
+.data-table th.col-theme,
+.data-table td.col-theme {
+  width: 5.5rem;
+  min-width: 4.5rem;
+  max-width: 7rem;
+  word-break: keep-all;
+}
+
+.data-table th.col-provider,
+.data-table td.col-provider {
+  width: 5.5rem;
+  min-width: 4.5rem;
+  max-width: 7rem;
+  white-space: nowrap;
+}
+
+.data-table th.col-date,
+.data-table td.col-date {
+  width: 6.5rem;
+  min-width: 6rem;
+  max-width: 7.5rem;
+  white-space: nowrap;
+}
+
+.data-table th.col-pages,
+.data-table td.col-pages {
+  width: 2.75rem;
+  min-width: 2.5rem;
+  max-width: 3rem;
+  white-space: nowrap;
+}
+
+.data-table th.col-framework,
+.data-table td.col-framework {
+  width: 36%;
+  min-width: 14rem;
+}
+
+.data-table .cell-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.35;
+}
+
 .role-badge {
   display: inline-block;
   flex-shrink: 0;

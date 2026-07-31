@@ -95,6 +95,11 @@ export type InputReport = {
   /** @deprecated prefer themes */
   theme_tag?: string | null
   themes?: string[]
+  /** Audit card fields from quality_json (axis / select LLM inputs). */
+  short_title?: string | null
+  topic?: string | null
+  framework_summary?: string | null
+  rationale?: string | null
   will_select: boolean
   will_fill_extra?: boolean
   select_role?: string | null
