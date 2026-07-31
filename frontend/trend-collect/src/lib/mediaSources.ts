@@ -8,6 +8,9 @@ export type MediaSource = {
   hubUrl: string
   hasSearch: boolean
   hasCatalogs: boolean
+  /** Account login before CDP hold (FnGuide-style). */
+  requiresLogin?: boolean
+  loginUrl?: string
 }
 
 export const MEDIA_SOURCES: MediaSource[] = [
@@ -45,6 +48,15 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hubUrl: 'https://www.deloitte.com/us/en/insights.html',
     hasSearch: true,
     hasCatalogs: false,
+  },
+  {
+    id: 'hbrkorea',
+    label: 'HBR Korea',
+    hubUrl: 'https://www.hbrkorea.com/',
+    hasSearch: false,
+    hasCatalogs: false,
+    requiresLogin: true,
+    loginUrl: 'https://www.hbrkorea.com/member/login',
   },
 ]
 

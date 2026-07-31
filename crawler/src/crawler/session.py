@@ -13,9 +13,10 @@ from pathlib import Path
 from patchright.sync_api import Browser, BrowserContext, Page
 
 from crawler.browser import LOGIN_URL, launch_browser, launch_context, new_human_context
+from crawler.paths import browser_profile_dir, session_state_path
 from crawler.status import DEFAULT_STATUS_PATH, clear_status, set_status
 
-DEFAULT_SESSION_PATH = Path(".crawler/session.json")
+DEFAULT_SESSION_PATH = session_state_path()
 SESSION_CONFLICT_TITLE = "이미 로그인된 다른 기기가 있습니다."
 
 
@@ -133,11 +134,12 @@ def filter_diagnostics(page: Page) -> dict:
 
 
 def read_chrome_exit_type(
-    preferences: Path = Path(".crawler/browser-profile/Default/Preferences"),
+    preferences: Path | None = None,
 ) -> str | None:
     """Read Chrome profile.exit_type when present (Crashed vs clean)."""
+    prefs = preferences or (browser_profile_dir() / "Default" / "Preferences")
     try:
-        data = json.loads(preferences.read_text(encoding="utf-8"))
+        data = json.loads(prefs.read_text(encoding="utf-8"))
     except Exception:
         return None
     profile = data.get("profile")

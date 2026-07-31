@@ -51,6 +51,7 @@ from crawler.session import (
     verify_session,
 )
 from crawler import collection_jobs_store, crawls_store, sessions_store
+from crawler.paths import snapshots_dir
 from crawler.status import DEFAULT_STATUS_PATH, clear_status, get_status, set_status
 
 
@@ -299,7 +300,7 @@ def main() -> None:
     cdp_shot.add_argument(
         "--out",
         type=Path,
-        default=Path(".crawler/snapshots/cdp.png"),
+        default=snapshots_dir() / "cdp.png",
     )
     cdp_eval = cdp_sub.add_parser("eval", help="Evaluate JS in active tab")
     cdp_eval.add_argument("--expr", required=True)
@@ -371,20 +372,39 @@ def main() -> None:
         if crawl_command == "run":
             preview = crawls_store.get_crawl(args.crawl_id)
             preview_mode = str((preview or {}).get("mode") or "")
-            from crawler.sources.registry import is_adhoc_source
+            from crawler.sources.registry import is_adhoc_source, source_requires_login
 
-            if not is_adhoc_source(preview_mode) and (
-                not args.user_id or not args.password
-            ):
+            user_id = args.user_id or ""
+            password = args.password or ""
+            if source_requires_login(preview_mode):
+                # Prefer site-specific env; CLI flags still override when set
+                # to non-default empty after argparse defaults from FNGUIDE_*.
+                site_user = os.environ.get("HBRKOREA_USER_ID") if preview_mode == "hbrkorea" else None
+                site_pass = (
+                    os.environ.get("HBRKOREA_PASSWORD")
+                    if preview_mode == "hbrkorea"
+                    else None
+                )
+                # argparse defaults user/password from FNGUIDE_*; for HBR use
+                # HBRKOREA_* unless explicitly passed (same as env already set).
+                if preview_mode == "hbrkorea":
+                    user_id = site_user or ""
+                    password = site_pass or ""
+                if not user_id or not password:
+                    parser.error(
+                        f"crawl run mode={preview_mode} requires "
+                        "HBRKOREA_USER_ID/HBRKOREA_PASSWORD"
+                    )
+            elif not is_adhoc_source(preview_mode) and (not user_id or not password):
                 parser.error(
                     "crawl run requires --user-id/--password or "
                     "FNGUIDE_USER_ID/FNGUIDE_PASSWORD "
-                    "(except adhoc media sources)"
+                    "(except no-login adhoc media sources)"
                 )
             try:
                 result = run_crawl(
-                    user_id=args.user_id or "",
-                    password=args.password or "",
+                    user_id=user_id,
+                    password=password,
                     ttl_seconds=args.ttl,
                     idle_seconds=args.idle,
                     headless=headless,

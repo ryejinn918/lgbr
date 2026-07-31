@@ -26,6 +26,7 @@ const SOURCE_LABEL: Record<string, string> = {
   kpmg: 'KPMG',
   ey: 'EY',
   deloitte: 'Deloitte',
+  hbrkorea: 'HBR Korea',
 }
 
 function sourceLabel(source: string | null | undefined) {
@@ -171,6 +172,7 @@ export function DashboardPage() {
     isBusy(crawl.state) && crawlMode === 'kpmg'
   const eyAdhoc = isBusy(crawl.state) && crawlMode === 'ey'
   const deloitteAdhoc = isBusy(crawl.state) && crawlMode === 'deloitte'
+  const hbrkoreaAdhoc = isBusy(crawl.state) && crawlMode === 'hbrkorea'
 
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
@@ -185,6 +187,7 @@ export function DashboardPage() {
   const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
   const eyBusy = eySearchBusy || eyAdhoc
   const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
+  const hbrkoreaBusy = hbrkoreaAdhoc
 
   const crawlProgress = crawl.progress ?? {}
   const pwcProgress = (pwcSearch.status.progress ??
@@ -306,6 +309,11 @@ export function DashboardPage() {
     deloitteBusy,
     deloitteSearchBusy ? deloitteSearch.status.state : crawl.state,
   )
+  const hbrkoreaBadge = jobBadgeClass(
+    !!(hbrkoreaAdhoc && fetchError),
+    hbrkoreaBusy,
+    crawl.state,
+  )
 
   async function onStopFnguide() {
     if (!window.confirm('FnGuide 크롤을 종료하고 로그아웃할까요?')) return
@@ -328,7 +336,7 @@ export function DashboardPage() {
   }
 
   async function onStopMedia(
-    source: 'pwc' | 'accenture' | 'kpmg' | 'ey' | 'deloitte',
+    source: 'pwc' | 'accenture' | 'kpmg' | 'ey' | 'deloitte' | 'hbrkorea',
     searchBusy: boolean,
     adhoc: boolean,
     stopSearch?: () => Promise<unknown>,
@@ -410,6 +418,12 @@ export function DashboardPage() {
         : deloitteSearch.status.job
           ? deloitteSearch.status.label
           : '유휴'
+
+  const hbrkoreaValue = fetchError
+    ? 'API Offline'
+    : hbrkoreaAdhoc
+      ? crawl.label
+      : '유휴'
 
   const fnguideLastAt = fnguideOwned
     ? jobTimestamp(crawl.crawl)
@@ -745,6 +759,36 @@ export function DashboardPage() {
                           deloitteAdhoc,
                           () => deloitteSearch.stopFeed(),
                         ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="HBR Korea"
+              meta={['계정', '애드혹', hbrkoreaAdhoc ? '로그인' : '']}
+              statusLabel={hbrkoreaValue}
+              stateClass={hbrkoreaBadge}
+              freshnessKind="report"
+              lastCollectedAt={
+                hbrkoreaAdhoc ? jobTimestamp(crawl.crawl) : null
+              }
+              progressLine={
+                hbrkoreaAdhoc
+                  ? mediaProgress(false, true, crawlProgress, crawl.crawl?.message)
+                  : null
+              }
+              links={
+                <>
+                  <Link to="/collect/hbrkorea/list/search">애드혹 실행</Link>
+                </>
+              }
+              stop={
+                hbrkoreaBusy
+                  ? {
+                      label: requestingStop ? '요청 중…' : '애드혹 종료',
+                      disabled: requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia('hbrkorea', false, hbrkoreaAdhoc),
                     }
                   : null
               }

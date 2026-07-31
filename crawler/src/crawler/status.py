@@ -9,9 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from crawler.paths import status_path
+
 StatusState = Literal["idle", "logging_in", "active", "logging_out", "error"]
 
-DEFAULT_STATUS_PATH = Path(".crawler/status.json")
+DEFAULT_STATUS_PATH = status_path()
 
 _IDLE: dict[str, Any] = {
     "state": "idle",

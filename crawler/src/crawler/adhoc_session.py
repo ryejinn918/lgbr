@@ -12,6 +12,7 @@ from typing import Any
 from patchright.sync_api import BrowserContext, Page
 
 from crawler.browser import launch_context
+from crawler.paths import browser_profile_dir
 
 DEFAULT_TTL_SECONDS = int(os.environ.get("ADHOC_SESSION_TTL_SECONDS", "28800"))
 DEFAULT_IDLE_SECONDS = int(os.environ.get("ADHOC_SESSION_IDLE_SECONDS", "3600"))
@@ -44,7 +45,7 @@ class AdhocBrowserSession:
 
     def __post_init__(self) -> None:
         if self.profile_dir is None:
-            self.profile_dir = Path(f".crawler/browser-profile-{self.source_id}")
+            self.profile_dir = browser_profile_dir(f"browser-profile-{self.source_id}")
 
     def start(self) -> dict[str, Any]:
         if self.page is not None:

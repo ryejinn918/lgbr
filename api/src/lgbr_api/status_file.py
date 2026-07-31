@@ -7,8 +7,11 @@ import os
 from pathlib import Path
 from typing import Any
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_STATUS = _REPO_ROOT / ".crawler" / "status.json"
+
 DEFAULT_STATUS_PATH = Path(
-    os.environ.get("FNGUIDE_STATUS_PATH", ".crawler/status.json")
+    os.environ.get("FNGUIDE_STATUS_PATH", str(_DEFAULT_STATUS))
 )
 
 _IDLE: dict[str, Any] = {

@@ -16,6 +16,8 @@ class SourceDef:
     abbrev: str
     hub_url: str
     has_search: bool = False
+    requires_login: bool = False
+    login_url: str | None = None
 
 
 # Add new adhoc media here; no DB migration needed for mode allowlist.
@@ -55,6 +57,15 @@ SOURCES: dict[str, SourceDef] = {
         hub_url="https://www.deloitte.com/us/en/insights.html",
         has_search=True,
     ),
+    "hbrkorea": SourceDef(
+        id="hbrkorea",
+        label="HBR Korea",
+        abbrev="hk",
+        hub_url="https://www.hbrkorea.com/",
+        has_search=False,
+        requires_login=True,
+        login_url="https://www.hbrkorea.com/member/login",
+    ),
 }
 
 
@@ -75,6 +86,16 @@ def adhoc_source_ids() -> frozenset[str]:
 
 def is_adhoc_source(mode: str | None) -> bool:
     return (mode or "").strip().lower() in SOURCES
+
+
+def source_requires_login(mode: str | None) -> bool:
+    key = (mode or "").strip().lower()
+    src = SOURCES.get(key)
+    return bool(src and src.requires_login)
+
+
+def no_account_source_ids() -> frozenset[str]:
+    return frozenset(s.id for s in SOURCES.values() if not s.requires_login)
 
 
 def source_mode_abbrev() -> dict[str, str]:

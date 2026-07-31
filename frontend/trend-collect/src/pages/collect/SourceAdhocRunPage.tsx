@@ -28,6 +28,8 @@ export function SourceAdhocRunPage() {
   const cdpPort = crawl.crawl?.cdp_port
   const label = meta?.label ?? source
   const hubUrl = meta?.hubUrl ?? ''
+  const loginUrl = meta?.loginUrl ?? ''
+  const requiresLogin = meta?.requiresLogin === true
   const badgeValue = session.fetchError
     ? 'API Offline'
     : isThisSource
@@ -37,7 +39,10 @@ export function SourceAdhocRunPage() {
         : `${label} · 유휴`
 
   async function onStart() {
-    if (!window.confirm(`${label} 애드혹을 시작할까요?\n${hubUrl}`)) {
+    const warn = requiresLogin
+      ? `\n\n계정 로그인 후 CDP를 엽니다.\n단일 세션 계정이면 다른 곳의 접속이 끊길 수 있습니다.`
+      : ''
+    if (!window.confirm(`${label} 애드혹을 시작할까요?\n${hubUrl}${warn}`)) {
       return
     }
     try {
@@ -68,12 +73,31 @@ export function SourceAdhocRunPage() {
     <section className={`panel badge-panel state-${badgeState}`}>
       <p className="badge-label">애드혹 · 실행</p>
       <p className="badge-value">{badgeValue}</p>
-      <p className="account-line">
-        허브를 Chrome+CDP로 엽니다. 목록/PDF 자동 수집은 아직 없습니다. 허브:{' '}
-        <a href={hubUrl} target="_blank" rel="noreferrer">
-          {hubUrl.replace(/^https?:\/\//, '')}
-        </a>
-      </p>
+      {requiresLogin ? (
+        <p className="account-line">
+          계정 로그인 후 Chrome+CDP로 홀드합니다. 목록/본문 자동 수집은 아직
+          없습니다. 계정당 동시 1세션이라 다른 접속이 끊길 수 있습니다. 허브:{' '}
+          <a href={hubUrl} target="_blank" rel="noreferrer">
+            {hubUrl.replace(/^https?:\/\//, '')}
+          </a>
+          {loginUrl ? (
+            <>
+              {' · '}
+              로그인:{' '}
+              <a href={loginUrl} target="_blank" rel="noreferrer">
+                {loginUrl.replace(/^https?:\/\//, '')}
+              </a>
+            </>
+          ) : null}
+        </p>
+      ) : (
+        <p className="account-line">
+          허브를 Chrome+CDP로 엽니다. 목록/PDF 자동 수집은 아직 없습니다. 허브:{' '}
+          <a href={hubUrl} target="_blank" rel="noreferrer">
+            {hubUrl.replace(/^https?:\/\//, '')}
+          </a>
+        </p>
+      )}
 
       {isThisSource && crawl.crawl?.started_at && !session.fetchError ? (
         <p className="account-line">

@@ -14,6 +14,7 @@ from patchright.sync_api import BrowserContext, Page
 
 from crawler import sessions_store
 from crawler.browser import LOGIN_URL, launch_context
+from crawler.paths import downloads_dir_root
 from crawler.session import (
     LoginPageError,
     _is_logged_in,
@@ -98,7 +99,7 @@ class FnguideSession:
                 detail = dict(exc.detail)
             if self.page is not None:
                 try:
-                    artifact_dir = self.downloads_path or Path(".crawler/downloads") / (
+                    artifact_dir = self.downloads_path or downloads_dir_root() / (
                         self.session_id or "login-fail"
                     )
                     captured = capture_login_failure(self.page, artifact_dir)

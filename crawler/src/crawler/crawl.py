@@ -25,9 +25,10 @@ from crawler.fnguide_session import (
     FnguideSession,
 )
 from crawler.adhoc_session import AdhocBrowserSession
+from crawler.hbrkorea_session import HbrKoreaSession
 from crawler.jobs.search_report import SEARCH_MODES, get_profile, run_search_report_job
 from crawler.session import LoginPageError
-from crawler.sources.registry import get_source, is_adhoc_source
+from crawler.sources.registry import get_source, is_adhoc_source, source_requires_login
 
 
 def _adhoc_hold_modes() -> frozenset[str]:
@@ -83,6 +84,19 @@ def run_crawl(
     crawl_id = str(crawl["id"])
     mode = str(crawl.get("mode") or "auto")
     if is_adhoc_source(mode):
+        if source_requires_login(mode):
+            return _run_logged_in_source_adhoc(
+                crawl_id=crawl_id,
+                crawl=crawl,
+                mode=mode,
+                user_id=user_id,
+                password=password,
+                ttl_seconds=ttl_seconds,
+                idle_seconds=idle_seconds,
+                headless=headless,
+                force_other_session=force_other_session,
+                poll_seconds=poll_seconds,
+            )
         return _run_source_adhoc(
             crawl_id=crawl_id,
             crawl=crawl,
@@ -248,6 +262,138 @@ def _resolve_adhoc_hub_url(mode: str) -> str:
         except ValueError:
             return get_catalog("kr").hub_url
     return src.hub_url
+
+
+def _run_logged_in_source_adhoc(
+    *,
+    crawl_id: str,
+    crawl: dict[str, Any],
+    mode: str,
+    user_id: str,
+    password: str,
+    ttl_seconds: int,
+    idle_seconds: int,
+    headless: bool | None,
+    force_other_session: bool,
+    poll_seconds: float,
+) -> dict[str, Any]:
+    """Account media adhoc: site login + CDP hold (e.g. HBR Korea)."""
+    asset_id = str(crawl.get("asset_id") or "")
+    if not asset_id:
+        raise CrawlStateError(f"Crawl {crawl_id} missing asset_id")
+    if not user_id or not password:
+        raise CrawlStateError(f"{mode} crawl requires account credentials")
+    src = get_source(mode)
+    log = CrawlLogger(crawl_id)
+    log.emit(
+        level="info",
+        stage="crawl",
+        event="claimed",
+        mode=mode,
+        asset_id=asset_id,
+    )
+    cdp_port = allocate_cdp_port()
+    download_dir = downloads_dir(asset_id)
+    download_dir.mkdir(parents=True, exist_ok=True)
+
+    if mode != "hbrkorea":
+        raise CrawlStateError(f"unsupported logged-in adhoc source: {mode}")
+    _ = src  # validated via get_source above
+    sess = HbrKoreaSession(
+        user_id=user_id,
+        password=password,
+        ttl_seconds=ttl_seconds,
+        idle_seconds=idle_seconds,
+        headless=headless,
+        force_other_session=force_other_session,
+        cdp_port=cdp_port,
+        downloads_path=download_dir,
+    )
+
+    try:
+        log.emit(
+            level="info",
+            stage="login",
+            event="stage_start",
+            mode=mode,
+            asset_id=asset_id,
+        )
+        log.set_progress(stage="login", mode=mode, asset_id=asset_id)
+        try:
+            sess.start()
+        except LoginPageError as exc:
+            log.emit(
+                level="error",
+                stage="login",
+                event="error",
+                error=str(exc),
+                **(exc.detail or {}),
+            )
+            raise
+        if isinstance(sess, HbrKoreaSession) and sess.conflict_accepted:
+            log.emit(
+                level="info",
+                stage="login",
+                event="session_conflict_accepted",
+                mode=mode,
+            )
+        log.emit(level="info", stage="login", event="stage_end", mode=mode)
+        if not sess.session_id:
+            raise CrawlStateError("Session start returned no session_id")
+        if _signal_requested():
+            return _graceful_end(
+                crawl_id,
+                sess,
+                log,
+                reason="shutdown",
+                message="shutdown signal",
+            )
+        crawls_store.set_cdp_port(crawl_id, cdp_port)
+        log.emit(level="info", stage="crawl", event="cdp_ready", cdp_port=cdp_port)
+        crawls_store.attach_session(crawl_id, sess.session_id)
+        crawls_store.mark_active(crawl_id)
+        log.emit(
+            level="info",
+            stage="crawl",
+            event="active",
+            mode=mode,
+            asset_id=asset_id,
+            url=sess.page.url if sess.page else None,
+        )
+        log.set_progress(
+            stage="adhoc_hold",
+            mode=mode,
+            asset_id=asset_id,
+            cdp_port=cdp_port,
+            url=sess.page.url if sess.page else None,
+        )
+        return _hold_until_stop(
+            crawl_id,
+            sess,
+            log,
+            touch_step=mode,
+            poll_seconds=poll_seconds,
+        )
+    except KeyboardInterrupt:
+        return _graceful_end(
+            crawl_id,
+            sess,
+            log,
+            reason="shutdown",
+            message="shutdown signal",
+        )
+    except LoginPageError as exc:
+        log.emit(
+            level="error",
+            stage="crawl",
+            event="error",
+            error=str(exc),
+            **(exc.detail or {}),
+        )
+        return _fail_closed(crawl_id, sess, log, message=str(exc))
+    except Exception as exc:
+        log.emit(level="error", stage="crawl", event="error", error=str(exc))
+        return _fail_closed(crawl_id, sess, log, message=str(exc))
 
 
 def _run_source_adhoc(
@@ -439,7 +585,7 @@ def _handoff_to_adhoc(
 
 def _hold_until_stop(
     crawl_id: str,
-    sess: FnguideSession | AdhocBrowserSession,
+    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
     log: CrawlLogger,
     *,
     touch_step: str,
@@ -472,7 +618,7 @@ def _hold_until_stop(
 
 def _graceful_end(
     crawl_id: str,
-    sess: FnguideSession | AdhocBrowserSession,
+    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
     log: CrawlLogger,
     *,
     reason: str,
@@ -529,7 +675,7 @@ def _graceful_end(
 
 def _fail_closed(
     crawl_id: str,
-    sess: FnguideSession | AdhocBrowserSession,
+    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
     log: CrawlLogger | None,
     *,
     message: str,
@@ -571,7 +717,9 @@ def _fail_closed(
 
 
 def _best_effort_stop_session(
-    sess: FnguideSession | AdhocBrowserSession, *, message: str
+    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
+    *,
+    message: str,
 ) -> None:
     if not sess.session_id and not sess.page:
         return
@@ -598,5 +746,5 @@ def _best_effort_stop_session(
             sess._close_browser()
         except Exception:
             pass
-        if isinstance(sess, FnguideSession):
+        if isinstance(sess, (FnguideSession, HbrKoreaSession)):
             sess.session_id = None
