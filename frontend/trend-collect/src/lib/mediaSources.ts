@@ -53,7 +53,7 @@ export const MEDIA_SOURCES: MediaSource[] = [
     id: 'hbrkorea',
     label: 'HBR Korea',
     hubUrl: 'https://www.hbrkorea.com/',
-    hasSearch: false,
+    hasSearch: true,
     hasCatalogs: false,
     requiresLogin: true,
     loginUrl: 'https://www.hbrkorea.com/member/login',

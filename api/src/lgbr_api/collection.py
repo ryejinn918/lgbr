@@ -30,7 +30,9 @@ JOB_STATE_LABELS = {
 }
 
 FEED_ALLOWLIST = frozenset({"arg"})
-SEARCH_ALLOWLIST = frozenset({"pwc", "accenture", "kpmg", "ey", "deloitte"})
+SEARCH_ALLOWLIST = frozenset(
+    {"pwc", "accenture", "kpmg", "ey", "deloitte", "hbrkorea"}
+)
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
 CAPABILITY_LABELS = {
     "feed": "리스트 발굴",
@@ -313,6 +315,8 @@ EY_CATALOGS = frozenset({"us"})
 DEFAULT_EY_CATALOG = "us"
 DELOITTE_CATALOGS = frozenset({"us"})
 DEFAULT_DELOITTE_CATALOG = "us"
+HBRKOREA_CATALOGS = frozenset({"kr"})
+DEFAULT_HBRKOREA_CATALOG = "kr"
 DELOITTE_PROFILES = frozenset(
     {
         "report",
@@ -332,6 +336,7 @@ SOURCE_DEFAULT_CATALOG = {
     "kpmg": DEFAULT_KPMG_CATALOG,
     "ey": DEFAULT_EY_CATALOG,
     "deloitte": DEFAULT_DELOITTE_CATALOG,
+    "hbrkorea": DEFAULT_HBRKOREA_CATALOG,
 }
 SOURCE_CATALOGS = {
     "pwc": PWC_CATALOGS,
@@ -339,6 +344,7 @@ SOURCE_CATALOGS = {
     "kpmg": KPMG_CATALOGS,
     "ey": EY_CATALOGS,
     "deloitte": DELOITTE_CATALOGS,
+    "hbrkorea": HBRKOREA_CATALOGS,
 }
 
 
@@ -352,7 +358,7 @@ def start_search(
     profile: str | None = None,
     item_delay_seconds: float | None = None,
 ) -> dict[str, Any]:
-    """Start list-while-download search job (PwC / Accenture / KPMG / EY / Deloitte)."""
+    """Start list-while-download search job (PwC / Big4 / HBR Korea)."""
     source_s = (source or "").strip().lower()
     if source_s not in SEARCH_ALLOWLIST:
         return {

@@ -32,6 +32,7 @@ from crawler.fetch_body_job import (
 from crawler.jobs.accenture_report import run_accenture_search_job
 from crawler.jobs.deloitte_report import run_deloitte_search_job
 from crawler.jobs.ey_report import run_ey_search_job
+from crawler.jobs.hbrkorea_report import run_hbrkorea_search_job
 from crawler.jobs.kpmg_report import run_kpmg_search_job
 from crawler.jobs.media_pace import DEFAULT_ITEM_DELAY_SECONDS
 from crawler.jobs.pwc_report import (
@@ -543,6 +544,8 @@ def main() -> None:
                     runner = run_ey_search_job
                 elif source == "deloitte":
                     runner = run_deloitte_search_job
+                elif source == "hbrkorea":
+                    runner = run_hbrkorea_search_job
                 else:
                     runner = run_pwc_search_job
                 catalog = args.catalog
@@ -556,6 +559,8 @@ def main() -> None:
                     "gx",
                 ):
                     catalog = "us"
+                if source == "hbrkorea" and catalog in ("us", "gx"):
+                    catalog = "kr"
                 period_months = args.period_months
                 if source != "deloitte" and period_months is None:
                     period_months = PWC_DEFAULT_PERIOD_MONTHS

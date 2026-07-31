@@ -74,7 +74,7 @@ function mediaJobs(sourceId: string): CollectJob[] {
   return [
     {
       id: 'search',
-      label: '검색',
+      label: meta?.hasSearch === false ? '애드혹' : '검색',
       stage: 'list',
       means: 'search',
       settingsLabel: meta?.hasCatalogs ? '목록' : null,

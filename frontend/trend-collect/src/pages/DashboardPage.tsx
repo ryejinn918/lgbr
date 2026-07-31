@@ -160,6 +160,10 @@ export function DashboardPage() {
     source: 'deloitte',
     capability: 'search',
   })
+  const hbrkoreaSearch = useCollectionJob({
+    source: 'hbrkorea',
+    capability: 'search',
+  })
 
   const crawlMode = crawl.crawl?.mode ?? null
   const fnguideOwned =
@@ -182,12 +186,13 @@ export function DashboardPage() {
   const kpmgSearchBusy = isBusy(kpmgSearch.status.state)
   const eySearchBusy = isBusy(eySearch.status.state)
   const deloitteSearchBusy = isBusy(deloitteSearch.status.state)
+  const hbrkoreaSearchBusy = isBusy(hbrkoreaSearch.status.state)
   const pwcBusy = pwcSearchBusy || pwcAdhoc
   const accentureBusy = accentureSearchBusy || accentureAdhoc
   const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
   const eyBusy = eySearchBusy || eyAdhoc
   const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
-  const hbrkoreaBusy = hbrkoreaAdhoc
+  const hbrkoreaBusy = hbrkoreaSearchBusy || hbrkoreaAdhoc
 
   const crawlProgress = crawl.progress ?? {}
   const pwcProgress = (pwcSearch.status.progress ??
@@ -204,6 +209,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const deloitteProgress = (deloitteSearch.status.progress ??
     deloitteSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const hbrkoreaProgress = (hbrkoreaSearch.status.progress ??
+    hbrkoreaSearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const argProgress = (argView.status.progress ??
     argView.status.job?.progress ??
@@ -272,6 +280,12 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsHk = useReports({
+    source: 'hbrkorea',
+    limit: 1,
+    offset: 0,
+    poll: true,
+  })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -310,9 +324,9 @@ export function DashboardPage() {
     deloitteSearchBusy ? deloitteSearch.status.state : crawl.state,
   )
   const hbrkoreaBadge = jobBadgeClass(
-    !!(hbrkoreaAdhoc && fetchError),
+    !!(hbrkoreaSearch.fetchError || (hbrkoreaAdhoc && fetchError)),
     hbrkoreaBusy,
-    crawl.state,
+    hbrkoreaSearchBusy ? hbrkoreaSearch.status.state : crawl.state,
   )
 
   async function onStopFnguide() {
@@ -419,11 +433,15 @@ export function DashboardPage() {
           ? deloitteSearch.status.label
           : '유휴'
 
-  const hbrkoreaValue = fetchError
+  const hbrkoreaValue = hbrkoreaSearch.fetchError
     ? 'API Offline'
-    : hbrkoreaAdhoc
-      ? crawl.label
-      : '유휴'
+    : hbrkoreaSearchBusy
+      ? hbrkoreaSearch.status.label
+      : hbrkoreaAdhoc
+        ? crawl.label
+        : hbrkoreaSearch.status.job
+          ? hbrkoreaSearch.status.label
+          : '유휴'
 
   const fnguideLastAt = fnguideOwned
     ? jobTimestamp(crawl.crawl)
@@ -765,30 +783,53 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="HBR Korea"
-              meta={['계정', '애드혹', hbrkoreaAdhoc ? '로그인' : '']}
+              meta={[
+                '계정',
+                '리포트',
+                '검색',
+                hbrkoreaAdhoc ? '애드혹' : '',
+              ]}
               statusLabel={hbrkoreaValue}
               stateClass={hbrkoreaBadge}
               freshnessKind="report"
-              lastCollectedAt={
-                hbrkoreaAdhoc ? jobTimestamp(crawl.crawl) : null
-              }
-              progressLine={
-                hbrkoreaAdhoc
-                  ? mediaProgress(false, true, crawlProgress, crawl.crawl?.message)
-                  : null
-              }
+              lastCollectedAt={mediaLastAt(
+                hbrkoreaSearch.status.job,
+                hbrkoreaAdhoc,
+              )}
+              lastDocAt={countsHk.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                hbrkoreaSearchBusy,
+                hbrkoreaAdhoc,
+                hbrkoreaProgress,
+                hbrkoreaSearch.status.job?.message,
+              )}
               links={
                 <>
-                  <Link to="/collect/hbrkorea/list/search">애드혹 실행</Link>
+                  <Link to="/collect/hbrkorea/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/hbrkorea">보고서</Link>
                 </>
               }
               stop={
                 hbrkoreaBusy
                   ? {
-                      label: requestingStop ? '요청 중…' : '애드혹 종료',
-                      disabled: requestingStop || !!fetchError,
+                      label: (hbrkoreaSearchBusy
+                        ? hbrkoreaSearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : hbrkoreaSearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: hbrkoreaSearchBusy
+                        ? hbrkoreaSearch.requestingStop
+                        : requestingStop || !!fetchError,
                       onClick: () =>
-                        void onStopMedia('hbrkorea', false, hbrkoreaAdhoc),
+                        void onStopMedia(
+                          'hbrkorea',
+                          hbrkoreaSearchBusy,
+                          hbrkoreaAdhoc,
+                          () => hbrkoreaSearch.stopFeed(),
+                        ),
                     }
                   : null
               }
@@ -989,6 +1030,14 @@ export function DashboardPage() {
             keys={COUNT_KEYS_MEDIA}
             error={countsDl.error}
             total={countsDl.counts.all ?? 0}
+          />
+          <CountRow
+            label="HBR Korea"
+            source="hbrkorea"
+            counts={countsHk.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsHk.error}
+            total={countsHk.counts.all ?? 0}
           />
         </div>
       </section>

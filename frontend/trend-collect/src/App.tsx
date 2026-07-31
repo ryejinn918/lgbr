@@ -87,6 +87,10 @@ function App() {
             path="reports/deloitte"
             element={<ReportsPage embedded source="deloitte" />}
           />
+          <Route
+            path="reports/hbrkorea"
+            element={<ReportsPage embedded source="hbrkorea" />}
+          />
           {/* legacy docs paths */}
           <Route
             path="fnguide"

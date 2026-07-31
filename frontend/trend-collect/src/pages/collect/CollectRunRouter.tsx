@@ -12,6 +12,7 @@ import { getMediaSource } from '../../lib/mediaSources'
 import { AccentureRunPage } from './AccentureRunPage'
 import { DeloitteRunPage } from './DeloitteRunPage'
 import { EyRunPage } from './EyRunPage'
+import { HbrKoreaRunPage } from './HbrKoreaRunPage'
 import { KpmgRunPage } from './KpmgRunPage'
 import { PwcAdhocRunPage } from './PwcAdhocRunPage'
 import { SourceAdhocRunPage } from './SourceAdhocRunPage'
@@ -60,6 +61,13 @@ export function CollectRunRouter() {
     ctx.means === 'search'
   ) {
     return <DeloitteRunPage />
+  }
+  if (
+    ctx.source === 'hbrkorea' &&
+    ctx.stage === 'list' &&
+    ctx.means === 'search'
+  ) {
+    return <HbrKoreaRunPage />
   }
   const media = getMediaSource(ctx.source)
   if (

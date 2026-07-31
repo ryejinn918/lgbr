@@ -61,7 +61,7 @@ SOURCES: dict[str, SourceDef] = {
         label="HBR Korea",
         abbrev="hk",
         hub_url="https://www.hbrkorea.com/",
-        has_search=False,
+        has_search=True,
         requires_login=True,
         login_url="https://www.hbrkorea.com/member/login",
     ),
