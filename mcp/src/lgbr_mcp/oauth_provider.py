@@ -32,12 +32,32 @@ _MAX_CLIENTS = 64
 _MAX_TOKENS = 256
 _MAX_LOGIN_FAILURES = 8
 
-# Open redirect / DCR abuse: only Claude hosted connector callback.
+# Open redirect / DCR abuse: only known LLM host connector callbacks.
 _ALLOWED_REDIRECT_URIS = frozenset(
     {
         "https://claude.ai/api/mcp/auth_callback",
+        "https://chatgpt.com/connector_platform_oauth_redirect",
     }
 )
+_ALLOWED_REDIRECT_PREFIXES = (
+    "https://chatgpt.com/connector/oauth/",
+)
+
+
+def _is_allowed_redirect_uri(uri: str) -> bool:
+    """Exact allowlist, or ChatGPT per-app connector/oauth/{callback_id} prefix."""
+    normalized = uri.rstrip("/")
+    if normalized in _ALLOWED_REDIRECT_URIS:
+        return True
+    if ".." in normalized:
+        return False
+    for prefix in _ALLOWED_REDIRECT_PREFIXES:
+        if normalized.startswith(prefix) and len(normalized) > len(prefix.rstrip("/")):
+            # Require a non-empty path segment after the prefix.
+            rest = normalized[len(prefix) :]
+            if rest and "/" not in rest and "\\" not in rest:
+                return True
+    return False
 
 
 def _secret_eq(a: str, b: str) -> bool:
@@ -78,7 +98,7 @@ class SimpleOAuthProvider(
         if not client_info.client_id:
             raise ValueError("No client_id provided")
         for uri in client_info.redirect_uris:
-            if str(uri).rstrip("/") not in _ALLOWED_REDIRECT_URIS:
+            if not _is_allowed_redirect_uri(str(uri)):
                 raise RegistrationError(
                     error="invalid_redirect_uri",
                     error_description="redirect_uri is not allowed",
@@ -163,7 +183,7 @@ button{{margin-top:1rem;padding:.6rem 1rem;width:100%;cursor:pointer}}
             raise HTTPException(400, "Invalid state")
         if not isinstance(client_id, str):
             raise HTTPException(400, "Invalid state")
-        if redirect_uri.rstrip("/") not in _ALLOWED_REDIRECT_URIS:
+        if not _is_allowed_redirect_uri(redirect_uri):
             raise HTTPException(400, "Invalid redirect_uri")
 
         code = secrets.token_urlsafe(32)

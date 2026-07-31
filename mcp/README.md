@@ -29,14 +29,14 @@ https://lgbrmcp.magpielabs.co.kr
 | `LGBR_MCP_PDF_TTL_SECONDS` | 서명 URL TTL (기본 `900`) |
 | `DATABASE_URL` | Postgres (api와 동일) |
 
-## Claude 웹
+## Claude / ChatGPT
 
-Settings → Connectors → Add custom connector (×2):
+Settings → Connectors(또는 Plugins) → Add custom connector (×2):
 
 1. `https://lgbrmcp.magpielabs.co.kr/mcp/collect`
 2. `https://lgbrmcp.magpielabs.co.kr/mcp/consensus`
 
-OAuth Client ID / Secret는 **비움**. Connect 후 `LGBR_MCP_OAUTH_USERNAME` / `LGBR_MCP_OAUTH_PASSWORD`로 로그인.
+OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAME` / `LGBR_MCP_OAUTH_PASSWORD`로 로그인. ChatGPT도 동일(OAuth + DCR + scope `mcp`).
 
 ### 동향 조사 플로우
 
