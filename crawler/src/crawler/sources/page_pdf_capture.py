@@ -22,18 +22,22 @@ DEFAULT_SETTLE_MS = 300
 DEFAULT_NETWORK_IDLE_TIMEOUT_MS = 15_000
 DEFAULT_BODY_READY_TIMEOUT_MS = 15_000
 
+# Prefer the longest candidate. `querySelector('article') || …` is wrong on
+# pages that put related-content cards in <article> ahead of the real body
+# (PwC Global M&A trends / podcasts: first article ≈200 chars, body ≫10k).
 _BODY_LEN_JS = """() => {
-  const pick = (sel) => {
-    const el = document.querySelector(sel);
-    return el ? (el.innerText || '').trim() : '';
-  };
-  const text =
-    pick('main') ||
-    pick('article') ||
-    pick('[role=main]') ||
-    (document.body ? (document.body.innerText || '').trim() : '');
+  const lengths = [];
+  for (const sel of ['main', 'article', '[role=main]']) {
+    for (const el of document.querySelectorAll(sel)) {
+      lengths.push((el.innerText || '').trim().length);
+    }
+  }
+  const body = document.body
+    ? (document.body.innerText || '').trim().length
+    : 0;
+  lengths.push(body);
   return {
-    body_len: text.length,
+    body_len: lengths.length ? Math.max(...lengths) : 0,
     title: (document.title || '').trim(),
   };
 }"""
@@ -43,6 +47,7 @@ _BODY_LEN_JS = """() => {
 _COOKIE_SELECTORS = (
     "#onetrust-accept-btn-handler",
     ".onetrust-accept-btn-handler",
+    "#accept-recommended-btn-handler",
     "button:has-text('I accept all cookies')",
     "button:has-text('Accept all cookies')",
     "button:has-text('Accept All Cookies')",
@@ -119,16 +124,18 @@ def _wait_for_print_ready(
     try:
         page.wait_for_function(
             """(minLen) => {
-              const pick = (sel) => {
-                const el = document.querySelector(sel);
-                return el ? (el.innerText || '').trim() : '';
-              };
-              const text =
-                pick('main') ||
-                pick('article') ||
-                pick('[role=main]') ||
-                (document.body ? (document.body.innerText || '').trim() : '');
-              return text.length >= minLen;
+              const lengths = [];
+              for (const sel of ['main', 'article', '[role=main]']) {
+                for (const el of document.querySelectorAll(sel)) {
+                  lengths.push((el.innerText || '').trim().length);
+                }
+              }
+              const body = document.body
+                ? (document.body.innerText || '').trim().length
+                : 0;
+              lengths.push(body);
+              const n = lengths.length ? Math.max(...lengths) : 0;
+              return n >= minLen;
             }""",
             arg=int(min_body_chars),
             timeout=max(1, int(body_ready_timeout_ms)),
@@ -164,15 +171,18 @@ def capture_url_as_pdf(
 
     # "load" (not domcontentloaded): resources/fonts more likely settled for print.
     page.goto(url, wait_until="load", timeout=60_000)
+    # Dismiss consent early — OneTrust overlays can blank page.pdf print.
+    clicked = _dismiss_cookie_banner(page)
     _wait_for_print_ready(
         page,
         min_body_chars=min_body_chars,
         network_idle_timeout_ms=network_idle_timeout_ms,
         body_ready_timeout_ms=body_ready_timeout_ms,
     )
-    clicked = _dismiss_cookie_banner(page)
-    if clicked:
-        # Consent UI can remount content; re-check readiness briefly.
+    # Banner sometimes mounts after networkidle; try once more.
+    clicked2 = _dismiss_cookie_banner(page)
+    if clicked2:
+        clicked = clicked or clicked2
         _wait_for_print_ready(
             page,
             min_body_chars=min_body_chars,
