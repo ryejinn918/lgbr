@@ -230,12 +230,30 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# Hangul syllable block; absence ≈ English / Latin-only audit text.
+_NON_KOREAN_SUMMARY_SQL = """(
+  (
+    coalesce(quality_json->>'framework_summary', '') <> ''
+    AND quality_json->>'framework_summary' !~ '[가-힣]'
+  )
+  OR (
+    coalesce(quality_json->>'topic', '') <> ''
+    AND quality_json->>'topic' !~ '[가-힣]'
+  )
+  OR (
+    coalesce(quality_json->>'rationale', '') <> ''
+    AND quality_json->>'rationale' !~ '[가-힣]'
+  )
+)"""
+
+
 def fetch_targets(
     *,
     force: bool = False,
     limit: int | None = None,
     theme: str | None = None,
     report_id: UUID | str | None = None,
+    non_korean_summary: bool = False,
 ) -> list[dict[str, Any]]:
     where = [
         "status = 'downloaded'",
@@ -247,7 +265,10 @@ def fetch_targets(
         where.append("id = %s")
         params.append(rid)
     else:
-        if not force:
+        if non_korean_summary:
+            where.append("quality_at IS NOT NULL")
+            where.append(_NON_KOREAN_SUMMARY_SQL)
+        elif not force:
             where.append("quality_at IS NULL")
         if theme:
             if str(theme) == "other":
@@ -539,13 +560,19 @@ async def run_audit(
     model: str = DEFAULT_MODEL,
     theme: str | None = None,
     report_id: UUID | str | None = None,
+    non_korean_summary: bool = False,
 ) -> dict[str, int]:
     rows = fetch_targets(
-        force=force, limit=limit, theme=theme, report_id=report_id
+        force=force,
+        limit=limit,
+        theme=theme,
+        report_id=report_id,
+        non_korean_summary=non_korean_summary,
     )
     print(
         f"candidates={len(rows)} force={force} theme={theme} "
-        f"report_id={report_id} concurrency={concurrency}"
+        f"report_id={report_id} non_korean_summary={non_korean_summary} "
+        f"concurrency={concurrency}"
     )
     targets, extract_failures = prepare_targets(rows)
     for rid, err in extract_failures:

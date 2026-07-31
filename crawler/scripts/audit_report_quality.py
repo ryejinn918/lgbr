@@ -75,6 +75,14 @@ def main() -> None:
         help="Audit a single report UUID (implies that row only)",
     )
     parser.add_argument(
+        "--non-korean-summary",
+        action="store_true",
+        help=(
+            "Re-audit rows whose topic/framework_summary/rationale "
+            "lack Hangul (English misfills). Implies already-audited rows."
+        ),
+    )
+    parser.add_argument(
         "--job-file",
         default=None,
         help="Write job status JSON for the monitor API",
@@ -93,10 +101,11 @@ def main() -> None:
         "started_at": _now(),
         "ended_at": None,
         "message": None,
-        "force": bool(args.force),
+        "force": bool(args.force) or bool(args.non_korean_summary),
         "limit": args.limit,
         "theme": args.theme,
         "report_id": str(report_id) if report_id else None,
+        "non_korean_summary": bool(args.non_korean_summary),
         "concurrency": args.concurrency,
         "model": args.model,
         "stats": None,
@@ -107,12 +116,15 @@ def main() -> None:
     try:
         stats = asyncio.run(
             run_audit(
-                force=args.force or report_id is not None,
+                force=args.force
+                or report_id is not None
+                or bool(args.non_korean_summary),
                 limit=args.limit,
                 concurrency=args.concurrency,
                 model=args.model,
                 theme=args.theme,
                 report_id=report_id,
+                non_korean_summary=bool(args.non_korean_summary),
             )
         )
         print("stats", stats)

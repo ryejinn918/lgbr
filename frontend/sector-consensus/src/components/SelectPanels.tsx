@@ -233,7 +233,7 @@ export function SelectPanels() {
                 <th>제목</th>
                 <th>증권사</th>
                 <th>쪽</th>
-                <th>이유</th>
+                <th>선정이유</th>
               </tr>
             </thead>
             <tbody>
@@ -302,7 +302,7 @@ export function SelectPanels() {
               <th className="col-date">일자</th>
               <th className="col-pages">쪽</th>
               <th className="col-quality">품질</th>
-              <th className="col-framework">프레임</th>
+              <th className="col-framework">요약</th>
             </tr>
           </thead>
           <tbody>
