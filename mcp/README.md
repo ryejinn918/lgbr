@@ -21,7 +21,7 @@ https://lgbrmcp.magpielabs.co.kr
 |------|------|
 | 원문 웹 URL (`url`) | 예 — 출처·인용 |
 | 원문 PDF (바이트·다운로드 링크·파일 경로) | **아니오** |
-| 품질/요약 (`quality_json`, SERP summary 등) | 예 |
+| 품질검사·요약 (`quality_json`, SERP summary 등) | 예 |
 
 ## Env
 
@@ -46,11 +46,11 @@ OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAM
 
 ### Collect 도구
 
-1. **`search_reports` → `get_report`** — 검색·상세 (요약·원문 url, PDF 없음)  
+1. **`search_reports` → `get_report`** — 검색·상세 (품질검사·요약·원문 url, PDF 없음)  
 2. **`search_news`** — 보조
 
 `source`: fnguide, pwc, accenture, kpmg, ey, deloitte, hbr, hbrkorea, bain, mckinsey, bcg  
-`audit_kind`: fnguide=`sell_side`, 그 외=`summary`
+처리 종류(`audit_kind`): fnguide=`sell_side`(품질검사), 그 외=`summary`(요약)
 
 ### Consensus
 

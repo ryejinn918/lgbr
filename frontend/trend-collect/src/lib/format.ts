@@ -26,29 +26,37 @@ export const STATUS_LABEL: Record<string, string> = {
 }
 
 export const QUALITY_LABEL: Record<string, string> = {
-  all: '판정전체',
+  all: '검사전체',
   pass: '적합',
   fail: '부적합',
-  pending: '미감사',
+  pending: '미검사',
   unauditable: '파일 없음',
 }
 
-/** Non-FnGuide media/consulting: summary audit, not sell-side pass/fail. */
+/** Non-FnGuide media/consulting: summary extract, not sell-side pass/fail. */
 export const QUALITY_LABEL_SUMMARY: Record<string, string> = {
   all: '요약전체',
   pass: '요약됨',
   fail: '추출실패',
-  pending: '미감사',
+  pending: '미요약',
   unauditable: '파일 없음',
+}
+
+/** Unified reports tab: sell-side filter vocabulary, pending = 미완료. */
+export const QUALITY_LABEL_ALL: Record<string, string> = {
+  ...QUALITY_LABEL,
+  pending: '미완료',
 }
 
 export function qualityLabelsForSource(
   source: string | null | undefined,
 ): Record<string, string> {
-  return source === 'fnguide' ? QUALITY_LABEL : QUALITY_LABEL_SUMMARY
+  if (source === 'fnguide') return QUALITY_LABEL
+  if (source === 'all') return QUALITY_LABEL_ALL
+  return QUALITY_LABEL_SUMMARY
 }
 
-/** Per-row label: FnGuide page/row = sell-side; else summary audit. */
+/** Per-row label: FnGuide page/row = sell-side; else summary. */
 export function qualityLabelForReport(
   quality: string | null | undefined,
   reportSource: string | null | undefined,
@@ -62,19 +70,29 @@ export function qualityLabelForReport(
   return labels[key] || key
 }
 
-/** 품질 감사 잡 stats → 현업용 한 줄 */
+export type AuditStatsMode = 'sell_side' | 'summary' | 'all'
+
+/** 품질검사·요약 잡 stats → 현업용 한 줄 */
 export function formatAuditStats(
   stats: Record<string, number> | null | undefined,
+  mode: AuditStatsMode = 'all',
 ): string | null {
   if (!stats) return null
-  const bits = [
+  if (mode === 'summary') {
+    return [
+      `대상 ${stats.candidates ?? 0}건`,
+      `요약됨 ${stats.pass ?? 0}`,
+      `추출실패 ${stats.extract_fail ?? 0}`,
+      `API오류 ${stats.fail_api ?? 0}`,
+    ].join(' · ')
+  }
+  return [
     `대상 ${stats.candidates ?? 0}건`,
     `적합 ${stats.pass ?? 0}`,
     `부적합 ${stats.reject ?? 0}`,
     `추출실패 ${stats.extract_fail ?? 0}`,
     `API오류 ${stats.fail_api ?? 0}`,
-  ]
-  return bits.join(' · ')
+  ].join(' · ')
 }
 
 export { THEME_LABEL } from './themes'

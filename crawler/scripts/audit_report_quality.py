@@ -106,7 +106,7 @@ def main() -> None:
     job_path = Path(args.job_file) if args.job_file else None
     base_job: dict[str, Any] = {
         "state": "active",
-        "label": "감사 중",
+        "label": "처리 중",
         "pid": os.getpid(),
         "started_at": _now(),
         "ended_at": None,
@@ -166,7 +166,7 @@ def main() -> None:
                 "state": "error",
                 "label": "오류",
                 "ended_at": _now(),
-                "message": f"품질 감사 중 오류: {str(exc)[:480]}",
+                "message": f"품질검사·요약 중 오류: {str(exc)[:480]}",
                 "can_start": True,
             }
         )

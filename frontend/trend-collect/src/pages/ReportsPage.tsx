@@ -11,7 +11,6 @@ import { useAudit } from '../hooks/useAudit'
 import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import {
-  QUALITY_LABEL,
   STATUS_LABEL,
   THEME_LABEL,
   formatAuditStats,
@@ -211,12 +210,8 @@ export function ReportsPage({
   // 증권사 열은 FnGuide 단독 탭만. 통합 보기·Big4에는 숨김.
   const showProvider = sourceKey === 'fnguide'
   const isSellSidePage = sourceKey === 'fnguide'
-  // 통합 탭 필터는 기존 판정 어휘 유지; 매체 단독 탭만 요약 라벨.
-  const qualityFilterLabels = isSellSidePage
-    ? QUALITY_LABEL
-    : isAll
-      ? QUALITY_LABEL
-      : qualityLabelsForSource(sourceKey)
+  // 통합 탭: 적합 어휘 + pending=미완료; 매체 단독: 요약 라벨.
+  const qualityFilterLabels = qualityLabelsForSource(sourceKey)
   const detailIsSellSide =
     isSellSidePage ||
     (isAll && (detail?.source || '') === 'fnguide')
@@ -228,6 +223,46 @@ export function ReportsPage({
       ? detail.themes
       : stringList(qj.themes)
   ).filter(Boolean)
+  const pipelineName = isSellSidePage
+    ? '품질검사'
+    : isAll
+      ? '품질검사·요약'
+      : '요약'
+  const pendingWord = isSellSidePage
+    ? '미검사'
+    : isAll
+      ? '미완료'
+      : '미요약'
+  const busyWord = isSellSidePage
+    ? '검사 중…'
+    : isAll
+      ? '처리 중…'
+      : '요약 중…'
+  const reprocessWord = isSellSidePage
+    ? '다시 검사'
+    : isAll
+      ? '다시 처리'
+      : '다시 요약'
+  const detailTitle = isSellSidePage
+    ? '품질검사 결과'
+    : isAll
+      ? '품질검사·요약 결과'
+      : '요약 결과'
+  const dateColLabel = isSellSidePage
+    ? '검사일'
+    : isAll
+      ? '완료일'
+      : '요약일'
+  const dateDetailLabel = isSellSidePage
+    ? '검사 시각'
+    : isAll
+      ? '완료 시각'
+      : '요약 시각'
+  const statsMode = isSellSidePage
+    ? 'sell_side'
+    : isAll
+      ? 'all'
+      : 'summary'
   const sourceTitle = SOURCE_LABEL[sourceKey] ?? sourceKey
   const sourceLede = isAll
     ? '매체별 보고서를 한곳에서 봅니다. FnGuide·PwC·Accenture·KPMG·EY·Deloitte·HBR Korea 탭으로 나눌 수도 있습니다.'
@@ -249,7 +284,7 @@ export function ReportsPage({
                     ? 'HBR.org 목록입니다. 로그인 후 Latest를 돌며 page.pdf를 받습니다.'
                     : sourceKey === 'hbrkorea'
                       ? 'HBR Korea 목록입니다. 로그인 검색이 목록을 돌며 page.pdf를 받습니다.'
-                      : '증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가 함께 표시됩니다.'
+                      : '증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질검사한 결과가 함께 표시됩니다.'
   const collectHref = isAll
     ? '/collect'
     : `/collect/${sourceKey}/list/search`
@@ -260,7 +295,7 @@ export function ReportsPage({
         <div className="section-head" style={{ marginBottom: '0.75rem' }}>
           <h2>{sourceTitle}</h2>
           <span className="section-note">
-            목록·다운로드·품질 감사 ·{' '}
+            목록·다운로드·품질검사·요약 ·{' '}
             <Link to={collectHref}>{isAll ? '수집' : '검색 실행'}</Link>
           </span>
         </div>
@@ -283,7 +318,7 @@ export function ReportsPage({
       <section className="panel audit-bar">
         <div className="audit-bar-row">
           <div>
-            <strong>품질 감사</strong>
+            <strong>{pipelineName}</strong>
             <span className="section-note">
               {' '}
               · {audit.label}
@@ -291,9 +326,9 @@ export function ReportsPage({
             </span>
             <p className="section-note" style={{ margin: '0.35rem 0 0' }}>
               {isSellSidePage
-                ? '본문 PDF가 있는 리포트만 자동으로 품질 감사합니다. 적합 판정만 컨센서스 입력에 쓰입니다.'
+                ? '본문 PDF가 있는 리포트만 자동으로 품질검사합니다. 적합만 컨센서스 입력에 쓰입니다.'
                 : isAll
-                  ? '본문 PDF가 있는 리포트만 자동으로 품질 감사합니다. FnGuide는 적합/부적합, 그 외 매체는 요약·섹터를 추출합니다.'
+                  ? '본문 PDF가 있는 리포트만 자동으로 처리합니다. FnGuide는 품질검사(적합/부적합), 그 외 매체는 요약을 추출합니다.'
                   : '본문 PDF가 있는 문헌만 자동으로 요약·섹터를 추출합니다.'}
             </p>
           </div>
@@ -308,9 +343,9 @@ export function ReportsPage({
                     : unauditedPreset(filters),
                 )
               }
-              title="다운로드된 미감사 리포트만 보기"
+              title={`다운로드된 ${pendingWord} 리포트만 보기`}
             >
-              미감사만 보기
+              {pendingWord}만 보기
             </button>
             <button
               type="button"
@@ -319,18 +354,18 @@ export function ReportsPage({
               onClick={() => void onStartPending()}
               title={
                 filters.theme !== 'all'
-                  ? `${THEME_LABEL[filters.theme]} 미감사만 일괄 실행`
-                  : '다운로드된 미감사 전부 일괄 실행'
+                  ? `${THEME_LABEL[filters.theme]} ${pendingWord}만 일괄 실행`
+                  : `다운로드된 ${pendingWord} 전부 일괄 실행`
               }
             >
-              {audit.busy ? '감사 중…' : '미감사 일괄 실행'}
+              {audit.busy ? busyWord : `${pendingWord} 일괄 실행`}
             </button>
           </div>
         </div>
         {audit.error ? <p className="warn">{audit.error}</p> : null}
-        {formatAuditStats(audit.audit?.stats) ? (
+        {formatAuditStats(audit.audit?.stats, statsMode) ? (
           <p className="section-note">
-            최근 결과: {formatAuditStats(audit.audit?.stats)}
+            최근 결과: {formatAuditStats(audit.audit?.stats, statsMode)}
           </p>
         ) : null}
       </section>
@@ -352,7 +387,7 @@ export function ReportsPage({
             className="filter-chip filter-reset"
             disabled={!dirty}
             onClick={() => commit(resetReportFilters())}
-            title="상태·테마·판정·검색·정렬·페이지 초기화"
+            title="상태·테마·검사/요약·검색·정렬·페이지 초기화"
           >
             초기화
           </button>
@@ -378,7 +413,7 @@ export function ReportsPage({
               className={`filter-chip${filters.quality === key ? ' active' : ''}`}
               onClick={() => commit(withQuality(filters, key))}
             >
-              {qualityFilterLabels[key] || QUALITY_LABEL[key]}{' '}
+              {qualityFilterLabels[key] || key}{' '}
               {key === 'all'
                 ? (reports.qualityCounts.pass ?? 0) +
                   (reports.qualityCounts.fail ?? 0) +
@@ -432,7 +467,7 @@ export function ReportsPage({
                   <tr>
                     <th className="col-status">상태</th>
                     <th className="col-quality">
-                      {isSellSidePage ? '판정' : isAll ? '판정/요약' : '요약'}
+                      {isSellSidePage ? '검사' : isAll ? '검사/요약' : '요약'}
                     </th>
                     <th className="col-title">제목</th>
                     {showProvider ? (
@@ -461,7 +496,7 @@ export function ReportsPage({
                       </button>
                     </th>
                     {isAll ? <th className="col-source">매체</th> : null}
-                    <th className="col-qat">감사일</th>
+                    <th className="col-qat">{dateColLabel}</th>
                     <th className="col-seen">
                       <button
                         type="button"
@@ -574,7 +609,7 @@ export function ReportsPage({
           {selectedId ? (
             <div className="report-audit-detail">
               <div className="section-head">
-                <h2>품질 감사 결과</h2>
+                <h2>{detailTitle}</h2>
                 <div className="audit-actions">
                   {detailOriginalUrl ? (
                     <a
@@ -593,7 +628,7 @@ export function ReportsPage({
                     disabled={audit.busy || !detail?.has_file}
                     onClick={() => void onReauditSelected()}
                   >
-                    다시 감사
+                    {reprocessWord}
                   </button>
                   <button
                     type="button"
@@ -609,39 +644,41 @@ export function ReportsPage({
               {detail && !detailLoading ? (
                 <div className="details">
                   <dl>
-                    <div>
-                      <dt>제목</dt>
-                      <dd>{detail.title}</dd>
-                    </div>
-                    <div>
-                      <dt>{detailIsSellSide ? '판정' : '상태'}</dt>
-                      <dd>
-                        {qualityLabelForReport(
-                          detail.quality,
-                          detail.source,
-                          sourceKey,
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>감사 시각</dt>
-                      <dd>{formatTime(detail.quality_at)}</dd>
-                    </div>
-                    <div>
-                      <dt>인용 제목</dt>
-                      <dd>{String(qj.short_title || '—')}</dd>
-                    </div>
                     {detailIsSellSide ? (
                       <>
+                        <div className="details-span">
+                          <dt>제목</dt>
+                          <dd>{detail.title}</dd>
+                        </div>
+                        <div>
+                          <dt>검사</dt>
+                          <dd>
+                            {qualityLabelForReport(
+                              detail.quality,
+                              detail.source,
+                              sourceKey,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>{dateDetailLabel}</dt>
+                          <dd>{formatTime(detail.quality_at)}</dd>
+                        </div>
+                        <div>
+                          <dt>인용 제목</dt>
+                          <dd>{String(qj.short_title || '—')}</dd>
+                        </div>
                         <div>
                           <dt>주제</dt>
                           <dd>{String(qj.topic || '—')}</dd>
                         </div>
-                        <div>
+                        <div className="details-span">
                           <dt>분석 틀 요약</dt>
-                          <dd>{String(qj.framework_summary || '—')}</dd>
+                          <dd className="audit-rationale">
+                            {String(qj.framework_summary || '—')}
+                          </dd>
                         </div>
-                        <div>
+                        <div className="details-span">
                           <dt>부적합 사유</dt>
                           <dd>
                             {failReasons.length ? (
@@ -655,7 +692,7 @@ export function ReportsPage({
                             )}
                           </dd>
                         </div>
-                        <div>
+                        <div className="details-span">
                           <dt>적합 근거</dt>
                           <dd>
                             {passSignals.length ? (
@@ -669,8 +706,8 @@ export function ReportsPage({
                             )}
                           </dd>
                         </div>
-                        <div>
-                          <dt>판정 설명</dt>
+                        <div className="details-span">
+                          <dt>검사 설명</dt>
                           <dd className="audit-rationale">
                             {String(qj.rationale || qj.error || '—')}
                           </dd>
@@ -678,6 +715,28 @@ export function ReportsPage({
                       </>
                     ) : (
                       <>
+                        <div>
+                          <dt>제목</dt>
+                          <dd>{detail.title}</dd>
+                        </div>
+                        <div>
+                          <dt>상태</dt>
+                          <dd>
+                            {qualityLabelForReport(
+                              detail.quality,
+                              detail.source,
+                              sourceKey,
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>{dateDetailLabel}</dt>
+                          <dd>{formatTime(detail.quality_at)}</dd>
+                        </div>
+                        <div>
+                          <dt>인용 제목</dt>
+                          <dd>{String(qj.short_title || '—')}</dd>
+                        </div>
                         <div>
                           <dt>섹터</dt>
                           <dd>

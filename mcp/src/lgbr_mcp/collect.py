@@ -25,18 +25,18 @@ LGBR 산업 동향 문서 코퍼스(조회 전용).
 규정:
 - 원문 웹 URL(url)은 출처·인용용으로 제공합니다.
 - 원문 PDF(바이트·다운로드 링크·파일 경로)는 제공하지 않습니다.
-- 근거는 quality_json 요약/심사 필드와 원문 url을 사용하세요.
+- 근거는 quality_json 품질검사·요약 필드와 원문 url을 사용하세요.
 
 동향·섹터 질문이면 먼저 lgbr-consensus의 get_consensus(theme)를 보세요.
 개별 보고서·근거가 필요할 때만 이 커넥터를 씁니다.
 
 플로우:
 1) search_reports(theme|q, source?, provider?, quality=pass 기본)
-2) get_report(id) — 품질/요약 상세 + 원문 url (PDF 없음)
+2) get_report(id) — 품질검사·요약 상세 + 원문 url (PDF 없음)
 3) 속보/기사는 search_news(보조)
 
-감사 모드:
-- fnguide = sell_side (적합/부적합 게이트)
+처리 종류:
+- fnguide = sell_side (품질검사: 적합/부적합 게이트)
 - 그 외 매체 = summary (한국어 요약·themes)
 
 검색 조건 가이드:
@@ -100,7 +100,7 @@ def build_collect_server(
 
     @mcp.tool()
     def get_report(report_id: str) -> str:
-        """보고서 메타·품질/요약 상세와 원문 웹 url. PDF는 제공하지 않음.
+        """보고서 메타·품질검사/요약 상세와 원문 웹 url. PDF는 제공하지 않음.
 
         Args:
             report_id: search_reports 결과의 id

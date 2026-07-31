@@ -118,7 +118,7 @@ def _reconcile(job: dict[str, Any]) -> dict[str, Any]:
                 "label": "오류",
                 "ended_at": _now().isoformat(),
                 "message": job.get("message")
-                or "품질 감사가 시작되지 않았습니다.",
+                or "품질검사·요약 작업이 시작되지 않았습니다.",
                 "can_start": True,
             }
         )
@@ -133,7 +133,7 @@ def _reconcile(job: dict[str, Any]) -> dict[str, Any]:
             "label": "오류",
             "ended_at": _now().isoformat(),
             "message": job.get("message")
-            or "품질 감사가 비정상 종료되었습니다.",
+            or "품질검사·요약 작업이 비정상 종료되었습니다.",
             "can_start": True,
         }
     )
@@ -250,8 +250,8 @@ def start_audit(
             "ok": False,
             "status": 409,
             "state": current.get("state"),
-            "label": current.get("label") or "감사 중",
-            "message": "이미 품질 감사가 실행 중입니다.",
+            "label": current.get("label") or "처리 중",
+            "message": "이미 품질검사·요약 작업이 실행 중입니다.",
             "audit": current,
             "can_start": False,
         }
@@ -262,7 +262,7 @@ def start_audit(
             "status": 500,
             "state": "error",
             "label": "오류",
-            "message": "품질 감사 실행 파일을 찾을 수 없습니다.",
+            "message": "품질검사·요약 실행 파일을 찾을 수 없습니다.",
             "audit": None,
             "can_start": True,
         }
@@ -326,7 +326,7 @@ def start_audit(
                 "state": "error",
                 "label": "오류",
                 "ended_at": _now().isoformat(),
-                "message": f"품질 감사 시작에 실패했습니다: {exc}",
+                "message": f"품질검사·요약 시작에 실패했습니다: {exc}",
                 "can_start": True,
             }
         )
@@ -336,7 +336,7 @@ def start_audit(
             "status": 500,
             "state": "error",
             "label": "오류",
-            "message": f"품질 감사 시작에 실패했습니다: {exc}",
+            "message": f"품질검사·요약 시작에 실패했습니다: {exc}",
             "audit": job,
             "can_start": True,
         }
@@ -346,7 +346,7 @@ def start_audit(
         "status": 202,
         "state": "starting",
         "label": "시작 중",
-        "message": "품질 감사를 시작했습니다.",
+        "message": "품질검사·요약 작업을 시작했습니다.",
         "audit": job,
         "can_start": False,
     }

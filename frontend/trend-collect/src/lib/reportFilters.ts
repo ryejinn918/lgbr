@@ -169,7 +169,7 @@ export function resetReportFilters(): ReportFilters {
   return { ...DEFAULT_REPORT_FILTERS }
 }
 
-/** 다운됨 + 미감사 프리셋 */
+/** 다운됨 + pending(미검사/미요약/미완료) 프리셋 */
 export function unauditedPreset(filters?: ReportFilters): ReportFilters {
   return {
     ...(filters ?? DEFAULT_REPORT_FILTERS),

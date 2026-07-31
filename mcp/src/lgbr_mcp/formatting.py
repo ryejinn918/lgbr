@@ -90,7 +90,7 @@ def serp_list_payload(result: dict[str, Any]) -> dict[str, Any]:
         "offset": result.get("offset"),
         "items": items,
         "hint": (
-            "후보 id로 get_report — 품질/요약 상세와 원문 url. "
+            "후보 id로 get_report — 품질검사·요약 상세와 원문 url. "
             "PDF는 제공하지 않음. 동향 요약은 lgbr-consensus.get_consensus."
         ),
     }
@@ -110,7 +110,7 @@ def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
         "report": clean,
         "hint": (
             "원문 웹 URL은 report.url. PDF·파일 경로는 제공하지 않음. "
-            "summary 감사: quality_json.short_title / summary / themes. "
+            "summary(요약): quality_json.short_title / summary / themes. "
             "sell_side(fnguide): topic, framework_summary, fail_reasons, "
             "pass_signals, rationale. 섹터 프레임은 lgbr-consensus.get_consensus."
         ),
