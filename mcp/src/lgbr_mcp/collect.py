@@ -1,4 +1,4 @@
-"""Collect / document corpus MCP — search → detail (+ optional news)."""
+"""Collect / document corpus MCP — search, detail, read-only SQL (no PDF)."""
 
 from __future__ import annotations
 
@@ -13,23 +13,40 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from lgbr_mcp.config import allowed_hosts
 from lgbr_mcp.formatting import dumps, report_detail_payload, serp_list_payload
+from lgbr_mcp.sql_explore import describe_schema as schema_doc
+from lgbr_mcp.sql_explore import run_sql as execute_ro_sql
 
-COLLECT_INSTRUCTIONS = """\
+COLLECT_SOURCES = (
+    "fnguide, pwc, accenture, kpmg, ey, deloitte, "
+    "hbr, hbrkorea, bain, mckinsey, bcg"
+)
+
+COLLECT_INSTRUCTIONS = f"""\
 LGBR 산업 동향 문서 코퍼스(조회 전용).
+
+규정:
+- 원문 웹 URL(url)은 출처·인용용으로 제공합니다.
+- 원문 PDF(바이트·다운로드 링크·파일 경로)는 제공하지 않습니다.
+- 근거는 quality_json 요약/심사 필드와 원문 url을 사용하세요.
 
 동향·섹터 질문이면 먼저 lgbr-consensus의 get_consensus(theme)를 보세요.
 개별 보고서·근거가 필요할 때만 이 커넥터를 씁니다.
 
 플로우:
-1) search_reports(theme 및/또는 q, source?, provider?, quality=pass 기본)
-2) 후보 id로 get_report — 품질 심사·pdf_url
-3) 속보/기사는 search_news(보조). 목록은 메타만, 본문은 include_body=True일 때.
+1) describe_schema → run_sql(SELECT … FROM mcp_reports …) 로 자율 탐색·집계
+   또는 search_reports(theme|q, source?, provider?, quality=pass 기본)
+2) get_report(id) — 품질/요약 상세 + 원문 url (PDF 없음)
+3) 속보/기사는 search_news(보조)
+
+감사 모드:
+- fnguide = sell_side (적합/부적합 게이트)
+- 그 외 매체 = summary (한국어 요약·themes)
 
 검색 조건 가이드:
-- theme: 섹터 테마
-- q: 제목·키워드
-- source: 채널(fnguide, deloitte, kpmg, ey, pwc, accenture)
-- provider: 선호 하우스/증권사(attrs.provider, 예: 삼성증권, 하나증권). 종목·섹터마다 다를 수 있음
+- theme: ai, datacenter, macroeconomy, physical_ai, appliance, display, automotive, petrochemical
+- q: 제목·키워드·요약
+- source: {COLLECT_SOURCES}
+- provider: 선호 하우스/증권사(attrs.provider)
 """
 
 
@@ -50,6 +67,20 @@ def build_collect_server(
     )
 
     @mcp.tool()
+    def describe_schema() -> str:
+        """mcp_reports 뷰 스키마·예시 SELECT (표준 SQL). PDF 컬럼 없음."""
+        return dumps(schema_doc())
+
+    @mcp.tool()
+    def run_sql(sql: str) -> str:
+        """읽기 전용 표준 SQL 실행 (Postgres 롤 lgbr_mcp_ro). mcp_reports만 SELECT 가능.
+
+        Args:
+            sql: SELECT 또는 WITH … SELECT. 다른 테이블·쓰기는 DB가 거절합니다.
+        """
+        return dumps(execute_ro_sql(sql))
+
+    @mcp.tool()
     def search_reports(
         theme: str | None = None,
         q: str | None = None,
@@ -60,13 +91,13 @@ def build_collect_server(
         limit: int = 10,
         offset: int = 0,
     ) -> str:
-        """보고서 검색(SERP). 기본 quality=pass. 상세는 get_report.
+        """보고서 검색(SERP). 기본 quality=pass. 상세는 get_report. PDF 없음.
 
         Args:
             theme: ai, datacenter, macroeconomy, physical_ai, appliance, display, automotive, petrochemical
-            q: 제목·키워드 검색
-            source: fnguide, pwc, accenture, kpmg, ey, deloitte (채널)
-            provider: 선호 하우스/증권사(부분일치, 예: 삼성, 하나증권)
+            q: 제목·키워드·요약 검색
+            source: fnguide, pwc, accenture, kpmg, ey, deloitte, hbr, hbrkorea, bain, mckinsey, bcg
+            provider: 선호 하우스/증권사(부분일치)
             quality: pass(기본), fail, pending, unauditable, all
             sort: published_at(기본), page_count, last_seen_at
             limit: 기본 10, 최대 200
@@ -86,10 +117,10 @@ def build_collect_server(
 
     @mcp.tool()
     def get_report(report_id: str) -> str:
-        """보고서 메타·품질 심사 상세와 PDF 서명 링크(pdf_url).
+        """보고서 메타·품질/요약 상세와 원문 웹 url. PDF는 제공하지 않음.
 
         Args:
-            report_id: search_reports 결과의 id
+            report_id: search_reports / run_sql 결과의 id
         """
         result = fetch_report(report_id)
         return dumps(report_detail_payload(result))

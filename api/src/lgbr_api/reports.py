@@ -572,9 +572,11 @@ def list_reports(
     if q_pat:
         where.append(
             "(title ILIKE %s OR source_key ILIKE %s OR attrs->>'provider' ILIKE %s "
-            "OR coalesce(quality_json->>'short_title', '') ILIKE %s)"
+            "OR coalesce(quality_json->>'short_title', '') ILIKE %s "
+            "OR coalesce(quality_json->>'summary', '') ILIKE %s "
+            "OR coalesce(quality_json->>'framework_summary', '') ILIKE %s)"
         )
-        params.extend([q_pat, q_pat, q_pat, q_pat])
+        params.extend([q_pat, q_pat, q_pat, q_pat, q_pat, q_pat])
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
 
@@ -597,7 +599,8 @@ def list_reports(
                 SELECT id, source, source_key, title, status, file_path, file_name,
                        last_seen_at, downloaded_at, published_at, page_count,
                        crawl_id, attrs,
-                       quality_pass, quality_scope, quality_confidence, quality_at
+                       quality_pass, quality_scope, quality_confidence, quality_at,
+                       quality_json
                 FROM reports
                 {where_sql}
                 ORDER BY {order_sql}
@@ -605,7 +608,18 @@ def list_reports(
                 """,
                 [*params, limit, offset],
             )
-            items = [_serialize(dict(r)) for r in cur.fetchall()]
+            items = []
+            for r in cur.fetchall():
+                row = dict(r)
+                data = _serialize(row)
+                qj = row.get("quality_json")
+                if isinstance(qj, dict):
+                    data["quality_json"] = qj
+                elif qj is None:
+                    data["quality_json"] = {}
+                else:
+                    data["quality_json"] = {"raw": qj}
+                items.append(data)
 
     return {
         "ok": True,

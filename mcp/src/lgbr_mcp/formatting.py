@@ -1,11 +1,11 @@
-"""SERP / tool payload shaping — links in, no PDF bytes."""
+"""SERP / tool payload shaping — original URL ok, no PDF bytes or download links."""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from lgbr_mcp.signed_urls import sign_report_pdf_url
+_SUMMARY_CLIP = 400
 
 _SERP_KEYS = (
     "id",
@@ -22,37 +22,61 @@ _SERP_KEYS = (
     "quality_scope",
     "status",
     "has_file",
+    "url",
 )
+
+_STRIP_FILE_KEYS = ("file_path", "file_name", "pdf_url")
 
 
 def dumps(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2, default=str)
 
 
-def attach_report_links(report: dict[str, Any]) -> dict[str, Any]:
+def audit_kind_for_source(source: Any) -> str:
+    if str(source or "").strip().lower() == "fnguide":
+        return "sell_side"
+    return "summary"
+
+
+def _clip(text: Any, *, max_len: int = _SUMMARY_CLIP) -> str | None:
+    s = " ".join(str(text or "").split())
+    if not s:
+        return None
+    if len(s) > max_len:
+        return s[: max_len - 1].rstrip() + "…"
+    return s
+
+
+def sanitize_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Keep original web url; strip PDF path / download fields."""
     out = dict(report)
-    out.pop("url", None)
-    rid = str(out.get("id") or "").strip()
-    if out.get("has_file") and rid:
-        out["pdf_url"] = sign_report_pdf_url(rid)
-    else:
-        out["pdf_url"] = None
+    for key in _STRIP_FILE_KEYS:
+        out.pop(key, None)
     return out
 
 
 def serp_item(report: dict[str, Any]) -> dict[str, Any]:
-    linked = attach_report_links(report)
-    item = {k: linked.get(k) for k in _SERP_KEYS}
-    item["pdf_url"] = linked.get("pdf_url")
-    # Short quality hint without full quality_json
+    clean = sanitize_report(report)
+    item = {k: clean.get(k) for k in _SERP_KEYS}
+    item["audit_kind"] = audit_kind_for_source(clean.get("source"))
     qj = report.get("quality_json")
-    if isinstance(qj, dict):
-        short = qj.get("short_title")
+    if not isinstance(qj, dict):
+        return item
+    short = qj.get("short_title")
+    if short:
+        item["short_title"] = short
+    kind = item["audit_kind"]
+    if kind == "sell_side":
         topic = qj.get("topic")
-        if short:
-            item["short_title"] = short
         if topic:
             item["topic"] = topic
+        fw = _clip(qj.get("framework_summary"))
+        if fw:
+            item["framework_summary"] = fw
+    else:
+        summary = _clip(qj.get("summary") or qj.get("framework_summary"))
+        if summary:
+            item["summary"] = summary
     return item
 
 
@@ -66,8 +90,8 @@ def serp_list_payload(result: dict[str, Any]) -> dict[str, Any]:
         "offset": result.get("offset"),
         "items": items,
         "hint": (
-            "후보를 고른 뒤 get_report(id)로 품질 상세·링크를 보세요. "
-            "동향 요약이 목표면 lgbr-consensus.get_consensus(theme)을 먼저."
+            "후보 id로 get_report — 품질/요약 상세와 원문 url. "
+            "PDF는 제공하지 않음. 동향 요약은 lgbr-consensus.get_consensus."
         ),
     }
 
@@ -78,13 +102,16 @@ def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
     report = result.get("report")
     if not isinstance(report, dict):
         return result
-    linked = attach_report_links(report)
+    clean = sanitize_report(report)
+    kind = audit_kind_for_source(clean.get("source"))
+    clean["audit_kind"] = kind
     return {
         "ok": True,
-        "report": linked,
+        "report": clean,
         "hint": (
-            "품질 심사는 report.quality_json. "
-            "PDF는 report.pdf_url(서명 링크). "
-            "섹터 프레임은 lgbr-consensus.get_consensus."
+            "원문 웹 URL은 report.url. PDF·파일 경로는 제공하지 않음. "
+            "summary 감사: quality_json.short_title / summary / themes. "
+            "sell_side(fnguide): topic, framework_summary, fail_reasons, "
+            "pass_signals, rationale. 섹터 프레임은 lgbr-consensus.get_consensus."
         ),
     }

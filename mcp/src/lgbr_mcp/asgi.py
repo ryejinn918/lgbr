@@ -1,4 +1,4 @@
-"""Combined ASGI: OAuth AS, /mcp/collect, /mcp/consensus, signed PDF, health."""
+"""Combined ASGI: OAuth AS, /mcp/collect, /mcp/consensus, health."""
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ from lgbr_mcp.config import (
     validate_startup,
 )
 from lgbr_mcp.consensus import build_consensus_server
-from lgbr_mcp.files import serve_report_pdf
 from lgbr_mcp.oauth_provider import MCP_SCOPE, SimpleOAuthProvider
 
 # Mount() only matches /mcp/collect/…; without a trailing slash Starlette
@@ -145,11 +144,6 @@ def create_app() -> Starlette:
     return Starlette(
         routes=[
             Route("/health", health),
-            Route(
-                "/files/reports/{report_id}",
-                serve_report_pdf,
-                methods=["GET"],
-            ),
             *auth_routes,
             Mount("/mcp/collect", app=collect_http),
             Mount("/mcp/consensus", app=consensus_http),
