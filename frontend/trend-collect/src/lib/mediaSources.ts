@@ -64,6 +64,13 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hasCatalogs: false,
   },
   {
+    id: 'bcg',
+    label: 'BCG',
+    hubUrl: 'https://www.bcg.com/',
+    hasSearch: true,
+    hasCatalogs: false,
+  },
+  {
     id: 'hbr',
     label: 'HBR',
     hubUrl: 'https://hbr.org/',

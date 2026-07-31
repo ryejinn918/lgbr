@@ -11,6 +11,7 @@ import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
 import { getMediaSource } from '../../lib/mediaSources'
 import { AccentureRunPage } from './AccentureRunPage'
 import { BainRunPage } from './BainRunPage'
+import { BcgRunPage } from './BcgRunPage'
 import { DeloitteRunPage } from './DeloitteRunPage'
 import { MckinseyRunPage } from './MckinseyRunPage'
 import { EyRunPage } from './EyRunPage'
@@ -81,6 +82,9 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'bain' && ctx.stage === 'list' && ctx.means === 'search') {
     return <BainRunPage />
+  }
+  if (ctx.source === 'bcg' && ctx.stage === 'list' && ctx.means === 'search') {
+    return <BcgRunPage />
   }
   if (ctx.source === 'hbr' && ctx.stage === 'list' && ctx.means === 'search') {
     return <HbrRunPage />

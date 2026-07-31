@@ -24,6 +24,7 @@ COVERAGE_SOURCES: tuple[tuple[str, str], ...] = (
     ("bain", "Bain"),
     ("hbr", "HBR"),
     ("mckinsey", "McKinsey"),
+    ("bcg", "BCG"),
 )
 _REPORT_COVERAGE_SOURCES = (
     "fnguide",
@@ -36,6 +37,7 @@ _REPORT_COVERAGE_SOURCES = (
     "bain",
     "hbr",
     "mckinsey",
+    "bcg",
 )
 
 

@@ -12,5 +12,6 @@ SEARCH_ALLOWLIST = frozenset(
         "bain",
         "hbr",
         "mckinsey",
+        "bcg",
     }
 )

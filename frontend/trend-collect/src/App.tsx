@@ -96,6 +96,10 @@ function App() {
             element={<ReportsPage embedded source="bain" />}
           />
           <Route
+            path="reports/bcg"
+            element={<ReportsPage embedded source="bcg" />}
+          />
+          <Route
             path="reports/hbr"
             element={<ReportsPage embedded source="hbr" />}
           />

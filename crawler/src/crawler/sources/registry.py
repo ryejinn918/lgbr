@@ -71,6 +71,13 @@ SOURCES: dict[str, SourceDef] = {
         hub_url="https://www.bain.com/",
         has_search=True,
     ),
+    "bcg": SourceDef(
+        id="bcg",
+        label="BCG",
+        abbrev="bc",
+        hub_url="https://www.bcg.com/",
+        has_search=True,
+    ),
     "hbr": SourceDef(
         id="hbr",
         label="HBR",

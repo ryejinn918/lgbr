@@ -220,9 +220,19 @@ def capture_article_pdf(
           const main = (document.querySelector('article')?.innerText
             || document.querySelector('main')?.innerText
             || document.body?.innerText || '').trim();
-          const paywallEl = !!document.querySelector(
-            '[class*=paywall], [class*=Paywall], [class*=gate], [id*=paywall]'
-          );
+          // Piano leaves a hidden paywall mount in DOM after login — ignore invisible nodes.
+          const paywallEl = [...document.querySelectorAll(
+            '[class*=paywall], [class*=Paywall], [id*=paywall]'
+          )].some((el) => {
+            const cls = String(el.className || '');
+            if (/__hidden|\\bhidden\\b/i.test(cls)) return false;
+            const st = getComputedStyle(el);
+            if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) {
+              return false;
+            }
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          });
           const pdfs = [...document.querySelectorAll('a[href*=".pdf"]')]
             .map(a => a.href).filter(h => /\\.pdf(\\?|$)/i.test(h));
           return {

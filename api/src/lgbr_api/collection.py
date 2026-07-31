@@ -41,6 +41,7 @@ SEARCH_ALLOWLIST = frozenset(
         "bain",
         "hbr",
         "mckinsey",
+        "bcg",
     }
 )
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
@@ -333,6 +334,8 @@ HBR_CATALOGS = frozenset({"us"})
 DEFAULT_HBR_CATALOG = "us"
 MCKINSEY_CATALOGS = frozenset({"us"})
 DEFAULT_MCKINSEY_CATALOG = "us"
+BCG_CATALOGS = frozenset({"us"})
+DEFAULT_BCG_CATALOG = "us"
 DELOITTE_PROFILES = frozenset(
     {
         "report",
@@ -356,6 +359,7 @@ SOURCE_DEFAULT_CATALOG = {
     "bain": DEFAULT_BAIN_CATALOG,
     "hbr": DEFAULT_HBR_CATALOG,
     "mckinsey": DEFAULT_MCKINSEY_CATALOG,
+    "bcg": DEFAULT_BCG_CATALOG,
 }
 SOURCE_CATALOGS = {
     "pwc": PWC_CATALOGS,
@@ -367,6 +371,7 @@ SOURCE_CATALOGS = {
     "bain": BAIN_CATALOGS,
     "hbr": HBR_CATALOGS,
     "mckinsey": MCKINSEY_CATALOGS,
+    "bcg": BCG_CATALOGS,
 }
 
 
