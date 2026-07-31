@@ -27,8 +27,12 @@ from crawler.fnguide_session import (
 from crawler.adhoc_session import AdhocBrowserSession
 from crawler.hbrkorea_session import HbrKoreaSession
 from crawler.jobs.search_report import SEARCH_MODES, get_profile, run_search_report_job
+from crawler.nikkei_session import NikkeiSession
+from crawler.nikkeixtech_session import NikkeixtechSession
 from crawler.session import LoginPageError
 from crawler.sources.registry import get_source, is_adhoc_source, source_requires_login
+
+LoggedInAdhocSession = HbrKoreaSession | NikkeiSession | NikkeixtechSession
 
 
 def _adhoc_hold_modes() -> frozenset[str]:
@@ -296,21 +300,47 @@ def _run_logged_in_source_adhoc(
     download_dir = downloads_dir(asset_id)
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    if mode != "hbrkorea":
-        raise CrawlStateError(f"unsupported logged-in adhoc source: {mode}")
     _ = src  # validated via get_source above
-    sess = HbrKoreaSession(
-        user_id=user_id,
-        password=password,
-        ttl_seconds=ttl_seconds,
-        idle_seconds=idle_seconds,
-        headless=headless,
-        force_other_session=force_other_session,
-        cdp_port=cdp_port,
-        downloads_path=download_dir,
-    )
+    if mode == "hbrkorea":
+        sess: LoggedInAdhocSession = HbrKoreaSession(
+            user_id=user_id,
+            password=password,
+            ttl_seconds=ttl_seconds,
+            idle_seconds=idle_seconds,
+            headless=headless,
+            force_other_session=force_other_session,
+            cdp_port=cdp_port,
+            downloads_path=download_dir,
+        )
+    elif mode == "nikkei":
+        sess = NikkeiSession(
+            user_id=user_id,
+            password=password,
+            ttl_seconds=ttl_seconds,
+            idle_seconds=idle_seconds,
+            headless=headless,
+            force_other_session=force_other_session,
+            cdp_port=cdp_port,
+            downloads_path=download_dir,
+        )
+    elif mode == "nikkeixtech":
+        sess = NikkeixtechSession(
+            user_id=user_id,
+            password=password,
+            ttl_seconds=ttl_seconds,
+            idle_seconds=idle_seconds,
+            headless=headless,
+            force_other_session=force_other_session,
+            cdp_port=cdp_port,
+            downloads_path=download_dir,
+        )
+    else:
+        raise CrawlStateError(f"unsupported logged-in adhoc source: {mode}")
 
     try:
+        # Publish CDP before login so OTP (xTECH/日経ID) can be entered remotely.
+        crawls_store.set_cdp_port(crawl_id, cdp_port)
+        log.emit(level="info", stage="crawl", event="cdp_ready", cdp_port=cdp_port)
         log.emit(
             level="info",
             stage="login",
@@ -318,7 +348,12 @@ def _run_logged_in_source_adhoc(
             mode=mode,
             asset_id=asset_id,
         )
-        log.set_progress(stage="login", mode=mode, asset_id=asset_id)
+        log.set_progress(
+            stage="login",
+            mode=mode,
+            asset_id=asset_id,
+            cdp_port=cdp_port,
+        )
         try:
             sess.start()
         except LoginPageError as exc:
@@ -330,11 +365,18 @@ def _run_logged_in_source_adhoc(
                 **(exc.detail or {}),
             )
             raise
-        if isinstance(sess, HbrKoreaSession) and sess.conflict_accepted:
+        if getattr(sess, "conflict_accepted", False):
             log.emit(
                 level="info",
                 stage="login",
                 event="session_conflict_accepted",
+                mode=mode,
+            )
+        if getattr(sess, "otp_waited", False):
+            log.emit(
+                level="info",
+                stage="login",
+                event="otp_completed",
                 mode=mode,
             )
         log.emit(level="info", stage="login", event="stage_end", mode=mode)
@@ -348,8 +390,6 @@ def _run_logged_in_source_adhoc(
                 reason="shutdown",
                 message="shutdown signal",
             )
-        crawls_store.set_cdp_port(crawl_id, cdp_port)
-        log.emit(level="info", stage="crawl", event="cdp_ready", cdp_port=cdp_port)
         crawls_store.attach_session(crawl_id, sess.session_id)
         crawls_store.mark_active(crawl_id)
         log.emit(
@@ -585,7 +625,7 @@ def _handoff_to_adhoc(
 
 def _hold_until_stop(
     crawl_id: str,
-    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
+    sess: FnguideSession | AdhocBrowserSession | LoggedInAdhocSession,
     log: CrawlLogger,
     *,
     touch_step: str,
@@ -618,7 +658,7 @@ def _hold_until_stop(
 
 def _graceful_end(
     crawl_id: str,
-    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
+    sess: FnguideSession | AdhocBrowserSession | LoggedInAdhocSession,
     log: CrawlLogger,
     *,
     reason: str,
@@ -675,7 +715,7 @@ def _graceful_end(
 
 def _fail_closed(
     crawl_id: str,
-    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
+    sess: FnguideSession | AdhocBrowserSession | LoggedInAdhocSession,
     log: CrawlLogger | None,
     *,
     message: str,
@@ -717,7 +757,7 @@ def _fail_closed(
 
 
 def _best_effort_stop_session(
-    sess: FnguideSession | AdhocBrowserSession | HbrKoreaSession,
+    sess: FnguideSession | AdhocBrowserSession | LoggedInAdhocSession,
     *,
     message: str,
 ) -> None:
@@ -746,5 +786,7 @@ def _best_effort_stop_session(
             sess._close_browser()
         except Exception:
             pass
-        if isinstance(sess, (FnguideSession, HbrKoreaSession)):
+        if isinstance(
+            sess, (FnguideSession, HbrKoreaSession, NikkeiSession, NikkeixtechSession)
+        ):
             sess.session_id = None

@@ -76,7 +76,15 @@ export function SourceAdhocRunPage() {
       {requiresLogin ? (
         <p className="account-line">
           계정 로그인 후 Chrome+CDP로 홀드합니다. 목록/본문 자동 수집은 아직
-          없습니다. 계정당 동시 1세션이라 다른 접속이 끊길 수 있습니다. 허브:{' '}
+          없습니다. 계정당 동시 1세션이라 다른 접속이 끊길 수 있습니다.
+          {source === 'nikkeixtech' ? (
+            <>
+              {' '}
+              日経ID OTP(ワンタイムパスワード)가 뜨면 로그인 단계에서 이미 열린
+              CDP로 코드를 입력하세요(기본 대기 300초).
+            </>
+          ) : null}{' '}
+          허브:{' '}
           <a href={hubUrl} target="_blank" rel="noreferrer">
             {hubUrl.replace(/^https?:\/\//, '')}
           </a>

@@ -27,6 +27,8 @@ const SOURCE_LABEL: Record<string, string> = {
   ey: 'EY',
   deloitte: 'Deloitte',
   hbrkorea: 'HBR Korea',
+  nikkei: 'Nikkei',
+  nikkeixtech: 'Nikkei xTECH',
 }
 
 function sourceLabel(source: string | null | undefined) {
@@ -177,6 +179,8 @@ export function DashboardPage() {
   const eyAdhoc = isBusy(crawl.state) && crawlMode === 'ey'
   const deloitteAdhoc = isBusy(crawl.state) && crawlMode === 'deloitte'
   const hbrkoreaAdhoc = isBusy(crawl.state) && crawlMode === 'hbrkorea'
+  const nikkeiAdhoc = isBusy(crawl.state) && crawlMode === 'nikkei'
+  const nikkeixtechAdhoc = isBusy(crawl.state) && crawlMode === 'nikkeixtech'
 
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
@@ -193,6 +197,8 @@ export function DashboardPage() {
   const eyBusy = eySearchBusy || eyAdhoc
   const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
   const hbrkoreaBusy = hbrkoreaSearchBusy || hbrkoreaAdhoc
+  const nikkeiBusy = nikkeiAdhoc
+  const nikkeixtechBusy = nikkeixtechAdhoc
 
   const crawlProgress = crawl.progress ?? {}
   const pwcProgress = (pwcSearch.status.progress ??
@@ -328,6 +334,16 @@ export function DashboardPage() {
     hbrkoreaBusy,
     hbrkoreaSearchBusy ? hbrkoreaSearch.status.state : crawl.state,
   )
+  const nikkeixtechBadge = jobBadgeClass(
+    !!(nikkeixtechAdhoc && fetchError),
+    nikkeixtechBusy,
+    crawl.state,
+  )
+  const nikkeiBadge = jobBadgeClass(
+    !!(nikkeiAdhoc && fetchError),
+    nikkeiBusy,
+    crawl.state,
+  )
 
   async function onStopFnguide() {
     if (!window.confirm('FnGuide 크롤을 종료하고 로그아웃할까요?')) return
@@ -350,7 +366,15 @@ export function DashboardPage() {
   }
 
   async function onStopMedia(
-    source: 'pwc' | 'accenture' | 'kpmg' | 'ey' | 'deloitte' | 'hbrkorea',
+    source:
+      | 'pwc'
+      | 'accenture'
+      | 'kpmg'
+      | 'ey'
+      | 'deloitte'
+      | 'hbrkorea'
+      | 'nikkeixtech'
+      | 'nikkei',
     searchBusy: boolean,
     adhoc: boolean,
     stopSearch?: () => Promise<unknown>,
@@ -442,6 +466,18 @@ export function DashboardPage() {
         : hbrkoreaSearch.status.job
           ? hbrkoreaSearch.status.label
           : '유휴'
+
+  const nikkeixtechValue = fetchError
+    ? 'API Offline'
+    : nikkeixtechAdhoc
+      ? crawl.label
+      : '유휴'
+
+  const nikkeiValue = fetchError
+    ? 'API Offline'
+    : nikkeiAdhoc
+      ? crawl.label
+      : '유휴'
 
   const fnguideLastAt = fnguideOwned
     ? jobTimestamp(crawl.crawl)
@@ -830,6 +866,86 @@ export function DashboardPage() {
                           hbrkoreaAdhoc,
                           () => hbrkoreaSearch.stopFeed(),
                         ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="Nikkei xTECH"
+              meta={[
+                '계정',
+                '애드혹',
+                nikkeixtechAdhoc ? '로그인' : '',
+              ]}
+              statusLabel={nikkeixtechValue}
+              stateClass={nikkeixtechBadge}
+              freshnessKind="article"
+              lastCollectedAt={
+                nikkeixtechAdhoc ? jobTimestamp(crawl.crawl) : null
+              }
+              progressLine={
+                nikkeixtechAdhoc
+                  ? mediaProgress(
+                      false,
+                      true,
+                      crawlProgress,
+                      crawl.crawl?.message,
+                    )
+                  : null
+              }
+              links={
+                <>
+                  <Link to="/collect/nikkeixtech/list/search">
+                    애드혹 실행
+                  </Link>
+                </>
+              }
+              stop={
+                nikkeixtechBusy
+                  ? {
+                      label: requestingStop ? '요청 중…' : '애드혹 종료',
+                      disabled: requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'nikkeixtech',
+                          false,
+                          nikkeixtechAdhoc,
+                        ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="Nikkei"
+              meta={['계정', '애드혹', nikkeiAdhoc ? '로그인' : '']}
+              statusLabel={nikkeiValue}
+              stateClass={nikkeiBadge}
+              freshnessKind="article"
+              lastCollectedAt={
+                nikkeiAdhoc ? jobTimestamp(crawl.crawl) : null
+              }
+              progressLine={
+                nikkeiAdhoc
+                  ? mediaProgress(
+                      false,
+                      true,
+                      crawlProgress,
+                      crawl.crawl?.message,
+                    )
+                  : null
+              }
+              links={
+                <>
+                  <Link to="/collect/nikkei/list/search">애드혹 실행</Link>
+                </>
+              }
+              stop={
+                nikkeiBusy
+                  ? {
+                      label: requestingStop ? '요청 중…' : '애드혹 종료',
+                      disabled: requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia('nikkei', false, nikkeiAdhoc),
                     }
                   : null
               }

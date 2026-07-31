@@ -378,23 +378,38 @@ def main() -> None:
             user_id = args.user_id or ""
             password = args.password or ""
             if source_requires_login(preview_mode):
-                # Prefer site-specific env; CLI flags still override when set
-                # to non-default empty after argparse defaults from FNGUIDE_*.
-                site_user = os.environ.get("HBRKOREA_USER_ID") if preview_mode == "hbrkorea" else None
-                site_pass = (
-                    os.environ.get("HBRKOREA_PASSWORD")
-                    if preview_mode == "hbrkorea"
-                    else None
-                )
-                # argparse defaults user/password from FNGUIDE_*; for HBR use
-                # HBRKOREA_* unless explicitly passed (same as env already set).
-                if preview_mode == "hbrkorea":
-                    user_id = site_user or ""
-                    password = site_pass or ""
+                # Prefer site-specific env over argparse FNGUIDE_* defaults.
+                env_map = {
+                    "hbrkorea": ("HBRKOREA_USER_ID", "HBRKOREA_PASSWORD"),
+                    "nikkei": ("NIKKEI_USER_ID", "NIKKEI_PASSWORD"),
+                    "nikkeixtech": (
+                        "NIKKEIXTECH_USER_ID",
+                        "NIKKEIXTECH_PASSWORD",
+                    ),
+                }
+                keys = env_map.get(preview_mode)
+                if keys:
+                    user_id = os.environ.get(keys[0]) or ""
+                    password = os.environ.get(keys[1]) or ""
+                    # xTECH shares 日経ID with electronic edition BP row.
+                    if preview_mode == "nikkeixtech" and (
+                        not user_id or not password
+                    ):
+                        user_id = os.environ.get("NIKKEI_USER_ID") or ""
+                        password = os.environ.get("NIKKEI_PASSWORD") or ""
                 if not user_id or not password:
+                    need = (
+                        f"{keys[0]}/{keys[1]}"
+                        if keys
+                        else "site credentials"
+                    )
+                    if preview_mode == "nikkeixtech":
+                        need = (
+                            "NIKKEIXTECH_USER_ID/NIKKEIXTECH_PASSWORD "
+                            "or NIKKEI_USER_ID/NIKKEI_PASSWORD"
+                        )
                     parser.error(
-                        f"crawl run mode={preview_mode} requires "
-                        "HBRKOREA_USER_ID/HBRKOREA_PASSWORD"
+                        f"crawl run mode={preview_mode} requires {need}"
                     )
             elif not is_adhoc_source(preview_mode) and (not user_id or not password):
                 parser.error(

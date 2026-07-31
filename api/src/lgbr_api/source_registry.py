@@ -65,6 +65,28 @@ SOURCES: dict[str, SourceDef] = {
         requires_login=True,
         login_url="https://www.hbrkorea.com/member/login",
     ),
+    "nikkei": SourceDef(
+        id="nikkei",
+        label="Nikkei",
+        abbrev="nk",
+        hub_url="https://www.nikkei.com/",
+        has_search=False,
+        requires_login=True,
+        login_url="https://www.nikkei.com/login",
+    ),
+    "nikkeixtech": SourceDef(
+        id="nikkeixtech",
+        label="Nikkei xTECH",
+        abbrev="xt",
+        hub_url="https://xtech.nikkei.com/",
+        has_search=False,
+        requires_login=True,
+        login_url=(
+            "https://bpsso.nikkei.com/ep/auth/prev/?ts=nxt&ru="
+            "https%3A%2F%2Fbpsso.nikkei.com%2Fep%2Fcookie%2F%3Fru%3D"
+            "https%253A%252F%252Fxtech.nikkei.com%252F"
+        ),
+    ),
 }
 
 FNGUIDE_MODES = frozenset(
