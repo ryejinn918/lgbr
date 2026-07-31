@@ -349,6 +349,9 @@ DELOITTE_PROFILES = frozenset(
     }
 )
 DEFAULT_DELOITTE_PROFILE = "report"
+# Same desk-theme ids as Deloitte; BCG maps each to allowlisted list URLs.
+BCG_PROFILES = frozenset(DELOITTE_PROFILES)
+DEFAULT_BCG_PROFILE = "report"
 SOURCE_DEFAULT_CATALOG = {
     "pwc": DEFAULT_PWC_CATALOG,
     "accenture": DEFAULT_ACCENTURE_CATALOG,
@@ -438,12 +441,30 @@ def start_search(
                 "job": None,
                 "can_start": False,
             }
+    elif source_s == "bcg":
+        profile_s = (
+            DEFAULT_BCG_PROFILE
+            if profile is None or str(profile).strip() == ""
+            else str(profile).strip().lower()
+        )
+        if profile_s not in BCG_PROFILES:
+            return {
+                "ok": False,
+                "status": 400,
+                "label": "오류",
+                "message": (
+                    "profile must be one of: "
+                    + ", ".join(sorted(BCG_PROFILES))
+                ),
+                "job": None,
+                "can_start": False,
+            }
     elif profile is not None and str(profile).strip() != "":
         return {
             "ok": False,
             "status": 400,
             "label": "오류",
-            "message": "profile is only supported for source=deloitte",
+            "message": "profile is only supported for source=deloitte|bcg",
             "job": None,
             "can_start": False,
         }

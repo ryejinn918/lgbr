@@ -1,53 +1,73 @@
-# BCG 수집 조사 (2026-07-31)
+# BCG 수집 조사 (2026-07-31, 갱신 2026-08-01)
 
-무계정 Patchright. 아티팩트: `.crawler/snapshots/bcg-research/` (`findings.json`, 스크린샷, `detail-1.pdf`, `detail-2.pdf`).
+무계정. 아티팩트: `.crawler/snapshots/bcg-research/` (`findings.json`, 스크린샷).
 
-HTTP/API 추정·연타 없음. 확인된 UI 경로만 기록.
+JSON 목록 API 없음. allowlist HTML GET + 상세 PDF만. 임의 `/publications/{year}/{slug}`·PDF slug 추측 금지.
 
 ## Hub
 
 - URL: `https://www.bcg.com/`
-- 타이틀: Strategic Management Consulting | Boston Consulting Group
-- Access Denied / 로그인월: **없음** (`body_len` ~4.7k)
-- 쿠키: `#onetrust-accept-btn-handler` / Accept (보이면)
-- 네비: **Our Insights** → 메가메뉴 → **Featured Insights**의 **Visit Page**
-  - Visit Page `href` 확인: `https://www.bcg.com/publications`
-  - (텍스트만 `Featured Insights`인 `javascript:void(0)` 링크는 제외)
+- Access Denied / 로그인월: **없음**
+- 쿠키: `#onetrust-accept-btn-handler` / Accept (보이면; 애드혹/probe)
+- 네비: **Our Insights** → **Featured Insights** Visit Page → `https://www.bcg.com/publications`
 
-## 목록 (확인)
+## 목록 표면 (확인)
+
+### Featured Insights
 
 - URL: `https://www.bcg.com/publications`
-- 타이틀/h1: Featured Insights and Perspectives | BCG
-- Access Denied: **없음** (`body_len` ~5.6k)
-- 카드: `a[href*="/publications/"]` 중 경로 `/publications/{YYYY}/{slug}`
-  - 예: `https://www.bcg.com/publications/2026/building-business-value-with-ai-investment`
-  - 제목 텍스트 길이 ≥12
-- 날짜: 카드 근처 `JULY 31, 2026` 형태 (월 풀네임 + 일, 연)
-- 첫 화면 카드 수: **6** (스크롤/Load More UI는 **미확인** — `Load More` 라벨 없음)
+- 카드: `a[href*="/publications/"]` 중 `/publications/{YYYY}/{slug}`
+- 날짜: 카드 근처 `JULY 31, 2026` 형태
+- 첫 화면 카드 수: **6** (정적 HTML 동일)
+- Load More: **미확인** (라벨 없음). 스크롤로 카드 증가 없음.
 
-## 상세 (2건 — 성공)
+### Industry / Capability (테마 프로필용)
 
-같은 브라우저, 목록 클릭 또는 `goto`+Referer, 상세 사이 delay 5s.
+데스크 테마 → **probe로 카드 ≥1 확인된** 목록 URL만 (`bcg_browser.PROFILES`):
 
-1. `…/publications/2026/building-business-value-with-ai-investment`
-   - `main` ~5.1k자, 차단 없음
-   - PDF: `https://web-assets.bcg.com/pdf-src/prod-live/building-business-value-with-ai-investment.pdf`
-   - `context.request` 1회: ~1.3MB, `%PDF`, `pdftotext`에 Access Denied 없음
-2. `…/publications/2026/closing-the-leadership-belief-gap`
-   - `main` ~12k자, 차단 없음
-   - PDF: `https://web-assets.bcg.com/pdf-src/prod-live/closing-the-leadership-belief-gap.pdf`
-   - ~2.9MB, `pdftotext` 본문 확인, Access Denied 없음
+| profile | list_urls (확인) |
+|---------|------------------|
+| report | `/publications` |
+| ai | `/capabilities/artificial-intelligence`, `…/generative-ai` |
+| datacenter | `/capabilities/…/cloud-computing`, `/industries/energy/power-utilities`, `…/semiconductors` |
+| physical_ai | `/capabilities/manufacturing/industry-4.0`, `…/machinery-industrial-automation` |
+| appliance | `/industries/consumer-products-industry/overview` |
+| display | `…/future-of-television`, `…/technology-industry` |
+| automotive | `/industries/automotive/overview` |
+| petrochemical | `/industries/industrial-goods/chemicals` |
 
-## 자동화에 쓸 절차 (다음 플랜용)
+Industry/capability 페이지는 featured 카드 소수(정적). 페이지네이션 없음.
 
-1. 영속 프로필 워밍업 → hub → 쿠키 → (가능하면) Our Insights 메뉴 → Visit Page로 `https://www.bcg.com/publications` (또는 동일 URL `goto`)
-2. 카드 수집: `/publications/{year}/{slug}` + 날짜·제목
-3. Load More가 UI에 생기면 그때만 클릭
-4. **한 건씩** 상세 + delay ≥5s
-5. 상세 `.pdf` 링크(주로 `web-assets.bcg.com`)면 브라우저 컨텍스트로 저장; 없으면 게이트된 `page.pdf`
-6. Access Denied·빈 본문·거부 PDF는 `downloaded`로 치지 않음
+## 상세 / PDF
+
+- PDF: `https://web-assets.bcg.com/pdf-src/prod-live/{slug}.pdf` (상세 HTML의 `.pdf` 링크만; slug 추측 금지)
+- 없으면 검증된 `page.pdf` (LazyCaptureBrowser)
+- Access Denied·빈 본문·비 `%PDF`는 `downloaded`로 치지 않음
+
+## Transport
+
+| 경로 | 방식 |
+|------|------|
+| **search** (`bcg_report`) | **HTTP** (`bcg_http`: list HTML → detail → PDF). PDF 없을 때만 page.pdf |
+| **adhoc** / **probe** | Patchright 브라우저 (`bcg_browser`, CDP) |
+
+스모크: `uv run python crawler/scripts/bcg_http_smoke.py --profile report --limit 1`
+
+## Probe
+
+```bash
+uv run python crawler/scripts/bcg_adhoc_probe.py --verify-profiles
+```
+
+## 자동화 절차 (search / HTTP)
+
+1. 프로필 allowlist `list_urls`만 GET (상한 = `max_pages`)
+2. 카드 파싱: `/publications/{year}/{slug}` + 날짜·제목
+3. 미보유 1건씩 상세 GET → PDF GET (또는 page.pdf 폴백)
+4. item delay 기본 **2s**
 
 ## 현재 상태
 
-- 수집 잡: `bcg_browser` + `bcg_report` (Bain형 1건씩, 프로필 `browser-profile-bcg-search`)
-- FE: `hasSearch` + `BcgRunPage` / Dashboard 검색 카드 / Docs `reports/bcg`
+- 잡: `bcg_report` HTTP + `profile` (desk theme)
+- FE: `BcgRunPage` 프로필 선택 · 기본 간격 2초 · 애드혹 CDP
+- 요약: `audit_report_quality.py --source bcg` (수집 안정 후)

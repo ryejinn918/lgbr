@@ -606,6 +606,16 @@ def main() -> None:
                         limit=args.limit,
                         item_delay_seconds=args.item_delay_seconds,
                     )
+                elif source == "bcg":
+                    result = run_bcg_search_job(
+                        args.job_id,
+                        catalog=catalog,
+                        profile=args.profile or "report",
+                        max_pages=args.max_pages,
+                        period_months=period_months,
+                        limit=args.limit,
+                        item_delay_seconds=args.item_delay_seconds,
+                    )
                 else:
                     result = runner(
                         args.job_id,
