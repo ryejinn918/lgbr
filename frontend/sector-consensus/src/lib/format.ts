@@ -13,6 +13,20 @@ export function formatTime(iso: string | null | undefined): string {
   })
 }
 
+/** Published date for compact table cells (YYYY-MM-DD). */
+export function formatPubDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso)
+  return m ? m[1] : iso
+}
+
 export function formatProgress(progress: Record<string, unknown>): string {
   const stage = progress.stage != null ? labelStage(String(progress.stage)) : ''
   const done = progress.docs_done

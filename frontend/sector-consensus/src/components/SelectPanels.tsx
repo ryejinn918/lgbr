@@ -8,6 +8,7 @@ import {
   labelThemes,
 } from '../lib/labels'
 import { isLiveState, openRunForTheme } from '../lib/runState'
+import { formatPubDate } from '../lib/format'
 import { parseTheme } from '../lib/theme'
 import type { InputReport, RunDoc, SelectCriteria } from '../types'
 
@@ -292,7 +293,7 @@ export function SelectPanels() {
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}
-        <table className="data-table">
+        <table className="data-table pool-table">
           <thead>
             <tr>
               <th className="col-title">제목</th>
@@ -328,8 +329,12 @@ export function SelectPanels() {
                   <td className="col-theme" title={themeLabels}>
                     {themeLabels}
                   </td>
-                  <td className="col-provider">{r.provider ?? '—'}</td>
-                  <td className="col-date">{r.published_at ?? '—'}</td>
+                  <td className="col-provider" title={r.provider ?? undefined}>
+                    {r.provider ?? '—'}
+                  </td>
+                  <td className="col-date" title={r.published_at ?? undefined}>
+                    {formatPubDate(r.published_at)}
+                  </td>
                   <td className="col-pages">{r.page_count ?? '—'}</td>
                   <td className="col-quality">
                     {r.quality_pass === true
