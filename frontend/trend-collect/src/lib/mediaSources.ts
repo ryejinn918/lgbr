@@ -53,7 +53,7 @@ export const MEDIA_SOURCES: MediaSource[] = [
     id: 'mckinsey',
     label: 'McKinsey',
     hubUrl: 'https://www.mckinsey.com/',
-    hasSearch: false,
+    hasSearch: true,
     hasCatalogs: false,
   },
   {

@@ -61,7 +61,7 @@ SOURCES: dict[str, SourceDef] = {
         label="McKinsey",
         abbrev="mk",
         hub_url="https://www.mckinsey.com/",
-        has_search=False,
+        has_search=True,
     ),
     "bain": SourceDef(
         id="bain",

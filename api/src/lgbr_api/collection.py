@@ -31,7 +31,17 @@ JOB_STATE_LABELS = {
 
 FEED_ALLOWLIST = frozenset({"arg"})
 SEARCH_ALLOWLIST = frozenset(
-    {"pwc", "accenture", "kpmg", "ey", "deloitte", "hbrkorea", "bain", "hbr"}
+    {
+        "pwc",
+        "accenture",
+        "kpmg",
+        "ey",
+        "deloitte",
+        "hbrkorea",
+        "bain",
+        "hbr",
+        "mckinsey",
+    }
 )
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
 CAPABILITY_LABELS = {
@@ -321,6 +331,8 @@ BAIN_CATALOGS = frozenset({"us"})
 DEFAULT_BAIN_CATALOG = "us"
 HBR_CATALOGS = frozenset({"us"})
 DEFAULT_HBR_CATALOG = "us"
+MCKINSEY_CATALOGS = frozenset({"us"})
+DEFAULT_MCKINSEY_CATALOG = "us"
 DELOITTE_PROFILES = frozenset(
     {
         "report",
@@ -343,6 +355,7 @@ SOURCE_DEFAULT_CATALOG = {
     "hbrkorea": DEFAULT_HBRKOREA_CATALOG,
     "bain": DEFAULT_BAIN_CATALOG,
     "hbr": DEFAULT_HBR_CATALOG,
+    "mckinsey": DEFAULT_MCKINSEY_CATALOG,
 }
 SOURCE_CATALOGS = {
     "pwc": PWC_CATALOGS,
@@ -353,6 +366,7 @@ SOURCE_CATALOGS = {
     "hbrkorea": HBRKOREA_CATALOGS,
     "bain": BAIN_CATALOGS,
     "hbr": HBR_CATALOGS,
+    "mckinsey": MCKINSEY_CATALOGS,
 }
 
 

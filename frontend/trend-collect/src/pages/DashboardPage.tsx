@@ -169,6 +169,10 @@ export function DashboardPage() {
     source: 'hbrkorea',
     capability: 'search',
   })
+  const mckinseySearch = useCollectionJob({
+    source: 'mckinsey',
+    capability: 'search',
+  })
   const bainSearch = useCollectionJob({
     source: 'bain',
     capability: 'search',
@@ -205,6 +209,7 @@ export function DashboardPage() {
   const eySearchBusy = isBusy(eySearch.status.state)
   const deloitteSearchBusy = isBusy(deloitteSearch.status.state)
   const hbrkoreaSearchBusy = isBusy(hbrkoreaSearch.status.state)
+  const mckinseySearchBusy = isBusy(mckinseySearch.status.state)
   const bainSearchBusy = isBusy(bainSearch.status.state)
   const hbrSearchBusy = isBusy(hbrSearch.status.state)
   const pwcBusy = pwcSearchBusy || pwcAdhoc
@@ -212,7 +217,7 @@ export function DashboardPage() {
   const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
   const eyBusy = eySearchBusy || eyAdhoc
   const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
-  const mckinseyBusy = mckinseyAdhoc
+  const mckinseyBusy = mckinseySearchBusy || mckinseyAdhoc
   const bainBusy = bainSearchBusy || bainAdhoc
   const hbrBusy = hbrSearchBusy || hbrAdhoc
   const hbrkoreaBusy = hbrkoreaSearchBusy || hbrkoreaAdhoc
@@ -237,6 +242,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const hbrkoreaProgress = (hbrkoreaSearch.status.progress ??
     hbrkoreaSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const mckinseyProgress = (mckinseySearch.status.progress ??
+    mckinseySearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const bainProgress = (bainSearch.status.progress ??
     bainSearch.status.job?.progress ??
@@ -317,6 +325,12 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsMk = useReports({
+    source: 'mckinsey',
+    limit: 1,
+    offset: 0,
+    poll: true,
+  })
   const countsBn = useReports({
     source: 'bain',
     limit: 1,
@@ -367,9 +381,9 @@ export function DashboardPage() {
     deloitteSearchBusy ? deloitteSearch.status.state : crawl.state,
   )
   const mckinseyBadge = jobBadgeClass(
-    !!(mckinseyAdhoc && fetchError),
+    !!(mckinseySearch.fetchError || (mckinseyAdhoc && fetchError)),
     mckinseyBusy,
-    crawl.state,
+    mckinseySearchBusy ? mckinseySearch.status.state : crawl.state,
   )
   const bainBadge = jobBadgeClass(
     !!(bainSearch.fetchError || (bainAdhoc && fetchError)),
@@ -532,11 +546,15 @@ export function DashboardPage() {
           ? hbrkoreaSearch.status.label
           : '유휴'
 
-  const mckinseyValue = fetchError
+  const mckinseyValue = mckinseySearch.fetchError
     ? 'API Offline'
-    : mckinseyAdhoc
-      ? crawl.label
-      : '유휴'
+    : mckinseySearchBusy
+      ? mckinseySearch.status.label
+      : mckinseyAdhoc
+        ? crawl.label
+        : mckinseySearch.status.job
+          ? mckinseySearch.status.label
+          : '유휴'
 
   const bainValue = bainSearch.fetchError
     ? 'API Offline'
@@ -900,35 +918,53 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="McKinsey"
-              meta={['무계정', '애드혹']}
+              meta={[
+                '무계정',
+                '리포트',
+                '검색',
+                mckinseyAdhoc ? '애드혹' : '',
+              ]}
               statusLabel={mckinseyValue}
               stateClass={mckinseyBadge}
               freshnessKind="report"
-              lastCollectedAt={
-                mckinseyAdhoc ? jobTimestamp(crawl.crawl) : null
-              }
-              progressLine={
-                mckinseyAdhoc
-                  ? mediaProgress(
-                      false,
-                      true,
-                      crawlProgress,
-                      crawl.crawl?.message,
-                    )
-                  : null
-              }
+              lastCollectedAt={mediaLastAt(
+                mckinseySearch.status.job,
+                mckinseyAdhoc,
+              )}
+              lastDocAt={countsMk.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                mckinseySearchBusy,
+                mckinseyAdhoc,
+                mckinseyProgress,
+                mckinseySearch.status.job?.message,
+              )}
               links={
                 <>
-                  <Link to="/collect/mckinsey/list/search">애드혹 실행</Link>
+                  <Link to="/collect/mckinsey/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/mckinsey">보고서</Link>
                 </>
               }
               stop={
                 mckinseyBusy
                   ? {
-                      label: requestingStop ? '요청 중…' : '애드혹 종료',
-                      disabled: requestingStop || !!fetchError,
+                      label: (mckinseySearchBusy
+                        ? mckinseySearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : mckinseySearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: mckinseySearchBusy
+                        ? mckinseySearch.requestingStop
+                        : requestingStop || !!fetchError,
                       onClick: () =>
-                        void onStopMedia('mckinsey', false, mckinseyAdhoc),
+                        void onStopMedia(
+                          'mckinsey',
+                          mckinseySearchBusy,
+                          mckinseyAdhoc,
+                          () => mckinseySearch.stopFeed(),
+                        ),
                     }
                   : null
               }

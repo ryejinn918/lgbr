@@ -12,6 +12,7 @@ import { getMediaSource } from '../../lib/mediaSources'
 import { AccentureRunPage } from './AccentureRunPage'
 import { BainRunPage } from './BainRunPage'
 import { DeloitteRunPage } from './DeloitteRunPage'
+import { MckinseyRunPage } from './MckinseyRunPage'
 import { EyRunPage } from './EyRunPage'
 import { HbrRunPage } from './HbrRunPage'
 import { HbrKoreaRunPage } from './HbrKoreaRunPage'
@@ -70,6 +71,13 @@ export function CollectRunRouter() {
     ctx.means === 'search'
   ) {
     return <HbrKoreaRunPage />
+  }
+  if (
+    ctx.source === 'mckinsey' &&
+    ctx.stage === 'list' &&
+    ctx.means === 'search'
+  ) {
+    return <MckinseyRunPage />
   }
   if (ctx.source === 'bain' && ctx.stage === 'list' && ctx.means === 'search') {
     return <BainRunPage />
