@@ -13,8 +13,13 @@ import {
 import { articlePublicOriginalUrl } from '../../lib/publicOriginalUrl'
 
 const SOURCE_LABEL: Record<string, string> = {
+  all: '전체',
   arg: 'ARG',
+  google_news: 'Google News',
 }
+
+/** Chip order for media filter (must match API OTHER_MEDIA_SOURCES). */
+const SOURCE_FILTERS = ['all', 'arg', 'google_news'] as const
 
 const BODY_FILTERS: NewsArticleBodyFilter[] = ['all', 'yes', 'no']
 
@@ -27,12 +32,13 @@ const BODY_LABEL: Record<NewsArticleBodyFilter, string> = {
 export function ArticlesPage() {
   const [qDraft, setQDraft] = useState('')
   const [q, setQ] = useState('')
+  const [source, setSource] = useState<string>('all')
   const [hasBody, setHasBody] = useState<NewsArticleBodyFilter>('all')
   const [offset, setOffset] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const limit = 30
   const articles = useNewsArticles({
-    source: 'all',
+    source,
     q,
     hasBody,
     limit,
@@ -44,7 +50,14 @@ export function ArticlesPage() {
     return articles.items.find((item) => item.id === selectedId) ?? null
   }, [articles.items, selectedId])
 
-  const dirty = hasBody !== 'all' || q !== '' || qDraft !== ''
+  const dirty =
+    source !== 'all' || hasBody !== 'all' || q !== '' || qDraft !== ''
+
+  function commitSource(next: string) {
+    setSource(next)
+    setOffset(0)
+    setSelectedId(null)
+  }
 
   function commitBody(next: NewsArticleBodyFilter) {
     setHasBody(next)
@@ -53,6 +66,7 @@ export function ArticlesPage() {
   }
 
   function resetFilters() {
+    setSource('all')
     setHasBody('all')
     setQ('')
     setQDraft('')
@@ -102,7 +116,7 @@ export function ArticlesPage() {
 
       <section className="panel">
         <div className="section-head">
-          <h2>전체 매체</h2>
+          <h2>{SOURCE_LABEL[source] ?? source}</h2>
           <p className="section-note">
             {articles.fetchError
               ? articles.fetchError
@@ -112,7 +126,20 @@ export function ArticlesPage() {
           </p>
         </div>
 
-        <div className="filter-row">
+        <div className="filter-row" aria-label="매체 필터">
+          {SOURCE_FILTERS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={`filter-chip${source === key ? ' active' : ''}`}
+              onClick={() => commitSource(key)}
+            >
+              {SOURCE_LABEL[key]} {articles.sourceCounts[key] ?? 0}
+            </button>
+          ))}
+        </div>
+
+        <div className="filter-row" aria-label="본문 필터">
           {BODY_FILTERS.map((key) => (
             <button
               key={key}
@@ -128,7 +155,7 @@ export function ArticlesPage() {
             className="filter-chip filter-reset"
             disabled={!dirty}
             onClick={resetFilters}
-            title="본문 필터·검색·페이지 초기화"
+            title="매체·본문 필터·검색·페이지 초기화"
           >
             초기화
           </button>

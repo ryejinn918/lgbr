@@ -418,9 +418,8 @@ def prepare_targets(
         except Exception as exc:  # noqa: BLE001 — batch resilience
             failures.append((rid, f"extract: {exc}"))
             continue
-        if len(text.strip()) < 80:
-            failures.append((rid, "extract: text too short"))
-            continue
+        # No minimum length: page.pdf / thin pages already passed capture
+        # gates when applicable; let the model judge short extracts.
         ready.append(
             AuditTarget(
                 id=rid,
@@ -428,7 +427,7 @@ def prepare_targets(
                 source_key=str(row.get("source_key") or ""),
                 title=str(row.get("title") or ""),
                 file_path=path,
-                text=text,
+                text=text or "",
             )
         )
     ready.sort(key=lambda t: t.text_len)
@@ -544,7 +543,15 @@ async def _classify_one(
                 "content": (
                     f"Title: {target.title}\n"
                     f"Source: {target.source}\n\n"
-                    f"Article / report text (extracted from early pages):\n{target.text}"
+                    "Article / report text (extracted from early pages):\n"
+                    + (
+                        target.text
+                        if (target.text or "").strip()
+                        else (
+                            "(No extractable PDF text — judge from the title "
+                            "and source only; say so in rationale if unsure.)"
+                        )
+                    )
                 ),
             },
         ],

@@ -371,6 +371,11 @@ export type NewsArticleBodyCounts = {
   [key: string]: number
 }
 
+export type NewsArticleSourceCounts = {
+  all: number
+  [source: string]: number
+}
+
 export type NewsArticlesResponse = {
   ok?: boolean
   source?: string
@@ -380,5 +385,6 @@ export type NewsArticlesResponse = {
   limit: number
   offset: number
   body_counts?: NewsArticleBodyCounts
+  source_counts?: NewsArticleSourceCounts
   message?: string
 }

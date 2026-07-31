@@ -3,12 +3,14 @@ import type {
   NewsArticleBodyCounts,
   NewsArticleBodyFilter,
   NewsArticleRecord,
+  NewsArticleSourceCounts,
   NewsArticlesResponse,
 } from '../types'
 
 const POLL_MS = 5_000
 
 const EMPTY_COUNTS: NewsArticleBodyCounts = { all: 0, yes: 0, no: 0 }
+const EMPTY_SOURCE_COUNTS: NewsArticleSourceCounts = { all: 0 }
 
 export function useNewsArticles(opts?: {
   source?: string
@@ -26,6 +28,8 @@ export function useNewsArticles(opts?: {
   const [total, setTotal] = useState(0)
   const [bodyCounts, setBodyCounts] =
     useState<NewsArticleBodyCounts>(EMPTY_COUNTS)
+  const [sourceCounts, setSourceCounts] =
+    useState<NewsArticleSourceCounts>(EMPTY_SOURCE_COUNTS)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
@@ -52,6 +56,10 @@ export function useNewsArticles(opts?: {
             yes: data.body_counts?.yes ?? 0,
             no: data.body_counts?.no ?? 0,
           })
+          setSourceCounts({
+            all: data.source_counts?.all ?? 0,
+            ...(data.source_counts ?? {}),
+          })
           setFetchError(null)
           setLoading(false)
         }
@@ -71,5 +79,5 @@ export function useNewsArticles(opts?: {
     }
   }, [source, q, hasBody, limit, offset])
 
-  return { items, total, bodyCounts, loading, fetchError }
+  return { items, total, bodyCounts, sourceCounts, loading, fetchError }
 }

@@ -1,15 +1,16 @@
-export type FreshnessKind = 'report' | 'daily'
+export type FreshnessKind = 'report' | 'daily' | 'article'
 export type FreshnessGrade = 'fresh' | 'aging' | 'stale'
 
 const DAY_MS = 86_400_000
 
-/** Report sources: weekly–monthly ops. Daily (ARG): slightly tighter. */
+/** Report: weekly–monthly. Daily/article news lanes: tighter. */
 const THRESHOLDS: Record<
   FreshnessKind,
   { freshMs: number; agingMs: number }
 > = {
   report: { freshMs: 7 * DAY_MS, agingMs: 30 * DAY_MS },
   daily: { freshMs: 2 * DAY_MS, agingMs: 7 * DAY_MS },
+  article: { freshMs: 2 * DAY_MS, agingMs: 7 * DAY_MS },
 }
 
 export function freshnessGrade(
