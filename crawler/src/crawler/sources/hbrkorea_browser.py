@@ -184,11 +184,15 @@ def capture_article_pdf(page: Page, url: str, dest: Path) -> dict[str, Any]:
           };
         }"""
     )
-    if detail.get("has_preview") or int(detail.get("body_len") or 0) < 1500:
+    # Paywall signal is section.preview only — short editor letters are valid
+    # full text (often <1500 chars). Keep a tiny floor for empty/broken pages.
+    body_len = int(detail.get("body_len") or 0)
+    if detail.get("has_preview"):
         raise RuntimeError(
-            f"paywall or short body at {url} "
-            f"(len={detail.get('body_len')} preview={detail.get('has_preview')})"
+            f"paywall preview at {url} (len={body_len})"
         )
+    if body_len < 200:
+        raise RuntimeError(f"empty body at {url} (len={body_len})")
     dest.parent.mkdir(parents=True, exist_ok=True)
     page.pdf(path=str(dest), format="A4", print_background=True)
     if not dest.is_file() or dest.stat().st_size < 1000:

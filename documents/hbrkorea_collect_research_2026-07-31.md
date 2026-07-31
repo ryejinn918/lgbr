@@ -13,6 +13,7 @@
 ## 본문
 
 - 로그인 상세: `#article_body` **8364자**, `section.preview` **없음** → 전문 확보 가능
+- 페이월 지표는 **`section.preview` 존재**뿐. 본문 길이 임계값(예: 1500)은 검증된 값이 아니며, 짧은 편집장 서문(700–1400자)을 오탐함 → 빈 페이지용 하한(~200)만 사용
 - `/article/pdf_download/article_no/{n}`: 로그인 후에도 **`text/html`** (실제 PDF 아님)
 - Playwright `page.pdf()`: **성공** (~563KB) → **본문 확보 전략 = page.pdf 캡처**
 
