@@ -70,6 +70,11 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--source",
+        default=None,
+        help="Limit to reports.source (e.g. hbrkorea, pwc, fnguide)",
+    )
+    parser.add_argument(
         "--report-id",
         default=None,
         help="Audit a single report UUID (implies that row only)",
@@ -104,6 +109,7 @@ def main() -> None:
         "force": bool(args.force) or bool(args.non_korean_summary),
         "limit": args.limit,
         "theme": args.theme,
+        "source": args.source,
         "report_id": str(report_id) if report_id else None,
         "non_korean_summary": bool(args.non_korean_summary),
         "concurrency": args.concurrency,
@@ -123,6 +129,7 @@ def main() -> None:
                 concurrency=args.concurrency,
                 model=args.model,
                 theme=args.theme,
+                source=args.source,
                 report_id=report_id,
                 non_korean_summary=bool(args.non_korean_summary),
             )

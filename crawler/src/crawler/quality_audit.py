@@ -101,6 +101,77 @@ Rules:
 - If text is too thin / unreadable / unrelated, set scope "unclear", pass false, confidence low.
 """
 
+# Non-FnGuide media / consulting pieces: summaries for citation, not sell-side gatekeeping.
+SUMMARY_SYSTEM_PROMPT = """You summarize business / management / consulting articles for a research desk.
+
+This is NOT a sell-side equity note. Do NOT judge "sector research pass/fail",
+stock pitches, target prices, or broker-note format. Ignore those criteria entirely.
+
+Your job is citation metadata + a faithful Korean summary of the piece's core argument.
+
+Respond with a single JSON object only (no markdown):
+{
+    "pass": true,
+    "confidence": number,
+    "has_coherent_framework": boolean,
+    "has_broad_sector_coverage": boolean,
+    "scope": "sector" | "company" | "unclear",
+    "topic": string,
+    "short_title": string,
+    "framework_summary": string,
+    "fail_reasons": [],
+    "pass_signals": string[],
+    "rationale": string,
+    "themes": string[]
+}
+
+Field meanings (mandatory):
+- pass: always true when the text is readable. Only false if text is empty/unreadable.
+- has_coherent_framework: true if the piece has a clear thesis or structured argument.
+- has_broad_sector_coverage: true only if it analyzes an industry / market / value chain
+  broadly. Leadership, HR, culture, personal productivity → usually false (that is OK).
+- scope:
+  - "sector" = industry / market / competitive landscape as the core
+  - "company" = one firm case study as the core
+  - "unclear" = general management, leadership, org behavior, methods (not a defect)
+- topic: one short Korean phrase for the subject.
+- framework_summary: 2–4 Korean sentences stating the core claim and how it is framed.
+  This is the main deliverable. Do not write pass/fail commentary.
+- rationale: one Korean sentence on who/what the piece is useful for
+  (e.g. "조직 리더의 AI 도입 의사결정에 참고"). Never say it fails broker-report criteria.
+- pass_signals: short Korean bullets of useful takeaways (0–3).
+- fail_reasons: always [] unless unreadable.
+
+Language (mandatory):
+- Write topic, short_title, framework_summary, pass_signals, and rationale in Korean.
+- Do not use Chinese. English only for proper nouns / product names.
+- Never put UUIDs, file paths, or hashes in human-facing fields.
+
+short_title (citation label — always fill):
+- About 8–22 characters. Nickname, not a full sentence.
+- No publisher name (HBR, PwC, …) inside.
+- Prefer the core theme; do not paste the full original title.
+
+themes (optional content tags):
+- Zero or more ids from this allowlist only: """ + _THEME_IDS + """
+- Labels:
+""" + _THEME_LABEL_LINES + """
+- Prefer exactly one when a desk theme clearly owns the piece; else [].
+- Empty array is normal for pure management / leadership / HR pieces.
+- Disambiguation:
+  - Pure AIDC / power / cooling / colo → datacenter (not ai).
+  - Model / LLM / AI chip / AI software demand → ai.
+  - Macro frame (growth, rates, FX, allocation) → macroeconomy.
+  - Single industry note → that sector only.
+"""
+
+
+def system_prompt_for_source(source: str) -> str:
+    """FnGuide keeps sell-side gatekeeping; other sources get summary prompts."""
+    if str(source or "").strip().lower() == SOURCE_FNGUIDE:
+        return SYSTEM_PROMPT
+    return SUMMARY_SYSTEM_PROMPT
+
 
 @dataclass(frozen=True)
 class AuditTarget:
@@ -252,6 +323,7 @@ def fetch_targets(
     force: bool = False,
     limit: int | None = None,
     theme: str | None = None,
+    source: str | None = None,
     report_id: UUID | str | None = None,
     non_korean_summary: bool = False,
 ) -> list[dict[str, Any]]:
@@ -265,6 +337,9 @@ def fetch_targets(
         where.append("id = %s")
         params.append(rid)
     else:
+        if source:
+            where.append("source = %s")
+            params.append(str(source).strip().lower())
         if non_korean_summary:
             where.append("quality_at IS NOT NULL")
             where.append(_NON_KOREAN_SUMMARY_SQL)
@@ -463,12 +538,13 @@ async def _classify_one(
         "response_format": {"type": "json_object"},
         "provider": {"sort": "throughput"},
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt_for_source(target.source)},
             {
                 "role": "user",
                 "content": (
-                    f"Title: {target.title}\n\n"
-                    f"Report text (extracted from early pages):\n{target.text}"
+                    f"Title: {target.title}\n"
+                    f"Source: {target.source}\n\n"
+                    f"Article / report text (extracted from early pages):\n{target.text}"
                 ),
             },
         ],
@@ -559,6 +635,7 @@ async def run_audit(
     concurrency: int = DEFAULT_CONCURRENCY,
     model: str = DEFAULT_MODEL,
     theme: str | None = None,
+    source: str | None = None,
     report_id: UUID | str | None = None,
     non_korean_summary: bool = False,
 ) -> dict[str, int]:
@@ -566,12 +643,14 @@ async def run_audit(
         force=force,
         limit=limit,
         theme=theme,
+        source=source,
         report_id=report_id,
         non_korean_summary=non_korean_summary,
     )
     print(
         f"candidates={len(rows)} force={force} theme={theme} "
-        f"report_id={report_id} non_korean_summary={non_korean_summary} "
+        f"source={source} report_id={report_id} "
+        f"non_korean_summary={non_korean_summary} "
         f"concurrency={concurrency}"
     )
     targets, extract_failures = prepare_targets(rows)

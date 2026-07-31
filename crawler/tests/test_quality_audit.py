@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from crawler.quality_audit import apply_source_pass_policy, normalize_result
+from crawler.quality_audit import (
+    SUMMARY_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    apply_source_pass_policy,
+    normalize_result,
+    system_prompt_for_source,
+)
 
 
 def test_normalize_result_short_title():
@@ -106,6 +112,14 @@ def test_apply_source_pass_policy_forces_pwc_pass():
     assert out["short_title"] == "종목 노트"
     assert out["framework_summary"] == "요약 유지"
     assert out["topic"] == "개별 종목"
+
+
+def test_system_prompt_for_source_splits_fnguide_vs_media():
+    assert system_prompt_for_source("fnguide") is SYSTEM_PROMPT
+    assert system_prompt_for_source("hbrkorea") is SUMMARY_SYSTEM_PROMPT
+    assert system_prompt_for_source("pwc") is SUMMARY_SYSTEM_PROMPT
+    assert "NOT a sell-side" in SUMMARY_SYSTEM_PROMPT
+    assert "framework_summary" in SUMMARY_SYSTEM_PROMPT
 
 
 def test_normalize_result_themes_multi():
