@@ -229,6 +229,11 @@ def fetch_list_page(
     return items, number_hits
 
 
+def is_pdf_url(url: str) -> bool:
+    """True when the URL itself is a PDF (list item may link directly)."""
+    return bool(re.search(r"\.pdf($|\?)", url or "", re.I))
+
+
 def find_pdf_url(detail_html: str, *, page_url: str) -> str | None:
     """Pick best PDF href from a detail page HTML."""
     hrefs = _PdfHrefParser.extract(detail_html)
@@ -237,7 +242,7 @@ def find_pdf_url(detail_html: str, *, page_url: str) -> str | None:
     resolved: list[str] = []
     for href in hrefs:
         abs_url = urljoin(page_url, href)
-        if not re.search(r"\.pdf($|\?)", abs_url, re.I):
+        if not is_pdf_url(abs_url):
             continue
         resolved.append(abs_url)
     if not resolved:

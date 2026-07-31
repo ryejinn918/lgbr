@@ -27,6 +27,7 @@ from crawler.sources.pwc_http import (
     fetch_detail_pdf_url,
     fetch_list_page,
     get_catalog,
+    is_pdf_url,
     make_session,
     months_ago_cutoff,
     pdf_page_count,
@@ -261,24 +262,29 @@ def _process_item(
         progress["skipped_existing"] = summary.skipped_existing
         return
 
-    try:
-        pdf_url = fetch_detail_pdf_url(
-            item.url, catalog=catalog, session=session
-        )
-    except Exception as exc:
-        summary.failed += 1
-        progress["failed"] = summary.failed
-        reports_store.mark_status(
-            source=SOURCE,
-            source_key=item.source_key,
-            status=reports_store.STATUS_FAILED,
-            attrs={**attrs, "error": f"detail_fetch: {exc}"},
-        )
-        return
+    # List cards sometimes link straight to a PDF (no HTML detail page).
+    if is_pdf_url(item.url):
+        pdf_url = item.url
+    else:
+        try:
+            pdf_url = fetch_detail_pdf_url(
+                item.url, catalog=catalog, session=session
+            )
+        except Exception as exc:
+            summary.failed += 1
+            progress["failed"] = summary.failed
+            reports_store.mark_status(
+                source=SOURCE,
+                source_key=item.source_key,
+                status=reports_store.STATUS_FAILED,
+                attrs={**attrs, "error": f"detail_fetch: {exc}"},
+            )
+            return
 
     safe = _safe_filename(item.source_key)
     dest = download_dir / f"{safe}.pdf"
     if not pdf_url:
+        # Only HTML pages get page.pdf fallback — never goto a .pdf URL.
         process_no_pdf_with_page_capture(
             capture=capture,
             source=SOURCE,
@@ -327,4 +333,7 @@ def _process_item(
 def _safe_filename(key: str) -> str:
     base = key.replace("/", "__")
     base = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
+    # source_key from a PDF URL already ends with .pdf
+    if base.lower().endswith(".pdf"):
+        base = base[:-4]
     return base[:180] or "pwc_report"
