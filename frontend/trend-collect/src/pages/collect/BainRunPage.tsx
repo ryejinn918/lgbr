@@ -32,7 +32,7 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
 /** Bain: browser Insights list → PDF/page.pdf one-by-one + CDP adhoc. */
 export function BainRunPage() {
   const [periodMonths, setPeriodMonths] = useState(3)
-  const [maxPages, setMaxPages] = useState(10)
+  const [maxPages, setMaxPages] = useState(20)
   const [limit, setLimit] = useState('')
   const [itemDelaySeconds, setItemDelaySeconds] = useState(5)
   const session = useSessionStatus()
@@ -86,7 +86,7 @@ export function BainRunPage() {
   }
 
   async function onStartSearch() {
-    const pages = Math.min(50, Math.max(1, Number(maxPages) || 10))
+    const pages = Math.min(50, Math.max(1, Number(maxPages) || 20))
     const months = PERIOD_OPTIONS.includes(
       periodMonths as (typeof PERIOD_OPTIONS)[number],
     )

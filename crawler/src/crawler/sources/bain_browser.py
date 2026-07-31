@@ -26,6 +26,7 @@ _HUB_SLUGS = frozenset(
         "consulting-services-insights",
         "featured-topics",
         "topics",
+        "books",
     }
 )
 
@@ -174,7 +175,7 @@ def collect_list_items(page: Page) -> list[BainListItem]:
             const parts = path.split('/').filter(Boolean);
             if (parts[0] !== 'insights' || parts.length !== 2) continue;
             const slug = parts[1];
-            if (/^(industry-insights|consulting-services-insights|featured-topics|topics)$/i.test(slug)) {
+            if (/^(industry-insights|consulting-services-insights|featured-topics|topics|books)$/i.test(slug)) {
               continue;
             }
             let title = '';

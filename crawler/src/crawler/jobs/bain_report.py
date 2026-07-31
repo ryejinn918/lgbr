@@ -21,6 +21,7 @@ from crawler.sources.bain_browser import (
     BainBlockedError,
     BainCaptureError,
     BainListItem,
+    LIST_URL,
     SOURCE,
     capture_insight,
     click_load_more,
@@ -33,7 +34,7 @@ from crawler.sources.bain_browser import (
 DEFAULT_PERIOD_MONTHS = 3
 MIN_PERIOD_MONTHS = 1
 MAX_PERIOD_MONTHS = 24
-DEFAULT_MAX_PAGES = 10
+DEFAULT_MAX_PAGES = 20
 MAX_MAX_PAGES = 50
 DEFAULT_CATALOG = "us"
 DEFAULT_ITEM_DELAY_SECONDS = 5.0
@@ -149,10 +150,24 @@ def run_bain_search_job(
                 break
 
             if page_num > 1:
+                # Detail capture leaves the list; Bain LOAD MORE is cumulative, so
+                # reopen Insights and replay clicks to reach this page depth.
+                if not re.search(r"/insights/?$", page.url or "", re.I):
+                    page.goto(
+                        LIST_URL,
+                        wait_until="domcontentloaded",
+                        timeout=90_000,
+                    )
+                    page.wait_for_timeout(2500)
                 progress["stage"] = "load_more"
                 progress["page_num"] = page_num
                 collection_jobs_store.set_progress(job_id, progress)
-                if not click_load_more(page):
+                load_ok = True
+                for _ in range(page_num - 1):
+                    if not click_load_more(page):
+                        load_ok = False
+                        break
+                if not load_ok:
                     progress["stop_reason"] = "no_load_more"
                     break
 
