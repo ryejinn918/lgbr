@@ -251,14 +251,36 @@ def mark_status(
     status: str,
     crawl_id: UUID | str | None = None,
     attrs: dict[str, Any] | None = None,
+    clear_download: bool = False,
 ) -> bool:
-    """Update status for an existing (or minimal) row. Won't demote downloaded."""
+    """Update status for an existing (or minimal) row.
+
+    By default won't demote downloaded. Pass ``clear_download=True`` to force
+    status and clear file_path / file_name / downloaded_at (e.g. empty page.pdf
+    re-capture).
+    """
     if status not in VALID_STATUSES:
         raise ValueError(f"invalid status: {status}")
     if status == STATUS_DOWNLOADED:
         raise ValueError("use mark_downloaded for downloaded status")
 
     attrs_json = json.dumps(attrs or {}, ensure_ascii=False)
+    if clear_download:
+        status_sql = "EXCLUDED.status"
+        clear_sql = """
+                    file_path = NULL,
+                    file_name = NULL,
+                    downloaded_at = NULL,
+                    page_count = NULL,
+        """
+    else:
+        status_sql = """CASE
+                        WHEN reports.file_path IS NOT NULL
+                             OR reports.status = 'downloaded'
+                        THEN reports.status
+                        ELSE EXCLUDED.status
+                    END"""
+        clear_sql = ""
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -270,12 +292,8 @@ def mark_status(
                 VALUES (%s, %s, %s, %s, %s, %s::jsonb, now(), now(), NULL)
                 ON CONFLICT (source, source_key) DO UPDATE SET
                     crawl_id = COALESCE(EXCLUDED.crawl_id, reports.crawl_id),
-                    status = CASE
-                        WHEN reports.file_path IS NOT NULL
-                             OR reports.status = 'downloaded'
-                        THEN reports.status
-                        ELSE EXCLUDED.status
-                    END,
+                    status = {status_sql},
+                    {clear_sql}
                     attrs = {_ATTRS_MERGE_SQL},
                     last_seen_at = now()
                 RETURNING id

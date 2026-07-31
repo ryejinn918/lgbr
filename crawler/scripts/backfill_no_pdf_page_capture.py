@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Backfill consulting reports stuck in no_download via page.pdf capture."""
+"""Backfill consulting reports via page.pdf capture.
+
+Modes:
+  default: status=no_download with URL, no file
+  --thin-page-pdf: downloaded page.pdf that is tiny / text-empty (re-capture)
+"""
 
 from __future__ import annotations
 
@@ -17,7 +22,9 @@ sys.path.insert(0, str(ROOT / "src"))
 from crawler.asset_id import DOWNLOADS_ROOT, downloads_dir, make_asset_id  # noqa: E402
 from crawler.db import connect  # noqa: E402
 from crawler.sources.page_pdf_capture import (  # noqa: E402
+    DEFAULT_MIN_PDF_BYTES,
     LazyCaptureBrowser,
+    pdf_extract_char_count,
     process_no_pdf_with_page_capture,
 )
 
@@ -37,12 +44,14 @@ def _safe_filename(key: str) -> str:
     return base[:180] or "report"
 
 
-def _load_rows(sources: list[str], *, limit: int | None) -> list[dict[str, Any]]:
+def _load_no_download(
+    sources: list[str], *, limit: int | None
+) -> list[dict[str, Any]]:
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT source, source_key, title, published_at, attrs
+                SELECT source, source_key, title, published_at, attrs, file_path
                 FROM reports
                 WHERE source = ANY(%s)
                   AND status = 'no_download'
@@ -57,6 +66,73 @@ def _load_rows(sources: list[str], *, limit: int | None) -> list[dict[str, Any]]
             return [dict(r) for r in cur.fetchall()]
 
 
+def _load_thin_page_pdf(
+    sources: list[str],
+    *,
+    limit: int | None,
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT source, source_key, title, published_at, attrs, file_path
+                FROM reports
+                WHERE source = ANY(%s)
+                  AND status = 'downloaded'
+                  AND file_path IS NOT NULL
+                  AND attrs->>'capture' = 'page.pdf'
+                  AND attrs->>'url' IS NOT NULL
+                  AND attrs->>'url' <> ''
+                  AND (
+                    COALESCE((attrs->>'bytes')::int, 0) < %s
+                    OR COALESCE((attrs->>'bytes')::int, 0) = 0
+                  )
+                ORDER BY source, last_seen_at DESC NULLS LAST
+                """
+                + (" LIMIT %s" if limit is not None else ""),
+                (
+                    (sources, max_bytes, limit)
+                    if limit is not None
+                    else (sources, max_bytes)
+                ),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+    # Also include larger page.pdf that still have no extractable text.
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT source, source_key, title, published_at, attrs, file_path
+                FROM reports
+                WHERE source = ANY(%s)
+                  AND status = 'downloaded'
+                  AND file_path IS NOT NULL
+                  AND attrs->>'capture' = 'page.pdf'
+                  AND attrs->>'url' IS NOT NULL
+                  AND COALESCE((attrs->>'bytes')::int, 0) >= %s
+                ORDER BY source, last_seen_at DESC NULLS LAST
+                """,
+                (sources, max_bytes),
+            )
+            extras = [dict(r) for r in cur.fetchall()]
+
+    seen = {(r["source"], r["source_key"]) for r in rows}
+    for r in extras:
+        key = (r["source"], r["source_key"])
+        if key in seen:
+            continue
+        path = Path(str(r.get("file_path") or ""))
+        if path.is_file() and pdf_extract_char_count(path) < 120:
+            rows.append(r)
+            seen.add(key)
+
+    if limit is not None:
+        rows = rows[: max(1, int(limit))]
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -68,17 +144,38 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--delay", type=float, default=1.0, help="Seconds between items")
     parser.add_argument(
+        "--thin-page-pdf",
+        action="store_true",
+        help="Re-capture tiny/text-empty downloaded page.pdf rows",
+    )
+    parser.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_MIN_PDF_BYTES,
+        help="With --thin-page-pdf, treat attrs.bytes below this as thin",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="List candidates only",
     )
     args = parser.parse_args()
     sources = list(args.source) if args.source else list(SOURCES)
-    rows = _load_rows(sources, limit=args.limit)
-    print(f"candidates={len(rows)} sources={sources}")
+    if args.thin_page_pdf:
+        rows = _load_thin_page_pdf(
+            sources, limit=args.limit, max_bytes=args.max_bytes
+        )
+        mode = "thin-page-pdf"
+    else:
+        rows = _load_no_download(sources, limit=args.limit)
+        mode = "no_download"
+    print(f"mode={mode} candidates={len(rows)} sources={sources}")
     if args.dry_run:
         for r in rows:
-            print(f"  {r['source']}\t{r['source_key']}\t{(r.get('attrs') or {}).get('url')}")
+            print(
+                f"  {r['source']}\t{r['source_key']}\t"
+                f"{(r.get('attrs') or {}).get('url')}"
+            )
         return 0
 
     by_source: dict[str, list[dict[str, Any]]] = {}
@@ -98,7 +195,13 @@ def main() -> int:
                 attrs = dict(row.get("attrs") or {})
                 url = str(attrs.get("url") or "").strip()
                 key = str(row["source_key"])
-                dest = download_dir / f"{_safe_filename(key)}.pdf"
+                # Prefer overwriting the existing path when re-capturing.
+                existing = Path(str(row.get("file_path") or ""))
+                if existing.name and existing.suffix.lower() == ".pdf":
+                    dest = existing
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                else:
+                    dest = download_dir / f"{_safe_filename(key)}.pdf"
                 print(f"[{source} {i}/{len(items)}] {key}", flush=True)
                 process_no_pdf_with_page_capture(
                     capture=capture,
