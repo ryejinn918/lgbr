@@ -1,4 +1,4 @@
-"""Collect / document corpus MCP — search, detail, read-only SQL (no PDF)."""
+"""Collect / document corpus MCP — search → detail (+ optional news, no PDF)."""
 
 from __future__ import annotations
 
@@ -13,8 +13,6 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from lgbr_mcp.config import allowed_hosts
 from lgbr_mcp.formatting import dumps, report_detail_payload, serp_list_payload
-from lgbr_mcp.sql_explore import describe_schema as schema_doc
-from lgbr_mcp.sql_explore import run_sql as execute_ro_sql
 
 COLLECT_SOURCES = (
     "fnguide, pwc, accenture, kpmg, ey, deloitte, "
@@ -33,8 +31,7 @@ LGBR 산업 동향 문서 코퍼스(조회 전용).
 개별 보고서·근거가 필요할 때만 이 커넥터를 씁니다.
 
 플로우:
-1) describe_schema → run_sql(SELECT … FROM mcp_reports …) 로 자율 탐색·집계
-   또는 search_reports(theme|q, source?, provider?, quality=pass 기본)
+1) search_reports(theme|q, source?, provider?, quality=pass 기본)
 2) get_report(id) — 품질/요약 상세 + 원문 url (PDF 없음)
 3) 속보/기사는 search_news(보조)
 
@@ -65,20 +62,6 @@ def build_collect_server(
         instructions=COLLECT_INSTRUCTIONS,
         **kwargs,
     )
-
-    @mcp.tool()
-    def describe_schema() -> str:
-        """mcp_reports 뷰 스키마·예시 SELECT (표준 SQL). PDF 컬럼 없음."""
-        return dumps(schema_doc())
-
-    @mcp.tool()
-    def run_sql(sql: str) -> str:
-        """읽기 전용 표준 SQL 실행 (Postgres 롤 lgbr_mcp_ro). mcp_reports만 SELECT 가능.
-
-        Args:
-            sql: SELECT 또는 WITH … SELECT. 다른 테이블·쓰기는 DB가 거절합니다.
-        """
-        return dumps(execute_ro_sql(sql))
 
     @mcp.tool()
     def search_reports(
@@ -120,7 +103,7 @@ def build_collect_server(
         """보고서 메타·품질/요약 상세와 원문 웹 url. PDF는 제공하지 않음.
 
         Args:
-            report_id: search_reports / run_sql 결과의 id
+            report_id: search_reports 결과의 id
         """
         result = fetch_report(report_id)
         return dumps(report_detail_payload(result))

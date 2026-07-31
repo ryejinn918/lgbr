@@ -10,7 +10,7 @@ https://lgbrmcp.magpielabs.co.kr
 
 | Path | 용도 |
 |------|------|
-| `POST /mcp/collect` | 문서 코퍼스 (`search_reports` / `run_sql` → `get_report`, 뉴스 보조) |
+| `POST /mcp/collect` | 문서 코퍼스 (`search_reports` → `get_report`, 뉴스 보조) |
 | `POST /mcp/consensus` | 섹터 동향 초안 (`get_consensus`) |
 | `GET/POST /login` | OAuth 로그인 |
 | `GET /health` | 헬스 (공개) |
@@ -33,9 +33,7 @@ https://lgbrmcp.magpielabs.co.kr
 | `LGBR_MCP_OAUTH_USERNAME` | Connect 로그인 계정 |
 | `LGBR_MCP_OAUTH_PASSWORD` | Connect 로그인 비밀번호 |
 | `LGBR_MCP_SIGNING_SECRET` | (레거시 서명 유틸; collect는 PDF URL을 발급하지 않음) |
-| `DATABASE_URL` | Postgres (api와 동일). SQL 탐색은 `SET ROLE lgbr_mcp_ro` |
-
-마이그레이션 `031_mcp_reports_sql.sql`이 뷰 `mcp_reports`·롤 `lgbr_mcp_ro`·`pg_trgm` 인덱스를 만듭니다.
+| `DATABASE_URL` | Postgres (api와 동일) |
 
 ## Claude / ChatGPT
 
@@ -48,10 +46,8 @@ OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAM
 
 ### Collect 도구
 
-1. **`describe_schema`** — `mcp_reports` 컬럼·예시 SELECT  
-2. **`run_sql(sql)`** — 표준 SQL, Postgres 롤 `lgbr_mcp_ro`로 실행 (`mcp_reports`만 SELECT)  
-3. **`search_reports` → `get_report`** — 간단 검색·상세 (요약·원문 url, PDF 없음)  
-4. **`search_news`** — 보조
+1. **`search_reports` → `get_report`** — 검색·상세 (요약·원문 url, PDF 없음)  
+2. **`search_news`** — 보조
 
 `source`: fnguide, pwc, accenture, kpmg, ey, deloitte, hbr, hbrkorea, bain, mckinsey, bcg  
 `audit_kind`: fnguide=`sell_side`, 그 외=`summary`
