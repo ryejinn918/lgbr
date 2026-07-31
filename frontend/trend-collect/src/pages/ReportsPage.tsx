@@ -700,17 +700,19 @@ export function ReportsPage({
                       <dt>섹터</dt>
                       <dd>
                         {detailThemes.length ? (
-                          <ul className="audit-list">
+                          <span className="theme-chips">
                             {detailThemes.map((t) => (
-                              <li key={t}>{THEME_LABEL[t] || t}</li>
+                              <span key={t} className="theme-chip">
+                                {THEME_LABEL[t] || t}
+                              </span>
                             ))}
-                          </ul>
+                          </span>
                         ) : (
                           '—'
                         )}
                       </dd>
                     </div>
-                    <div>
+                    <div className="details-span">
                       <dt>요약</dt>
                       <dd className="audit-rationale">
                         {detailSummary || String(qj.error || '—')}

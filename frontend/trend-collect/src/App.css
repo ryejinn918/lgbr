@@ -531,7 +531,14 @@
   gap: 0.35rem;
 }
 
-.report-table .theme-chip {
+.theme-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.theme-chip {
   display: inline-block;
   padding: 0.05rem 0.35rem;
   font-size: 0.72rem;
@@ -955,6 +962,10 @@ a.report-original-link {
 .details dl > div {
   display: grid;
   gap: 0.25rem;
+}
+
+.details dl > .details-span {
+  grid-column: 1 / -1;
 }
 
 .details dt {
