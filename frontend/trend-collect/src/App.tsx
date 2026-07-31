@@ -88,6 +88,14 @@ function App() {
             element={<ReportsPage embedded source="deloitte" />}
           />
           <Route
+            path="reports/mckinsey"
+            element={<ReportsPage embedded source="mckinsey" />}
+          />
+          <Route
+            path="reports/bain"
+            element={<ReportsPage embedded source="bain" />}
+          />
+          <Route
             path="reports/hbrkorea"
             element={<ReportsPage embedded source="hbrkorea" />}
           />

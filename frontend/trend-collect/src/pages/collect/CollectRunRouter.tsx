@@ -10,6 +10,7 @@ import { ArgFeedRunPage } from './ArgFeedRunPage'
 import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
 import { getMediaSource } from '../../lib/mediaSources'
 import { AccentureRunPage } from './AccentureRunPage'
+import { BainRunPage } from './BainRunPage'
 import { DeloitteRunPage } from './DeloitteRunPage'
 import { EyRunPage } from './EyRunPage'
 import { HbrKoreaRunPage } from './HbrKoreaRunPage'
@@ -68,6 +69,9 @@ export function CollectRunRouter() {
     ctx.means === 'search'
   ) {
     return <HbrKoreaRunPage />
+  }
+  if (ctx.source === 'bain' && ctx.stage === 'list' && ctx.means === 'search') {
+    return <BainRunPage />
   }
   const media = getMediaSource(ctx.source)
   if (

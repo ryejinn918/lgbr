@@ -50,6 +50,20 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hasCatalogs: false,
   },
   {
+    id: 'mckinsey',
+    label: 'McKinsey',
+    hubUrl: 'https://www.mckinsey.com/',
+    hasSearch: false,
+    hasCatalogs: false,
+  },
+  {
+    id: 'bain',
+    label: 'Bain',
+    hubUrl: 'https://www.bain.com/',
+    hasSearch: true,
+    hasCatalogs: false,
+  },
+  {
     id: 'hbrkorea',
     label: 'HBR Korea',
     hubUrl: 'https://www.hbrkorea.com/',

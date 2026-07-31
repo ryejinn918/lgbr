@@ -32,6 +32,7 @@ from crawler.fetch_body_job import (
 from crawler.jobs.accenture_report import run_accenture_search_job
 from crawler.jobs.deloitte_report import run_deloitte_search_job
 from crawler.jobs.ey_report import run_ey_search_job
+from crawler.jobs.bain_report import run_bain_search_job
 from crawler.jobs.hbrkorea_report import run_hbrkorea_search_job
 from crawler.jobs.kpmg_report import run_kpmg_search_job
 from crawler.jobs.media_pace import DEFAULT_ITEM_DELAY_SECONDS
@@ -561,6 +562,8 @@ def main() -> None:
                     runner = run_deloitte_search_job
                 elif source == "hbrkorea":
                     runner = run_hbrkorea_search_job
+                elif source == "bain":
+                    runner = run_bain_search_job
                 else:
                     runner = run_pwc_search_job
                 catalog = args.catalog
@@ -569,6 +572,7 @@ def main() -> None:
                     "kpmg",
                     "ey",
                     "deloitte",
+                    "bain",
                 ) and catalog in (
                     "kr",
                     "gx",

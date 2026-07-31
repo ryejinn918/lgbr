@@ -27,6 +27,8 @@ const SOURCE_LABEL: Record<string, string> = {
   ey: 'EY',
   deloitte: 'Deloitte',
   hbrkorea: 'HBR Korea',
+  mckinsey: 'McKinsey',
+  bain: 'Bain',
   nikkei: 'Nikkei',
   nikkeixtech: 'Nikkei xTECH',
 }
@@ -166,6 +168,10 @@ export function DashboardPage() {
     source: 'hbrkorea',
     capability: 'search',
   })
+  const bainSearch = useCollectionJob({
+    source: 'bain',
+    capability: 'search',
+  })
 
   const crawlMode = crawl.crawl?.mode ?? null
   const fnguideOwned =
@@ -178,6 +184,8 @@ export function DashboardPage() {
     isBusy(crawl.state) && crawlMode === 'kpmg'
   const eyAdhoc = isBusy(crawl.state) && crawlMode === 'ey'
   const deloitteAdhoc = isBusy(crawl.state) && crawlMode === 'deloitte'
+  const mckinseyAdhoc = isBusy(crawl.state) && crawlMode === 'mckinsey'
+  const bainAdhoc = isBusy(crawl.state) && crawlMode === 'bain'
   const hbrkoreaAdhoc = isBusy(crawl.state) && crawlMode === 'hbrkorea'
   const nikkeiAdhoc = isBusy(crawl.state) && crawlMode === 'nikkei'
   const nikkeixtechAdhoc = isBusy(crawl.state) && crawlMode === 'nikkeixtech'
@@ -191,11 +199,14 @@ export function DashboardPage() {
   const eySearchBusy = isBusy(eySearch.status.state)
   const deloitteSearchBusy = isBusy(deloitteSearch.status.state)
   const hbrkoreaSearchBusy = isBusy(hbrkoreaSearch.status.state)
+  const bainSearchBusy = isBusy(bainSearch.status.state)
   const pwcBusy = pwcSearchBusy || pwcAdhoc
   const accentureBusy = accentureSearchBusy || accentureAdhoc
   const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
   const eyBusy = eySearchBusy || eyAdhoc
   const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
+  const mckinseyBusy = mckinseyAdhoc
+  const bainBusy = bainSearchBusy || bainAdhoc
   const hbrkoreaBusy = hbrkoreaSearchBusy || hbrkoreaAdhoc
   const nikkeiBusy = nikkeiAdhoc
   const nikkeixtechBusy = nikkeixtechAdhoc
@@ -218,6 +229,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const hbrkoreaProgress = (hbrkoreaSearch.status.progress ??
     hbrkoreaSearch.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const bainProgress = (bainSearch.status.progress ??
+    bainSearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const argProgress = (argView.status.progress ??
     argView.status.job?.progress ??
@@ -292,6 +306,12 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsBn = useReports({
+    source: 'bain',
+    limit: 1,
+    offset: 0,
+    poll: true,
+  })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -328,6 +348,16 @@ export function DashboardPage() {
     !!(deloitteSearch.fetchError || (deloitteAdhoc && fetchError)),
     deloitteBusy,
     deloitteSearchBusy ? deloitteSearch.status.state : crawl.state,
+  )
+  const mckinseyBadge = jobBadgeClass(
+    !!(mckinseyAdhoc && fetchError),
+    mckinseyBusy,
+    crawl.state,
+  )
+  const bainBadge = jobBadgeClass(
+    !!(bainSearch.fetchError || (bainAdhoc && fetchError)),
+    bainBusy,
+    bainSearchBusy ? bainSearch.status.state : crawl.state,
   )
   const hbrkoreaBadge = jobBadgeClass(
     !!(hbrkoreaSearch.fetchError || (hbrkoreaAdhoc && fetchError)),
@@ -372,6 +402,8 @@ export function DashboardPage() {
       | 'kpmg'
       | 'ey'
       | 'deloitte'
+      | 'mckinsey'
+      | 'bain'
       | 'hbrkorea'
       | 'nikkeixtech'
       | 'nikkei',
@@ -465,6 +497,22 @@ export function DashboardPage() {
         ? crawl.label
         : hbrkoreaSearch.status.job
           ? hbrkoreaSearch.status.label
+          : '유휴'
+
+  const mckinseyValue = fetchError
+    ? 'API Offline'
+    : mckinseyAdhoc
+      ? crawl.label
+      : '유휴'
+
+  const bainValue = bainSearch.fetchError
+    ? 'API Offline'
+    : bainSearchBusy
+      ? bainSearch.status.label
+      : bainAdhoc
+        ? crawl.label
+        : bainSearch.status.job
+          ? bainSearch.status.label
           : '유휴'
 
   const nikkeixtechValue = fetchError
@@ -812,6 +860,94 @@ export function DashboardPage() {
                           deloitteSearchBusy,
                           deloitteAdhoc,
                           () => deloitteSearch.stopFeed(),
+                        ),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="McKinsey"
+              meta={['무계정', '애드혹']}
+              statusLabel={mckinseyValue}
+              stateClass={mckinseyBadge}
+              freshnessKind="report"
+              lastCollectedAt={
+                mckinseyAdhoc ? jobTimestamp(crawl.crawl) : null
+              }
+              progressLine={
+                mckinseyAdhoc
+                  ? mediaProgress(
+                      false,
+                      true,
+                      crawlProgress,
+                      crawl.crawl?.message,
+                    )
+                  : null
+              }
+              links={
+                <>
+                  <Link to="/collect/mckinsey/list/search">애드혹 실행</Link>
+                </>
+              }
+              stop={
+                mckinseyBusy
+                  ? {
+                      label: requestingStop ? '요청 중…' : '애드혹 종료',
+                      disabled: requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia('mckinsey', false, mckinseyAdhoc),
+                    }
+                  : null
+              }
+            />
+            <CollectJobCard
+              title="Bain"
+              meta={[
+                '무계정',
+                '리포트',
+                '검색',
+                bainAdhoc ? '애드혹' : '',
+              ]}
+              statusLabel={bainValue}
+              stateClass={bainBadge}
+              freshnessKind="report"
+              lastCollectedAt={mediaLastAt(
+                bainSearch.status.job,
+                bainAdhoc,
+              )}
+              lastDocAt={countsBn.items[0]?.last_seen_at ?? null}
+              progressLine={mediaProgress(
+                bainSearchBusy,
+                bainAdhoc,
+                bainProgress,
+                bainSearch.status.job?.message,
+              )}
+              links={
+                <>
+                  <Link to="/collect/bain/list/search">검색 실행</Link>
+                  {' · '}
+                  <Link to="/docs/reports/bain">보고서</Link>
+                </>
+              }
+              stop={
+                bainBusy
+                  ? {
+                      label: (bainSearchBusy
+                        ? bainSearch.requestingStop
+                        : requestingStop)
+                        ? '요청 중…'
+                        : bainSearchBusy
+                          ? '검색 중단'
+                          : '애드혹 종료',
+                      disabled: bainSearchBusy
+                        ? bainSearch.requestingStop
+                        : requestingStop || !!fetchError,
+                      onClick: () =>
+                        void onStopMedia(
+                          'bain',
+                          bainSearchBusy,
+                          bainAdhoc,
+                          () => bainSearch.stopFeed(),
                         ),
                     }
                   : null

@@ -54,6 +54,8 @@ const SOURCE_LABEL: Record<string, string> = {
   kpmg: 'KPMG',
   ey: 'EY',
   deloitte: 'Deloitte',
+  mckinsey: 'McKinsey',
+  bain: 'Bain',
   hbrkorea: 'HBR Korea',
 }
 
@@ -217,9 +219,11 @@ export function ReportsPage({
             ? 'EY US Insights 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
             : sourceKey === 'deloitte'
               ? 'Deloitte US Insights 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
-              : sourceKey === 'hbrkorea'
-                ? 'HBR Korea 목록입니다. 지금은 애드혹 탐색만 가능하고 자동 수집은 아직 없습니다.'
-                : '증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가 함께 표시됩니다.'
+              : sourceKey === 'bain'
+                ? 'Bain Insights 목록입니다. 브라우저로 한 건씩 PDF/page.pdf를 받습니다.'
+                : sourceKey === 'hbrkorea'
+                  ? 'HBR Korea 목록입니다. 로그인 검색이 목록을 돌며 page.pdf를 받습니다.'
+                  : '증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질 감사한 결과가 함께 표시됩니다.'
   const collectHref = isAll
     ? '/collect'
     : `/collect/${sourceKey}/list/search`
