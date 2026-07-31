@@ -261,6 +261,17 @@ def _process_item(
     if published_at is not None:
         attrs["publish_date"] = published_at.isoformat()
 
+    # Skip before upsert: Cludo list dates are often older than page
+    # datePublished and would regress published_at via COALESCE.
+    if item.source_key in already:
+        summary.skipped_existing += 1
+        progress["skipped_existing"] = summary.skipped_existing
+        progress["current_title"] = item.title
+        progress["current_url"] = item.url
+        collection_jobs_store.set_progress(job_id, progress)
+        # Treat as in-period for paging (Cludo sort mixes ages).
+        return "skip"
+
     reports_store.upsert_listed(
         source=SOURCE,
         source_key=item.source_key,
@@ -273,16 +284,6 @@ def _process_item(
     progress["current_title"] = item.title
     progress["current_url"] = item.url
     collection_jobs_store.set_progress(job_id, progress)
-
-    if published_at is not None and published_at < cutoff:
-        summary.skipped_old += 1
-        progress["skipped_old"] = summary.skipped_old
-        return "old"
-
-    if item.source_key in already:
-        summary.skipped_existing += 1
-        progress["skipped_existing"] = summary.skipped_existing
-        return "skip"
 
     try:
         pdf_url, detail_date = fetch_detail_meta(
@@ -309,10 +310,12 @@ def _process_item(
             published_at=published_at,
             attrs=attrs,
         )
-        if published_at < cutoff:
-            summary.skipped_old += 1
-            progress["skipped_old"] = summary.skipped_old
-            return "old"
+
+    # Cutoff only after detail date (Cludo list dates are unreliable).
+    if published_at is not None and published_at < cutoff:
+        summary.skipped_old += 1
+        progress["skipped_old"] = summary.skipped_old
+        return "old"
 
     safe = _safe_filename(item.source_key)
     dest = download_dir / f"{safe}.pdf"
