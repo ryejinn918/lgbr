@@ -18,6 +18,8 @@ import {
   formatPublishedAt,
   formatRelative,
   formatTime,
+  qualityLabelForReport,
+  qualityLabelsForSource,
 } from '../lib/format'
 import { reportPublicOriginalUrl } from '../lib/publicOriginalUrl'
 import {
@@ -208,6 +210,24 @@ export function ReportsPage({
   const isAll = sourceKey === 'all'
   // 증권사 열은 FnGuide 단독 탭만. 통합 보기·Big4에는 숨김.
   const showProvider = sourceKey === 'fnguide'
+  const isSellSidePage = sourceKey === 'fnguide'
+  // 통합 탭 필터는 기존 판정 어휘 유지; 매체 단독 탭만 요약 라벨.
+  const qualityFilterLabels = isSellSidePage
+    ? QUALITY_LABEL
+    : isAll
+      ? QUALITY_LABEL
+      : qualityLabelsForSource(sourceKey)
+  const detailIsSellSide =
+    isSellSidePage ||
+    (isAll && (detail?.source || '') === 'fnguide')
+  const detailSummary = String(
+    qj.summary || qj.framework_summary || '',
+  ).trim()
+  const detailThemes = (
+    detail?.themes?.length
+      ? detail.themes
+      : stringList(qj.themes)
+  ).filter(Boolean)
   const sourceTitle = SOURCE_LABEL[sourceKey] ?? sourceKey
   const sourceLede = isAll
     ? '매체별 보고서를 한곳에서 봅니다. FnGuide·PwC·Accenture·KPMG·EY·Deloitte·HBR Korea 탭으로 나눌 수도 있습니다.'
@@ -270,8 +290,11 @@ export function ReportsPage({
               {audit.message ? ` — ${audit.message}` : ''}
             </span>
             <p className="section-note" style={{ margin: '0.35rem 0 0' }}>
-              본문 PDF가 있는 리포트만 자동으로 품질 감사합니다. 적합 판정만
-              컨센서스 입력에 쓰입니다.
+              {isSellSidePage
+                ? '본문 PDF가 있는 리포트만 자동으로 품질 감사합니다. 적합 판정만 컨센서스 입력에 쓰입니다.'
+                : isAll
+                  ? '본문 PDF가 있는 리포트만 자동으로 품질 감사합니다. FnGuide는 적합/부적합, 그 외 매체는 요약·섹터를 추출합니다.'
+                  : '본문 PDF가 있는 문헌만 자동으로 요약·섹터를 추출합니다.'}
             </p>
           </div>
           <div className="audit-actions">
@@ -355,7 +378,7 @@ export function ReportsPage({
               className={`filter-chip${filters.quality === key ? ' active' : ''}`}
               onClick={() => commit(withQuality(filters, key))}
             >
-              {QUALITY_LABEL[key]}{' '}
+              {qualityFilterLabels[key] || QUALITY_LABEL[key]}{' '}
               {key === 'all'
                 ? (reports.qualityCounts.pass ?? 0) +
                   (reports.qualityCounts.fail ?? 0) +
@@ -405,7 +428,9 @@ export function ReportsPage({
               <thead>
                 <tr>
                   <th className="col-status">상태</th>
-                  <th className="col-quality">판정</th>
+                  <th className="col-quality">
+                    {isSellSidePage ? '판정' : isAll ? '판정/요약' : '요약'}
+                  </th>
                   <th className="col-title">제목</th>
                   {showProvider ? (
                     <th className="col-provider">증권사</th>
@@ -466,7 +491,7 @@ export function ReportsPage({
                       </td>
                       <td className="col-quality">
                         <span className={`status-pill quality-${q}`}>
-                          {QUALITY_LABEL[q] || q}
+                          {qualityLabelForReport(q, item.source, sourceKey)}
                         </span>
                       </td>
                       <td className="col-title report-title">
@@ -477,6 +502,15 @@ export function ReportsPage({
                           >
                             {item.title}
                           </span>
+                          {(item.themes || []).length > 0 ? (
+                            <span className="report-title-meta">
+                              {(item.themes || []).map((t) => (
+                                <span key={t} className="theme-chip">
+                                  {THEME_LABEL[t] || t}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null}
                           {originalUrl ? (
                             <a
                               className="report-file-link report-original-link"
@@ -598,9 +632,13 @@ export function ReportsPage({
                   <dd>{detail.title}</dd>
                 </div>
                 <div>
-                  <dt>판정</dt>
+                  <dt>{detailIsSellSide ? '판정' : '상태'}</dt>
                   <dd>
-                    {QUALITY_LABEL[detail.quality || 'pending'] || detail.quality}
+                    {qualityLabelForReport(
+                      detail.quality,
+                      detail.source,
+                      sourceKey,
+                    )}
                   </dd>
                 </div>
                 <div>
@@ -608,51 +646,78 @@ export function ReportsPage({
                   <dd>{formatTime(detail.quality_at)}</dd>
                 </div>
                 <div>
-                  <dt>주제</dt>
-                  <dd>{String(qj.topic || '—')}</dd>
-                </div>
-                <div>
                   <dt>인용 제목</dt>
                   <dd>{String(qj.short_title || '—')}</dd>
                 </div>
-                <div>
-                  <dt>분석 틀 요약</dt>
-                  <dd>{String(qj.framework_summary || '—')}</dd>
-                </div>
-                <div>
-                  <dt>부적합 사유</dt>
-                  <dd>
-                    {failReasons.length ? (
-                      <ul className="audit-list">
-                        {failReasons.map((r) => (
-                          <li key={r}>{r}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      '—'
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>적합 근거</dt>
-                  <dd>
-                    {passSignals.length ? (
-                      <ul className="audit-list">
-                        {passSignals.map((r) => (
-                          <li key={r}>{r}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      '—'
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>판정 설명</dt>
-                  <dd className="audit-rationale">
-                    {String(qj.rationale || qj.error || '—')}
-                  </dd>
-                </div>
+                {detailIsSellSide ? (
+                  <>
+                    <div>
+                      <dt>주제</dt>
+                      <dd>{String(qj.topic || '—')}</dd>
+                    </div>
+                    <div>
+                      <dt>분석 틀 요약</dt>
+                      <dd>{String(qj.framework_summary || '—')}</dd>
+                    </div>
+                    <div>
+                      <dt>부적합 사유</dt>
+                      <dd>
+                        {failReasons.length ? (
+                          <ul className="audit-list">
+                            {failReasons.map((r) => (
+                              <li key={r}>{r}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          '—'
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>적합 근거</dt>
+                      <dd>
+                        {passSignals.length ? (
+                          <ul className="audit-list">
+                            {passSignals.map((r) => (
+                              <li key={r}>{r}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          '—'
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>판정 설명</dt>
+                      <dd className="audit-rationale">
+                        {String(qj.rationale || qj.error || '—')}
+                      </dd>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <dt>섹터</dt>
+                      <dd>
+                        {detailThemes.length ? (
+                          <ul className="audit-list">
+                            {detailThemes.map((t) => (
+                              <li key={t}>{THEME_LABEL[t] || t}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          '—'
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>요약</dt>
+                      <dd className="audit-rationale">
+                        {detailSummary || String(qj.error || '—')}
+                      </dd>
+                    </div>
+                  </>
+                )}
               </dl>
             </div>
           ) : null}

@@ -148,24 +148,17 @@ def run_hbr_search_job(
         if page is None:
             raise RuntimeError("browser page missing after login")
 
-        progress["stage"] = "list_download"
+        # Phase 1: expand Latest in place (no detail nav) until cutoff / no more.
+        progress["stage"] = "list"
         collection_jobs_store.set_progress(job_id, progress)
         open_latest(page)
+        pending: list[HbrListItem] = []
+        hit_cutoff = False
 
         for page_num in range(1, max_pages + 1):
             if stop():
                 summary.stopped = True
                 break
-            if limit is not None and len(summary.downloaded) >= limit:
-                break
-
-            if page_num > 1:
-                progress["stage"] = "load_more"
-                progress["page_num"] = page_num
-                collection_jobs_store.set_progress(job_id, progress)
-                if not click_load_more(page):
-                    progress["stop_reason"] = "no_load_more"
-                    break
 
             progress["stage"] = "list"
             progress["page_num"] = page_num
@@ -195,12 +188,6 @@ def run_hbr_search_job(
             older_than_cutoff = 0
             dated_on_batch = 0
             for item in new_items:
-                if stop():
-                    summary.stopped = True
-                    break
-                if limit is not None and len(summary.downloaded) >= limit:
-                    break
-
                 if item.published_at and item.published_at < cutoff:
                     summary.skipped_old += 1
                     older_than_cutoff += 1
@@ -222,32 +209,67 @@ def run_hbr_search_job(
                     summary.listed += 1
                     progress["listed"] = summary.listed
                     continue
-
                 if item.published_at:
                     dated_on_batch += 1
-
-                _process_item(
-                    page,
-                    item,
-                    catalog_id=catalog_id,
-                    summary=summary,
-                    already=already,
-                    download_dir=download_dir,
-                    progress=progress,
-                    job_id=job_id,
-                )
-                session.touch(step=f"item_{item.source_key}")
-                pace_after_item(item_delay_seconds)
+                pending.append(item)
 
             summary.pages_done += 1
             progress["pages_done"] = summary.pages_done
-            progress["listed"] = summary.listed
-            progress["downloaded"] = len(summary.downloaded)
+            progress["pending"] = len(pending)
             collection_jobs_store.set_progress(job_id, progress)
 
             if dated_on_batch and older_than_cutoff == dated_on_batch:
                 progress["stop_reason"] = "period_cutoff"
+                hit_cutoff = True
                 break
+
+            progress["stage"] = "load_more"
+            collection_jobs_store.set_progress(job_id, progress)
+            if not click_load_more(page):
+                progress["stop_reason"] = "no_load_more"
+                break
+            pace_after_item(min(item_delay_seconds, 3.0))
+
+        if summary.stopped:
+            progress["stop_reason"] = "manual"
+            progress["stage"] = "done"
+            collection_jobs_store.set_progress(job_id, progress)
+            return collection_jobs_store.end_job(
+                job_id,
+                error=False,
+                message=summary.as_message(),
+            )
+
+        # Phase 2: one-by-one page.pdf with item delay (skips existing).
+        if limit is not None:
+            pending = pending[:limit]
+        progress["stage"] = "download"
+        progress["pending"] = len(pending)
+        collection_jobs_store.set_progress(job_id, progress)
+        collection_jobs_store.set_message(
+            job_id,
+            f"hbr 목록 {len(pending)}건 확보"
+            f"{' (cutoff)' if hit_cutoff else ''} → page.pdf 수집",
+        )
+
+        for item in pending:
+            if stop():
+                summary.stopped = True
+                break
+            if limit is not None and len(summary.downloaded) >= limit:
+                break
+            _process_item(
+                page,
+                item,
+                catalog_id=catalog_id,
+                summary=summary,
+                already=already,
+                download_dir=download_dir,
+                progress=progress,
+                job_id=job_id,
+            )
+            session.touch(step=f"item_{item.source_key}")
+            pace_after_item(item_delay_seconds)
 
         if summary.stopped:
             progress["stop_reason"] = "manual"

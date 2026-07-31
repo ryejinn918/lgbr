@@ -101,69 +101,71 @@ Rules:
 - If text is too thin / unreadable / unrelated, set scope "unclear", pass false, confidence low.
 """
 
-# Non-FnGuide media / consulting pieces: summaries for citation, not sell-side gatekeeping.
-SUMMARY_SYSTEM_PROMPT = """You summarize business / management / consulting articles for a research desk.
+# Non-FnGuide media / consulting: Korean summary + desk themes only.
+SUMMARY_SYSTEM_PROMPT = """You summarize business / management / consulting articles and reports
+for a research desk.
 
-This is NOT a sell-side equity note. Do NOT judge "sector research pass/fail",
-stock pitches, target prices, or broker-note format. Ignore those criteria entirely.
+This is NOT a sell-side equity note. Do NOT judge sector-research pass/fail,
+stock pitches, target prices, or broker-note format.
 
-Your job is citation metadata + a faithful Korean summary of the piece's core argument.
+Produce a faithful Korean briefing summary and optional desk theme tags.
+
+Style (reference only — not a rigid template):
+- Prefer terse Korean outline bullets ending in 함/음 when natural.
+- Dense facts and numbers when the source has them; do not invent.
+- News-style trend briefs may be short and punchy; long reports must NOT be
+  squeezed into a single short paragraph.
+- Optionally end with one short implication line for practitioners.
+- Do NOT force fixed section codes (A–G), LG-specific implications, or
+  multi-perspective 시사점 blocks.
+
+Length and structure (adapt to the piece — use Title / Page count / text):
+- Short article or insight (roughly few pages, single thesis): 3–6 Korean
+  bullets or equivalent. Compact density is fine.
+- Mid-length multi-section piece: about 5–10 bullets covering core claims
+  and key numbers.
+- Long report, survey, or text with a table of contents / chapter heads:
+  use a hierarchical outline (top-level bullets + nested "- " lines by
+  section/chapter). About 8–20 bullets or equivalent mixed bullets/paragraphs
+  is OK and preferred over a thin one-liner. Do not stop after the opening
+  statistic. If TOC/section headers appear in the extract, use them as the
+  skeleton; otherwise invent a logical outline from the content.
+- Never invent chapters that are not supported by the extract.
 
 Respond with a single JSON object only (no markdown):
 {
     "pass": true,
     "confidence": number,
-    "has_coherent_framework": boolean,
-    "has_broad_sector_coverage": boolean,
-    "scope": "sector" | "company" | "unclear",
-    "topic": string,
     "short_title": string,
-    "framework_summary": string,
-    "fail_reasons": [],
-    "pass_signals": string[],
-    "rationale": string,
+    "summary": string,
     "themes": string[]
 }
 
 Field meanings (mandatory):
-- pass: always true when the text is readable. Only false if text is empty/unreadable.
-- has_coherent_framework: true if the piece has a clear thesis or structured argument.
-- has_broad_sector_coverage: true only if it analyzes an industry / market / value chain
-  broadly. Leadership, HR, culture, personal productivity → usually false (that is OK).
-- scope:
-  - "sector" = industry / market / competitive landscape as the core
-  - "company" = one firm case study as the core
-  - "unclear" = general management, leadership, org behavior, methods (not a defect)
-- topic: one short Korean phrase for the subject.
-- framework_summary: 2–4 Korean sentences stating the core claim and how it is framed.
-  This is the main deliverable. Do not write pass/fail commentary.
-- rationale: one Korean sentence on who/what the piece is useful for
-  (e.g. "조직 리더의 AI 도입 의사결정에 참고"). Never say it fails broker-report criteria.
-- pass_signals: short Korean bullets of useful takeaways (0–3).
-- fail_reasons: always [] unless unreadable.
-
-Language (mandatory):
-- Write topic, short_title, framework_summary, pass_signals, and rationale in Korean.
-- Do not use Chinese. English only for proper nouns / product names.
-- Never put UUIDs, file paths, or hashes in human-facing fields.
-
-short_title (citation label — always fill):
-- About 8–22 characters. Nickname, not a full sentence.
-- No publisher name (HBR, PwC, …) inside.
-- Prefer the core theme; do not paste the full original title.
-
-themes (optional content tags):
-- Zero or more ids from this allowlist only: """ + _THEME_IDS + """
-- Labels:
+- pass: true when the text (or title) is usable. false only if empty/unreadable.
+- confidence: 0–1.
+- short_title: Korean citation nickname, about 8–22 characters, not a full sentence.
+  No publisher name (HBR, PwC, …). Prefer the core theme; do not paste the full title.
+- summary: the main deliverable. Korean outline/bullets as above. Optional final
+  implication bullet. Do not write pass/fail commentary.
+- themes: zero to two ids from this allowlist only: """ + _THEME_IDS + """
+  Labels:
 """ + _THEME_LABEL_LINES + """
-- Prefer exactly one when a desk theme clearly owns the piece; else [].
-- Empty array is normal for pure management / leadership / HR pieces.
-- Disambiguation:
+  Prefer exactly one when a desk theme clearly owns the piece; else [].
+  Empty array is normal for pure management / leadership / HR pieces.
+  Disambiguation:
   - Pure AIDC / power / cooling / colo → datacenter (not ai).
   - Model / LLM / AI chip / AI software demand → ai.
   - Macro frame (growth, rates, FX, allocation) → macroeconomy.
   - Single industry note → that sector only.
+
+Language (mandatory):
+- Write short_title and summary in Korean.
+- No Chinese. English only for proper nouns / product names.
+- Never put UUIDs, file paths, or hashes in human-facing fields.
 """
+
+MEDIA_SUMMARY_MAX_CHARS = 6000
 
 
 def system_prompt_for_source(source: str) -> str:
@@ -171,6 +173,10 @@ def system_prompt_for_source(source: str) -> str:
     if str(source or "").strip().lower() == SOURCE_FNGUIDE:
         return SYSTEM_PROMPT
     return SUMMARY_SYSTEM_PROMPT
+
+
+def is_fnguide_source(source: str) -> bool:
+    return str(source or "").strip().lower() == SOURCE_FNGUIDE
 
 
 @dataclass(frozen=True)
@@ -181,6 +187,7 @@ class AuditTarget:
     title: str
     file_path: Path
     text: str
+    page_count: int | None = None
 
     @property
     def text_len(self) -> int:
@@ -190,11 +197,13 @@ class AuditTarget:
 def apply_source_pass_policy(
     result: dict[str, Any], source: str
 ) -> dict[str, Any]:
-    """Non-FnGuide sources always pass; keep summary / short_title fields."""
-    if str(source or "").strip().lower() == SOURCE_FNGUIDE:
+    """Non-FnGuide: force pass when a usable summary exists; else keep model pass."""
+    if is_fnguide_source(source):
         return result
     out = dict(result)
-    out["pass"] = True
+    summary = out.get("summary") or out.get("framework_summary")
+    if summary and str(summary).strip():
+        out["pass"] = True
     return out
 
 
@@ -237,7 +246,37 @@ def extract_pdf_text(path: Path, *, max_pages: int = PDF_PAGES) -> str:
     return text
 
 
+def _clip_short_title(raw: Any) -> str:
+    short_title = " ".join(str(raw or "").split())
+    if len(short_title) > 28:
+        short_title = short_title[:27].rstrip() + "…"
+    return short_title
+
+
+def _normalize_themes(themes_raw: Any, *, max_n: int | None = None) -> list[str]:
+    themes: list[str] = []
+    if isinstance(themes_raw, list):
+        for item in themes_raw:
+            s = str(item).strip()
+            if s in VALID_THEMES and s not in themes:
+                themes.append(s)
+    elif isinstance(themes_raw, str) and themes_raw.strip() in VALID_THEMES:
+        themes = [themes_raw.strip()]
+    if max_n is not None:
+        themes = themes[: max(0, int(max_n))]
+    return themes
+
+
+def _confidence(raw: dict[str, Any]) -> float:
+    try:
+        confidence = float(raw.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return max(0.0, min(1.0, confidence))
+
+
 def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
+    """FnGuide sell-side gate normalize (hard pass/fail corrections)."""
     scope = str(raw.get("scope") or "unclear").strip().lower()
     if scope not in {"sector", "company", "unclear"}:
         scope = "unclear"
@@ -254,12 +293,6 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
     if scope == "unclear":
         passed = False
 
-    try:
-        confidence = float(raw.get("confidence") or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-    confidence = max(0.0, min(1.0, confidence))
-
     fail_reasons = raw.get("fail_reasons") or []
     if not isinstance(fail_reasons, list):
         fail_reasons = [str(fail_reasons)]
@@ -271,41 +304,68 @@ def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
     if summary is not None:
         summary = str(summary)
 
-    short_title = " ".join(str(raw.get("short_title") or "").split())
-    if len(short_title) > 28:
-        short_title = short_title[:27].rstrip() + "…"
-
-    themes_raw = raw.get("themes")
-    themes: list[str] = []
-    if isinstance(themes_raw, list):
-        for item in themes_raw:
-            s = str(item).strip()
-            if s in VALID_THEMES:
-                themes.append(s)
-    elif isinstance(themes_raw, str) and themes_raw.strip() in VALID_THEMES:
-        themes = [themes_raw.strip()]
-
     return {
         "pass": passed,
-        "confidence": confidence,
+        "confidence": _confidence(raw),
         "has_coherent_framework": has_fw,
         "has_broad_sector_coverage": has_broad,
         "scope": scope,
         "topic": str(raw.get("topic") or "")[:500],
-        "short_title": short_title,
+        "short_title": _clip_short_title(raw.get("short_title")),
         "framework_summary": summary,
         "fail_reasons": [str(x)[:200] for x in fail_reasons][:20],
         "pass_signals": [str(x)[:200] for x in pass_signals][:20],
         "rationale": str(raw.get("rationale") or "")[:2000],
-        "themes": themes,
+        "themes": _normalize_themes(raw.get("themes")),
     }
+
+
+def normalize_media_result(raw: dict[str, Any]) -> dict[str, Any]:
+    """Non-FnGuide slim schema: summary + themes + short_title."""
+    summary = raw.get("summary")
+    if summary is None or (isinstance(summary, str) and not summary.strip()):
+        summary = raw.get("framework_summary")
+    if summary is not None:
+        summary = str(summary).strip()
+        if len(summary) > MEDIA_SUMMARY_MAX_CHARS:
+            summary = summary[: MEDIA_SUMMARY_MAX_CHARS - 1].rstrip() + "…"
+    else:
+        summary = None
+
+    passed = bool(raw.get("pass", True))
+    if not (summary and str(summary).strip()):
+        # Keep model pass; apply_source_pass_policy only forces True when summary exists.
+        pass
+
+    return {
+        "pass": passed,
+        "confidence": _confidence(raw),
+        "short_title": _clip_short_title(raw.get("short_title")),
+        "summary": summary,
+        "framework_summary": summary,
+        "themes": _normalize_themes(raw.get("themes"), max_n=2),
+    }
+
+
+def normalize_for_source(raw: dict[str, Any], source: str) -> dict[str, Any]:
+    if is_fnguide_source(source):
+        return normalize_result(raw)
+    return normalize_media_result(raw)
 
 
 # Hangul syllable block; absence ≈ English / Latin-only audit text.
 _NON_KOREAN_SUMMARY_SQL = """(
   (
-    coalesce(quality_json->>'framework_summary', '') <> ''
-    AND quality_json->>'framework_summary' !~ '[가-힣]'
+    coalesce(
+      nullif(quality_json->>'summary', ''),
+      quality_json->>'framework_summary',
+      ''
+    ) <> ''
+    AND coalesce(
+      nullif(quality_json->>'summary', ''),
+      quality_json->>'framework_summary',
+      ''
+    ) !~ '[가-힣]'
   )
   OR (
     coalesce(quality_json->>'topic', '') <> ''
@@ -324,6 +384,7 @@ def fetch_targets(
     limit: int | None = None,
     theme: str | None = None,
     source: str | None = None,
+    exclude_source: str | None = None,
     report_id: UUID | str | None = None,
     non_korean_summary: bool = False,
 ) -> list[dict[str, Any]]:
@@ -340,6 +401,9 @@ def fetch_targets(
         if source:
             where.append("source = %s")
             params.append(str(source).strip().lower())
+        if exclude_source:
+            where.append("source <> %s")
+            params.append(str(exclude_source).strip().lower())
         if non_korean_summary:
             where.append("quality_at IS NOT NULL")
             where.append(_NON_KOREAN_SUMMARY_SQL)
@@ -383,7 +447,7 @@ def fetch_targets(
                 params.extend([str(theme), str(theme), str(theme)])
     where_sql = " AND ".join(where)
     sql = f"""
-        SELECT id, source, source_key, title, file_path
+        SELECT id, source, source_key, title, file_path, page_count
         FROM reports
         WHERE {where_sql}
         ORDER BY last_seen_at DESC NULLS LAST, id DESC
@@ -420,6 +484,12 @@ def prepare_targets(
             continue
         # No minimum length: page.pdf / thin pages already passed capture
         # gates when applicable; let the model judge short extracts.
+        pc = row.get("page_count")
+        page_count: int | None
+        try:
+            page_count = int(pc) if pc is not None else None
+        except (TypeError, ValueError):
+            page_count = None
         ready.append(
             AuditTarget(
                 id=rid,
@@ -428,6 +498,7 @@ def prepare_targets(
                 title=str(row.get("title") or ""),
                 file_path=path,
                 text=text or "",
+                page_count=page_count,
             )
         )
     ready.sort(key=lambda t: t.text_len)
@@ -500,11 +571,21 @@ def save_quality(
         conn.commit()
 
 
-def save_unclear(report_id: UUID, *, model: str, error: str) -> None:
-    # Human-facing rationale stays short Korean; raw error goes to error column only.
-    save_quality(
-        report_id,
-        result={
+def save_unclear(
+    report_id: UUID, *, model: str, error: str, source: str | None = None
+) -> None:
+    # Human-facing text stays short Korean; raw error goes to error column only.
+    if source is not None and not is_fnguide_source(source):
+        result: dict[str, Any] = {
+            "pass": False,
+            "confidence": 0.0,
+            "short_title": "",
+            "summary": None,
+            "framework_summary": None,
+            "themes": [],
+        }
+    else:
+        result = {
             "pass": False,
             "confidence": 0.0,
             "has_coherent_framework": False,
@@ -517,9 +598,40 @@ def save_unclear(report_id: UUID, *, model: str, error: str) -> None:
             "pass_signals": [],
             "rationale": "텍스트 추출 또는 감사 API 호출에 실패했습니다.",
             "themes": [],
-        },
+        }
+    save_quality(
+        report_id,
+        result=result,
         model=model,
         error=error,
+    )
+
+
+def _user_content_for_target(target: AuditTarget) -> str:
+    pages = (
+        str(target.page_count)
+        if target.page_count is not None
+        else "unknown"
+    )
+    text = (target.text or "").strip()
+    if text:
+        body = text
+    elif is_fnguide_source(target.source):
+        body = (
+            "(No extractable PDF text — judge from the title "
+            "and source only; say so in rationale if unsure.)"
+        )
+    else:
+        body = (
+            "(No extractable PDF text — summarize from the title "
+            "and source only; keep summary short and note uncertainty.)"
+        )
+    return (
+        f"Title: {target.title}\n"
+        f"Source: {target.source}\n"
+        f"Page count: {pages}\n\n"
+        "Article / report text (extracted from early pages):\n"
+        f"{body}"
     )
 
 
@@ -540,19 +652,7 @@ async def _classify_one(
             {"role": "system", "content": system_prompt_for_source(target.source)},
             {
                 "role": "user",
-                "content": (
-                    f"Title: {target.title}\n"
-                    f"Source: {target.source}\n\n"
-                    "Article / report text (extracted from early pages):\n"
-                    + (
-                        target.text
-                        if (target.text or "").strip()
-                        else (
-                            "(No extractable PDF text — judge from the title "
-                            "and source only; say so in rationale if unsure.)"
-                        )
-                    )
-                ),
+                "content": _user_content_for_target(target),
             },
         ],
     }
@@ -576,7 +676,7 @@ async def _classify_one(
     parsed = json.loads(content)
     if not isinstance(parsed, dict):
         raise ValueError("model response is not a JSON object")
-    result = normalize_result(parsed)
+    result = normalize_for_source(parsed, target.source)
     result = apply_source_pass_policy(result, target.source)
     result["_usage"] = data.get("usage") or {}
     result["_model"] = data.get("model") or model
@@ -624,7 +724,11 @@ async def audit_targets(
                 )
             except Exception as exc:  # noqa: BLE001
                 await asyncio.to_thread(
-                    save_unclear, target.id, model=model, error=str(exc)[:500]
+                    save_unclear,
+                    target.id,
+                    model=model,
+                    error=str(exc)[:500],
+                    source=target.source,
                 )
                 async with lock:
                     stats["fail_api"] += 1
@@ -643,6 +747,7 @@ async def run_audit(
     model: str = DEFAULT_MODEL,
     theme: str | None = None,
     source: str | None = None,
+    exclude_source: str | None = None,
     report_id: UUID | str | None = None,
     non_korean_summary: bool = False,
 ) -> dict[str, int]:
@@ -651,18 +756,29 @@ async def run_audit(
         limit=limit,
         theme=theme,
         source=source,
+        exclude_source=exclude_source,
         report_id=report_id,
         non_korean_summary=non_korean_summary,
     )
     print(
         f"candidates={len(rows)} force={force} theme={theme} "
-        f"source={source} report_id={report_id} "
+        f"source={source} exclude_source={exclude_source} "
+        f"report_id={report_id} "
         f"non_korean_summary={non_korean_summary} "
         f"concurrency={concurrency}"
     )
     targets, extract_failures = prepare_targets(rows)
+    # Map id → source for extract failures (prepare_targets drops row context).
+    source_by_id = {
+        (row["id"] if isinstance(row["id"], UUID) else UUID(str(row["id"]))): str(
+            row.get("source") or ""
+        )
+        for row in rows
+    }
     for rid, err in extract_failures:
-        save_unclear(rid, model=model, error=err)
+        save_unclear(
+            rid, model=model, error=err, source=source_by_id.get(rid)
+        )
         print(f"extract-fail {rid}: {err}")
     print(f"ready={len(targets)} extract_fail={len(extract_failures)}")
     stats = await audit_targets(

@@ -33,6 +33,35 @@ export const QUALITY_LABEL: Record<string, string> = {
   unauditable: '파일 없음',
 }
 
+/** Non-FnGuide media/consulting: summary audit, not sell-side pass/fail. */
+export const QUALITY_LABEL_SUMMARY: Record<string, string> = {
+  all: '요약전체',
+  pass: '요약됨',
+  fail: '추출실패',
+  pending: '미감사',
+  unauditable: '파일 없음',
+}
+
+export function qualityLabelsForSource(
+  source: string | null | undefined,
+): Record<string, string> {
+  return source === 'fnguide' ? QUALITY_LABEL : QUALITY_LABEL_SUMMARY
+}
+
+/** Per-row label: FnGuide page/row = sell-side; else summary audit. */
+export function qualityLabelForReport(
+  quality: string | null | undefined,
+  reportSource: string | null | undefined,
+  pageSource?: string | null,
+): string {
+  const key = quality || 'pending'
+  const sellSide =
+    pageSource === 'fnguide' ||
+    ((pageSource === 'all' || !pageSource) && reportSource === 'fnguide')
+  const labels = sellSide ? QUALITY_LABEL : QUALITY_LABEL_SUMMARY
+  return labels[key] || key
+}
+
 /** 품질 감사 잡 stats → 현업용 한 줄 */
 export function formatAuditStats(
   stats: Record<string, number> | null | undefined,

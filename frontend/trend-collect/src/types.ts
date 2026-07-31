@@ -185,10 +185,13 @@ export type QualityJson = {
   topic?: string
   /** Citation nickname from quality audit; pairs with provider. */
   short_title?: string
+  /** Non-FnGuide primary summary (also mirrored to framework_summary). */
+  summary?: string | null
   framework_summary?: string | null
   fail_reasons?: string[]
   pass_signals?: string[]
   rationale?: string
+  themes?: string[]
   error?: string
   [key: string]: unknown
 }

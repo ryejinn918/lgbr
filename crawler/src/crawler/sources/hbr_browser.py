@@ -114,7 +114,7 @@ def collect_list_items(page: Page) -> list[HbrListItem]:
               title: title.slice(0, 300),
               date_raw: dm ? dm[0] : '',
             });
-            if (out.length >= 40) break;
+            if (out.length >= 400) break;
           }
           return out;
         }"""
@@ -173,12 +173,21 @@ def _parse_long_date(text: str) -> date | None:
 
 
 def click_load_more(page: Page) -> bool:
+    """Click Latest 'Load More Items'; scroll into view first."""
     loc = page.get_by_text(re.compile(r"^\s*Load More Items\s*$", re.I))
     try:
-        if not loc.count() or not loc.first.is_visible(timeout=1500):
+        if not loc.count():
             return False
-        loc.first.click(timeout=8000)
-        page.wait_for_timeout(3000)
+        btn = loc.first
+        try:
+            btn.scroll_into_view_if_needed(timeout=5000)
+        except Exception:
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(800)
+        if not btn.is_visible(timeout=2500):
+            return False
+        btn.click(timeout=8000)
+        page.wait_for_timeout(3500)
         return True
     except Exception:
         return False

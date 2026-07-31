@@ -75,6 +75,11 @@ def main() -> None:
         help="Limit to reports.source (e.g. hbrkorea, pwc, fnguide)",
     )
     parser.add_argument(
+        "--exclude-source",
+        default=None,
+        help="Skip reports.source (e.g. fnguide when force-reauditing media)",
+    )
+    parser.add_argument(
         "--report-id",
         default=None,
         help="Audit a single report UUID (implies that row only)",
@@ -110,6 +115,7 @@ def main() -> None:
         "limit": args.limit,
         "theme": args.theme,
         "source": args.source,
+        "exclude_source": args.exclude_source,
         "report_id": str(report_id) if report_id else None,
         "non_korean_summary": bool(args.non_korean_summary),
         "concurrency": args.concurrency,
@@ -130,6 +136,7 @@ def main() -> None:
                 model=args.model,
                 theme=args.theme,
                 source=args.source,
+                exclude_source=args.exclude_source,
                 report_id=report_id,
                 non_korean_summary=bool(args.non_korean_summary),
             )
