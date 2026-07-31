@@ -188,10 +188,27 @@ class AuditTarget:
     file_path: Path
     text: str
     page_count: int | None = None
+    extract: dict[str, Any] | None = None
 
     @property
     def text_len(self) -> int:
         return len(self.text)
+
+
+def build_extract_meta(
+    *,
+    pages_total: int | None,
+    truncated_by_chars: bool,
+    max_pages: int = PDF_PAGES,
+) -> dict[str, Any]:
+    """Build quality_json.extract — only ``truncated`` 0/1."""
+    truncated_by_pages = (
+        pages_total is not None
+        and int(pages_total) > 0
+        and int(pages_total) > int(max_pages)
+    )
+    truncated = 1 if (truncated_by_pages or truncated_by_chars) else 0
+    return {"truncated": truncated}
 
 
 def apply_source_pass_policy(
@@ -219,7 +236,10 @@ def openrouter_api_key() -> str:
     return key
 
 
-def extract_pdf_text(path: Path, *, max_pages: int = PDF_PAGES) -> str:
+def extract_pdf_text_with_meta(
+    path: Path, *, max_pages: int = PDF_PAGES
+) -> tuple[str, dict[str, Any]]:
+    """Return (text, partial meta with chars / char-truncation / max_pages)."""
     if not path.is_file():
         raise FileNotFoundError(str(path))
     if shutil.which("pdftotext") is None:
@@ -241,8 +261,20 @@ def extract_pdf_text(path: Path, *, max_pages: int = PDF_PAGES) -> str:
     raw = proc.stdout.decode("utf-8", errors="replace")
     text = _WATERMARK_RE.sub(" ", raw)
     text = " ".join(text.split())
+    truncated_by_chars = False
     if len(text) > MAX_CHARS:
         text = text[:MAX_CHARS] + "…"
+        truncated_by_chars = True
+    chars_used = MAX_CHARS if truncated_by_chars else len(text)
+    return text, {
+        "chars_used": chars_used,
+        "truncated_by_chars": truncated_by_chars,
+        "max_pages": int(max_pages),
+    }
+
+
+def extract_pdf_text(path: Path, *, max_pages: int = PDF_PAGES) -> str:
+    text, _meta = extract_pdf_text_with_meta(path, max_pages=max_pages)
     return text
 
 
@@ -478,7 +510,7 @@ def prepare_targets(
             continue
         path = Path(str(raw_path))
         try:
-            text = extract_pdf_text(path)
+            text, partial = extract_pdf_text_with_meta(path)
         except Exception as exc:  # noqa: BLE001 — batch resilience
             failures.append((rid, f"extract: {exc}"))
             continue
@@ -490,6 +522,11 @@ def prepare_targets(
             page_count = int(pc) if pc is not None else None
         except (TypeError, ValueError):
             page_count = None
+        extract = build_extract_meta(
+            pages_total=page_count,
+            truncated_by_chars=bool(partial.get("truncated_by_chars")),
+            max_pages=int(partial.get("max_pages") or PDF_PAGES),
+        )
         ready.append(
             AuditTarget(
                 id=rid,
@@ -499,6 +536,7 @@ def prepare_targets(
                 file_path=path,
                 text=text or "",
                 page_count=page_count,
+                extract=extract,
             )
         )
     ready.sort(key=lambda t: t.text_len)
@@ -707,6 +745,9 @@ async def audit_targets(
                 )
                 used_model = str(result.pop("_model", model))
                 result.pop("_usage", None)
+                # Force extract meta from local truncation (not model JSON).
+                if target.extract:
+                    result["extract"] = dict(target.extract)
                 # DB write is sync/blocking; offload lightly via to_thread
                 await asyncio.to_thread(
                     save_quality, target.id, result=result, model=used_model

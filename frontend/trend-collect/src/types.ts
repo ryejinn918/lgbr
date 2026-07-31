@@ -176,6 +176,11 @@ export type ReportStatus =
 
 export type ReportQuality = 'pass' | 'fail' | 'pending' | 'unauditable'
 
+/** Whether summary/audit input was truncated (0/1 or boolean). */
+export type QualityExtractMeta = {
+  truncated?: 0 | 1 | boolean
+}
+
 export type QualityJson = {
   pass?: boolean
   confidence?: number
@@ -193,6 +198,8 @@ export type QualityJson = {
   rationale?: string
   themes?: string[]
   error?: string
+  /** Local extract truncation (set on re-audit/summary). */
+  extract?: QualityExtractMeta
   [key: string]: unknown
 }
 

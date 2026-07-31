@@ -1,4 +1,9 @@
-import type { CrawlEvent, CrawlState, SessionState } from '../types'
+import type {
+  CrawlEvent,
+  CrawlState,
+  QualityExtractMeta,
+  SessionState,
+} from '../types'
 
 export const CRAWL_CLASS: Record<CrawlState, string> = {
   starting: 'starting',
@@ -102,6 +107,25 @@ export function formatTime(value: string | null | undefined): string {
   const ms = Date.parse(value)
   if (Number.isNaN(ms)) return value
   return new Date(ms).toLocaleString()
+}
+
+/** Matches crawler quality_audit.PDF_PAGES. */
+export const EXTRACT_PDF_PAGES = 5
+
+/** 「요약 입력」: 절단 시 ``첫 5페이지 이후 후략``, 아니면 ``전체``. */
+export function formatExtractInput(
+  pageCount: number | null | undefined,
+  extract?: QualityExtractMeta | null,
+): string {
+  const total = Number(pageCount)
+  const truncatedPages =
+    Number.isFinite(total) && total > EXTRACT_PDF_PAGES
+  const truncatedFlag =
+    extract?.truncated === 1 || extract?.truncated === true
+  if (truncatedPages) return `첫 ${EXTRACT_PDF_PAGES}페이지 이후 후략`
+  if (truncatedFlag) return '앞부분만 사용'
+  if (Number.isFinite(total) && total > 0) return '전체'
+  return '—'
 }
 
 /** Report published_at (DATE / ISO date) → YYYY-MM-DD. */

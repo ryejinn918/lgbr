@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from lgbr_mcp.formatting import report_detail_payload, serp_item, serp_list_payload
+from lgbr_mcp.formatting import (
+    extract_truncated_flag,
+    report_detail_payload,
+    serp_item,
+    serp_list_payload,
+)
 
 
 def test_serp_summary_kind_keeps_url_no_pdf() -> None:
@@ -77,3 +82,47 @@ def test_detail_strips_pdf_keeps_url() -> None:
 def test_list_hint_mentions_no_pdf() -> None:
     payload = serp_list_payload({"ok": True, "items": [], "total": 0})
     assert "PDF" in payload["hint"]
+
+
+def test_extract_truncated_flag() -> None:
+    assert extract_truncated_flag(None) is None
+    assert extract_truncated_flag({}) is None
+    assert extract_truncated_flag({"truncated": 0}) == 0
+    assert extract_truncated_flag({"truncated": 1}) == 1
+    assert extract_truncated_flag({"truncated": True}) == 1
+    assert extract_truncated_flag({"truncated": False}) == 0
+
+
+def test_serp_includes_extract_truncated() -> None:
+    report = {
+        "id": "44444444-4444-4444-4444-444444444444",
+        "title": "Long",
+        "source": "accenture",
+        "url": "https://www.accenture.com/x",
+        "quality_json": {
+            "summary": "요약",
+            "extract": {"truncated": 1},
+        },
+    }
+    item = serp_item(report)
+    assert item["extract_truncated"] == 1
+    assert "extract_note" not in item
+
+
+def test_detail_includes_extract_truncated() -> None:
+    result = {
+        "ok": True,
+        "report": {
+            "id": "55555555-5555-5555-5555-555555555555",
+            "source": "pwc",
+            "url": "https://www.pwc.com/x",
+            "quality_json": {
+                "summary": "요약",
+                "extract": {"truncated": 1},
+            },
+        },
+    }
+    out = report_detail_payload(result)
+    assert out["report"]["extract_truncated"] == 1
+    assert out["report"]["quality_json"]["extract"] == {"truncated": 1}
+    assert "extract_truncated" in out["hint"]

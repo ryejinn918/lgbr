@@ -47,6 +47,13 @@ def _clip(text: Any, *, max_len: int = _SUMMARY_CLIP) -> str | None:
     return s
 
 
+def extract_truncated_flag(extract: Any) -> int | None:
+    """Return 1/0 when extract.truncated is set; else None."""
+    if not isinstance(extract, dict) or "truncated" not in extract:
+        return None
+    return 1 if extract.get("truncated") else 0
+
+
 def sanitize_report(report: dict[str, Any]) -> dict[str, Any]:
     """Keep original web url; strip PDF path / download fields."""
     out = dict(report)
@@ -77,6 +84,9 @@ def serp_item(report: dict[str, Any]) -> dict[str, Any]:
         summary = _clip(qj.get("summary") or qj.get("framework_summary"))
         if summary:
             item["summary"] = summary
+    flag = extract_truncated_flag(qj.get("extract"))
+    if flag is not None:
+        item["extract_truncated"] = flag
     return item
 
 
@@ -105,6 +115,11 @@ def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
     clean = sanitize_report(report)
     kind = audit_kind_for_source(clean.get("source"))
     clean["audit_kind"] = kind
+    qj = clean.get("quality_json")
+    if isinstance(qj, dict):
+        flag = extract_truncated_flag(qj.get("extract"))
+        if flag is not None:
+            clean["extract_truncated"] = flag
     return {
         "ok": True,
         "report": clean,
@@ -112,6 +127,8 @@ def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
             "원문 웹 URL은 report.url. PDF·파일 경로는 제공하지 않음. "
             "summary(요약): quality_json.short_title / summary / themes. "
             "sell_side(fnguide): topic, framework_summary, fail_reasons, "
-            "pass_signals, rationale. 섹터 프레임은 lgbr-consensus.get_consensus."
+            "pass_signals, rationale. "
+            "입력 절단은 extract_truncated(0/1). "
+            "섹터 프레임은 lgbr-consensus.get_consensus."
         ),
     }

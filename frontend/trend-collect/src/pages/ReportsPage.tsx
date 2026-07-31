@@ -14,6 +14,7 @@ import {
   STATUS_LABEL,
   THEME_LABEL,
   formatAuditStats,
+  formatExtractInput,
   formatPublishedAt,
   formatRelative,
   formatTime,
@@ -218,6 +219,10 @@ export function ReportsPage({
   const detailSummary = String(
     qj.summary || qj.framework_summary || '',
   ).trim()
+  const detailExtractInput = formatExtractInput(
+    detail?.page_count,
+    qj.extract,
+  )
   const detailThemes = (
     detail?.themes?.length
       ? detail.themes
@@ -672,6 +677,10 @@ export function ReportsPage({
                           <dt>주제</dt>
                           <dd>{String(qj.topic || '—')}</dd>
                         </div>
+                        <div>
+                          <dt>요약 입력</dt>
+                          <dd>{detailExtractInput}</dd>
+                        </div>
                         <div className="details-span">
                           <dt>분석 틀 요약</dt>
                           <dd className="audit-rationale">
@@ -736,6 +745,10 @@ export function ReportsPage({
                         <div>
                           <dt>인용 제목</dt>
                           <dd>{String(qj.short_title || '—')}</dd>
+                        </div>
+                        <div>
+                          <dt>요약 입력</dt>
+                          <dd>{detailExtractInput}</dd>
                         </div>
                         <div>
                           <dt>섹터</dt>

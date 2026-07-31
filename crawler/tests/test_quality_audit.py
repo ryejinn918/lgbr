@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from crawler.quality_audit import (
     MEDIA_SUMMARY_MAX_CHARS,
+    PDF_PAGES,
     SUMMARY_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     apply_source_pass_policy,
+    build_extract_meta,
     normalize_for_source,
     normalize_media_result,
     normalize_result,
@@ -208,3 +210,38 @@ def test_normalize_for_source_routes():
     )
     assert fg["pass"] is True
     assert "fail_reasons" in fg
+
+
+def test_build_extract_meta_truncated_by_pages():
+    meta = build_extract_meta(
+        pages_total=61,
+        truncated_by_chars=False,
+        max_pages=PDF_PAGES,
+    )
+    assert meta == {"truncated": 1}
+
+
+def test_build_extract_meta_full_short_pdf():
+    meta = build_extract_meta(
+        pages_total=3,
+        truncated_by_chars=False,
+        max_pages=PDF_PAGES,
+    )
+    assert meta == {"truncated": 0}
+
+
+def test_build_extract_meta_char_cap():
+    meta = build_extract_meta(
+        pages_total=2,
+        truncated_by_chars=True,
+        max_pages=PDF_PAGES,
+    )
+    assert meta == {"truncated": 1}
+
+
+def test_build_extract_meta_unknown_page_count():
+    meta = build_extract_meta(
+        pages_total=None,
+        truncated_by_chars=False,
+    )
+    assert meta == {"truncated": 0}
