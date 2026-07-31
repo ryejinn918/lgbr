@@ -30,6 +30,10 @@ from crawler.sources.deloitte_http import (
     months_ago_cutoff,
     pdf_page_count,
 )
+from crawler.sources.page_pdf_capture import (
+    LazyCaptureBrowser,
+    process_no_pdf_with_page_capture,
+)
 
 DEFAULT_PERIOD_MONTHS = 3
 MIN_PERIOD_MONTHS = 1
@@ -155,6 +159,7 @@ def run_deloitte_search_job(
     def stop() -> bool:
         return bool(collection_jobs_store.stop_requested(job_id))
 
+    capture = LazyCaptureBrowser(SOURCE, downloads_path=download_dir)
     try:
         for q_idx, query in enumerate(prof.queries):
             if stop():
@@ -209,6 +214,7 @@ def run_deloitte_search_job(
                         progress=progress,
                         job_id=job_id,
                         session=session,
+                        capture=capture,
                     )
                     if outcome != "old":
                         in_period += 1
@@ -264,6 +270,8 @@ def run_deloitte_search_job(
             error=True,
             message=str(exc),
         )
+    finally:
+        capture.close()
 
 
 def _process_item(
@@ -277,6 +285,7 @@ def _process_item(
     already: set[str],
     seen_keys: set[str],
     download_dir: Path,
+    capture: LazyCaptureBrowser,
     progress: dict[str, Any],
     job_id: UUID | str,
     session,
@@ -355,19 +364,24 @@ def _process_item(
             progress["skipped_old"] = summary.skipped_old
             return "old"
 
+    safe = _safe_filename(item.source_key)
+    dest = download_dir / f"{safe}.pdf"
     if not pdf_url:
-        summary.skipped_no_download += 1
-        progress["skipped_no_download"] = summary.skipped_no_download
-        reports_store.mark_status(
+        process_no_pdf_with_page_capture(
+            capture=capture,
             source=SOURCE,
             source_key=item.source_key,
-            status=reports_store.STATUS_NO_DOWNLOAD,
-            attrs={**attrs, "no_pdf": True},
+            title=item.title,
+            published_at=published_at,
+            url=item.url,
+            dest=dest,
+            attrs=attrs,
+            already=already,
+            summary=summary,
+            progress=progress,
         )
         return "ok" if published_at else "skip"
 
-    safe = _safe_filename(item.source_key)
-    dest = download_dir / f"{safe}.pdf"
     try:
         size = download_pdf(pdf_url, dest, session=session)
         pages = pdf_page_count(dest)

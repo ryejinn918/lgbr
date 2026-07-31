@@ -15,6 +15,10 @@ from crawler.jobs.media_pace import (
     clamp_item_delay_seconds,
     pace_after_item,
 )
+from crawler.sources.page_pdf_capture import (
+    LazyCaptureBrowser,
+    process_no_pdf_with_page_capture,
+)
 from crawler.sources.pwc_http import (
     DEFAULT_CATALOG,
     PwcListItem,
@@ -134,6 +138,7 @@ def run_pwc_search_job(
     def stop() -> bool:
         return bool(collection_jobs_store.stop_requested(job_id))
 
+    capture = LazyCaptureBrowser(SOURCE, downloads_path=download_dir)
     try:
         number_hits = 0
         for page_idx in range(max_pages):
@@ -179,6 +184,7 @@ def run_pwc_search_job(
                     progress=progress,
                     job_id=job_id,
                     session=session,
+                    capture=capture,
                 )
                 pace_after_item(item_delay_seconds)
 
@@ -213,6 +219,8 @@ def run_pwc_search_job(
             error=True,
             message=str(exc),
         )
+    finally:
+        capture.close()
 
 
 def _process_item(
@@ -226,6 +234,7 @@ def _process_item(
     progress: dict[str, Any],
     job_id: UUID | str,
     session,
+    capture: LazyCaptureBrowser,
 ) -> None:
     attrs = {
         "url": item.url,
@@ -267,19 +276,24 @@ def _process_item(
         )
         return
 
+    safe = _safe_filename(item.source_key)
+    dest = download_dir / f"{safe}.pdf"
     if not pdf_url:
-        summary.skipped_no_download += 1
-        progress["skipped_no_download"] = summary.skipped_no_download
-        reports_store.mark_status(
+        process_no_pdf_with_page_capture(
+            capture=capture,
             source=SOURCE,
             source_key=item.source_key,
-            status=reports_store.STATUS_NO_DOWNLOAD,
-            attrs={**attrs, "no_pdf": True},
+            title=item.title,
+            published_at=item.published_at,
+            url=item.url,
+            dest=dest,
+            attrs=attrs,
+            already=already,
+            summary=summary,
+            progress=progress,
         )
         return
 
-    safe = _safe_filename(item.source_key)
-    dest = download_dir / f"{safe}.pdf"
     try:
         size = download_pdf(
             pdf_url, dest, catalog=catalog, session=session
