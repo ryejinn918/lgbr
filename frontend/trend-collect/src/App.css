@@ -755,6 +755,29 @@ a.report-original-link {
   padding: 1.25rem 1.35rem;
 }
 
+/* Bottom audit drawer: out of document flow so the report table does not jump (CLS). */
+.audit-detail {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(1200px, calc(100% - 2rem));
+  max-height: min(40vh, 420px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow: 0 -4px 18px color-mix(in srgb, var(--ink) 8%, transparent);
+  background: color-mix(in srgb, var(--panel) 96%, #fff);
+}
+
+.panel.audit-detail-open {
+  /* Reserve space under the list so the last rows stay reachable above the drawer. */
+  padding-bottom: calc(min(40vh, 420px) + 1.25rem);
+}
+
 .badge-panel .badge-label {
   margin: 0;
   font-size: 0.8rem;

@@ -335,7 +335,9 @@ export function ReportsPage({
         ) : null}
       </section>
 
-      <section className="panel">
+      <section
+        className={`panel${selectedId ? ' audit-detail-open' : ''}`}
+      >
         <div className="filter-row">
           {STATUS_FILTERS.map((key) => (
             <button
