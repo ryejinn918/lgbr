@@ -54,7 +54,8 @@ def connect_cdp() -> Iterator[tuple[dict[str, Any], Browser, Page]]:
                 page = pages[0]
             yield crawl, browser, page
         finally:
-            browser.close()
+            # Do not browser.close(): on CDP that terminates the adhoc Chromium.
+            pass
 
 
 def _touch_after(crawl: dict[str, Any], page: Page, step: str) -> None:
