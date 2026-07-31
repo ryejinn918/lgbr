@@ -335,9 +335,7 @@ export function ReportsPage({
         ) : null}
       </section>
 
-      <section
-        className={`panel${selectedId ? ' audit-detail-open' : ''}`}
-      >
+      <section className="panel">
         <div className="filter-row">
           {STATUS_FILTERS.map((key) => (
             <button
@@ -420,152 +418,296 @@ export function ReportsPage({
           </button>
         </form>
         {reports.error ? <p className="warn">{reports.error}</p> : null}
-        {reports.loading && reports.items.length === 0 ? (
-          <p className="empty">불러오는 중…</p>
-        ) : reports.items.length === 0 ? (
-          <p className="empty">결과가 없습니다.</p>
-        ) : (
-          <div className="report-sheet">
-            <table className="report-table report-table-audit">
-              <thead>
-                <tr>
-                  <th className="col-status">상태</th>
-                  <th className="col-quality">
-                    {isSellSidePage ? '판정' : isAll ? '판정/요약' : '요약'}
-                  </th>
-                  <th className="col-title">제목</th>
-                  {showProvider ? (
-                    <th className="col-provider">증권사</th>
-                  ) : null}
-                  <th className="col-published">
-                    <button
-                      type="button"
-                      className={`sort-th${filters.sort === 'published_at' ? ' active' : ''}`}
-                      onClick={() => commit(withSort(filters, 'published_at'))}
-                      title="발행일 내림차순 (다시 누르면 해제)"
-                    >
-                      발행일{filters.sort === 'published_at' ? ' ↓' : ''}
-                    </button>
-                  </th>
-                  <th className="col-pages">
-                    <button
-                      type="button"
-                      className={`sort-th${filters.sort === 'page_count' ? ' active' : ''}`}
-                      onClick={() => commit(withSort(filters, 'page_count'))}
-                      title="페이지수 내림차순 (다시 누르면 해제)"
-                    >
-                      페이지{filters.sort === 'page_count' ? ' ↓' : ''}
-                    </button>
-                  </th>
-                  {isAll ? <th className="col-source">매체</th> : null}
-                  <th className="col-qat">감사일</th>
-                  <th className="col-seen">
-                    <button
-                      type="button"
-                      className={`sort-th${filters.sort === 'last_seen_at' ? ' active' : ''}`}
-                      onClick={() => commit(withSort(filters, 'last_seen_at'))}
-                      title="최근 본 시각 내림차순 (다시 누르면 해제)"
-                    >
-                      최근{filters.sort === 'last_seen_at' ? ' ↓' : ''}
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {reports.items.map((item) => {
-                  const q = item.quality || 'pending'
-                  const selected = selectedId === item.id
-                  const originalUrl = reportPublicOriginalUrl(
-                    item.source,
-                    item.url,
-                  )
-                  return (
-                    <tr
-                      key={item.id}
-                      className={selected ? 'row-selected' : undefined}
-                      onClick={() => onRowClick(item.id)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td className="col-status">
-                        <span className={`status-pill status-${item.status}`}>
-                          {STATUS_LABEL[item.status] || item.status}
-                        </span>
-                      </td>
-                      <td className="col-quality">
-                        <span className={`status-pill quality-${q}`}>
-                          {qualityLabelForReport(q, item.source, sourceKey)}
-                        </span>
-                      </td>
-                      <td className="col-title report-title">
-                        <div className="report-title-inner">
-                          <span
-                            className="report-title-text"
-                            title={item.title}
-                          >
-                            {item.title}
+        <div
+          className={`report-workspace${selectedId ? ' has-detail' : ''}`}
+        >
+          {reports.loading && reports.items.length === 0 ? (
+            <p className="empty">불러오는 중…</p>
+          ) : reports.items.length === 0 ? (
+            <p className="empty">결과가 없습니다.</p>
+          ) : (
+            <div className="report-sheet">
+              <table className="report-table report-table-audit">
+                <thead>
+                  <tr>
+                    <th className="col-status">상태</th>
+                    <th className="col-quality">
+                      {isSellSidePage ? '판정' : isAll ? '판정/요약' : '요약'}
+                    </th>
+                    <th className="col-title">제목</th>
+                    {showProvider ? (
+                      <th className="col-provider">증권사</th>
+                    ) : null}
+                    <th className="col-published">
+                      <button
+                        type="button"
+                        className={`sort-th${filters.sort === 'published_at' ? ' active' : ''}`}
+                        onClick={() =>
+                          commit(withSort(filters, 'published_at'))
+                        }
+                        title="발행일 내림차순 (다시 누르면 해제)"
+                      >
+                        발행일{filters.sort === 'published_at' ? ' ↓' : ''}
+                      </button>
+                    </th>
+                    <th className="col-pages">
+                      <button
+                        type="button"
+                        className={`sort-th${filters.sort === 'page_count' ? ' active' : ''}`}
+                        onClick={() => commit(withSort(filters, 'page_count'))}
+                        title="페이지수 내림차순 (다시 누르면 해제)"
+                      >
+                        페이지{filters.sort === 'page_count' ? ' ↓' : ''}
+                      </button>
+                    </th>
+                    {isAll ? <th className="col-source">매체</th> : null}
+                    <th className="col-qat">감사일</th>
+                    <th className="col-seen">
+                      <button
+                        type="button"
+                        className={`sort-th${filters.sort === 'last_seen_at' ? ' active' : ''}`}
+                        onClick={() =>
+                          commit(withSort(filters, 'last_seen_at'))
+                        }
+                        title="수집일 내림차순 (다시 누르면 해제)"
+                      >
+                        수집일{filters.sort === 'last_seen_at' ? ' ↓' : ''}
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reports.items.map((item) => {
+                    const q = item.quality || 'pending'
+                    const selected = selectedId === item.id
+                    const originalUrl = reportPublicOriginalUrl(
+                      item.source,
+                      item.url,
+                    )
+                    return (
+                      <tr
+                        key={item.id}
+                        className={selected ? 'row-selected' : undefined}
+                        onClick={() => onRowClick(item.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td className="col-status">
+                          <span className={`status-pill status-${item.status}`}>
+                            {STATUS_LABEL[item.status] || item.status}
                           </span>
-                          {(item.themes || []).length > 0 ? (
-                            <span className="report-title-meta">
-                              {(item.themes || []).map((t) => (
-                                <span key={t} className="theme-chip">
-                                  {THEME_LABEL[t] || t}
-                                </span>
-                              ))}
-                            </span>
-                          ) : null}
-                          {originalUrl ? (
-                            <a
-                              className="report-file-link report-original-link"
-                              href={originalUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={onFileClick}
+                        </td>
+                        <td className="col-quality">
+                          <span className={`status-pill quality-${q}`}>
+                            {qualityLabelForReport(q, item.source, sourceKey)}
+                          </span>
+                        </td>
+                        <td className="col-title report-title">
+                          <div className="report-title-inner">
+                            <span
+                              className="report-title-text"
+                              title={item.title}
                             >
-                              원문
-                            </a>
-                          ) : null}
-                        </div>
-                      </td>
-                      {showProvider ? (
+                              {item.title}
+                            </span>
+                            {(item.themes || []).length > 0 ? (
+                              <span className="report-title-meta">
+                                {(item.themes || []).map((t) => (
+                                  <span key={t} className="theme-chip">
+                                    {THEME_LABEL[t] || t}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : null}
+                            {originalUrl ? (
+                              <a
+                                className="report-file-link report-original-link"
+                                href={originalUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={onFileClick}
+                              >
+                                원문
+                              </a>
+                            ) : null}
+                          </div>
+                        </td>
+                        {showProvider ? (
+                          <td
+                            className="col-provider"
+                            title={item.provider || undefined}
+                          >
+                            {item.provider || '—'}
+                          </td>
+                        ) : null}
+                        <td className="col-published mono">
+                          {formatPublishedAt(item.published_at)}
+                        </td>
+                        <td className="col-pages mono report-pages">
+                          {item.page_count != null ? item.page_count : '—'}
+                        </td>
+                        {isAll ? (
+                          <td className="col-source">
+                            {SOURCE_LABEL[item.source || ''] ||
+                              item.source ||
+                              '—'}
+                          </td>
+                        ) : null}
                         <td
-                          className="col-provider"
-                          title={item.provider || undefined}
+                          className="col-qat"
+                          title={item.quality_at || undefined}
                         >
-                          {item.provider || '—'}
+                          {formatRelative(item.quality_at)}
                         </td>
-                      ) : null}
-                      <td className="col-published mono">
-                        {formatPublishedAt(item.published_at)}
-                      </td>
-                      <td className="col-pages mono report-pages">
-                        {item.page_count != null ? item.page_count : '—'}
-                      </td>
-                      {isAll ? (
-                        <td className="col-source">
-                          {SOURCE_LABEL[item.source || ''] ||
-                            item.source ||
-                            '—'}
+                        <td
+                          className="col-seen"
+                          title={item.last_seen_at || undefined}
+                        >
+                          {formatRelative(item.last_seen_at)}
                         </td>
-                      ) : null}
-                      <td
-                        className="col-qat"
-                        title={item.quality_at || undefined}
-                      >
-                        {formatRelative(item.quality_at)}
-                      </td>
-                      <td
-                        className="col-seen"
-                        title={item.last_seen_at || undefined}
-                      >
-                        {formatRelative(item.last_seen_at)}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {selectedId ? (
+            <div className="report-audit-detail">
+              <div className="section-head">
+                <h2>품질 감사 결과</h2>
+                <div className="audit-actions">
+                  {detailOriginalUrl ? (
+                    <a
+                      className="run-btn"
+                      href={detailOriginalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={onFileClick}
+                    >
+                      원문 열기
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="run-btn"
+                    disabled={audit.busy || !detail?.has_file}
+                    onClick={() => void onReauditSelected()}
+                  >
+                    다시 감사
+                  </button>
+                  <button
+                    type="button"
+                    className="run-btn"
+                    onClick={() => setSelectedId(null)}
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+              {detailLoading ? <p className="empty">불러오는 중…</p> : null}
+              {detailError ? <p className="warn">{detailError}</p> : null}
+              {detail && !detailLoading ? (
+                <div className="details">
+                  <dl>
+                    <div>
+                      <dt>제목</dt>
+                      <dd>{detail.title}</dd>
+                    </div>
+                    <div>
+                      <dt>{detailIsSellSide ? '판정' : '상태'}</dt>
+                      <dd>
+                        {qualityLabelForReport(
+                          detail.quality,
+                          detail.source,
+                          sourceKey,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>감사 시각</dt>
+                      <dd>{formatTime(detail.quality_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>인용 제목</dt>
+                      <dd>{String(qj.short_title || '—')}</dd>
+                    </div>
+                    {detailIsSellSide ? (
+                      <>
+                        <div>
+                          <dt>주제</dt>
+                          <dd>{String(qj.topic || '—')}</dd>
+                        </div>
+                        <div>
+                          <dt>분석 틀 요약</dt>
+                          <dd>{String(qj.framework_summary || '—')}</dd>
+                        </div>
+                        <div>
+                          <dt>부적합 사유</dt>
+                          <dd>
+                            {failReasons.length ? (
+                              <ul className="audit-list">
+                                {failReasons.map((r) => (
+                                  <li key={r}>{r}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              '—'
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>적합 근거</dt>
+                          <dd>
+                            {passSignals.length ? (
+                              <ul className="audit-list">
+                                {passSignals.map((r) => (
+                                  <li key={r}>{r}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              '—'
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>판정 설명</dt>
+                          <dd className="audit-rationale">
+                            {String(qj.rationale || qj.error || '—')}
+                          </dd>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <dt>섹터</dt>
+                          <dd>
+                            {detailThemes.length ? (
+                              <span className="theme-chips">
+                                {detailThemes.map((t) => (
+                                  <span key={t} className="theme-chip">
+                                    {THEME_LABEL[t] || t}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </dd>
+                        </div>
+                        <div className="details-span">
+                          <dt>요약</dt>
+                          <dd className="audit-rationale">
+                            {detailSummary || String(qj.error || '—')}
+                          </dd>
+                        </div>
+                      </>
+                    )}
+                  </dl>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
         <div className="pager">
           <button
             type="button"
@@ -590,143 +732,6 @@ export function ReportsPage({
           </button>
         </div>
       </section>
-
-      {selectedId ? (
-        <section className="panel audit-detail">
-          <div className="section-head">
-            <h2>품질 감사 결과</h2>
-            <div className="audit-actions">
-              {detailOriginalUrl ? (
-                <a
-                  className="run-btn"
-                  href={detailOriginalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={onFileClick}
-                >
-                  원문 열기
-                </a>
-              ) : null}
-              <button
-                type="button"
-                className="run-btn"
-                disabled={audit.busy || !detail?.has_file}
-                onClick={() => void onReauditSelected()}
-              >
-                다시 감사
-              </button>
-              <button
-                type="button"
-                className="run-btn"
-                onClick={() => setSelectedId(null)}
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-          {detailLoading ? <p className="empty">불러오는 중…</p> : null}
-          {detailError ? <p className="warn">{detailError}</p> : null}
-          {detail && !detailLoading ? (
-            <div className="details">
-              <dl>
-                <div>
-                  <dt>제목</dt>
-                  <dd>{detail.title}</dd>
-                </div>
-                <div>
-                  <dt>{detailIsSellSide ? '판정' : '상태'}</dt>
-                  <dd>
-                    {qualityLabelForReport(
-                      detail.quality,
-                      detail.source,
-                      sourceKey,
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>감사 시각</dt>
-                  <dd>{formatTime(detail.quality_at)}</dd>
-                </div>
-                <div>
-                  <dt>인용 제목</dt>
-                  <dd>{String(qj.short_title || '—')}</dd>
-                </div>
-                {detailIsSellSide ? (
-                  <>
-                    <div>
-                      <dt>주제</dt>
-                      <dd>{String(qj.topic || '—')}</dd>
-                    </div>
-                    <div>
-                      <dt>분석 틀 요약</dt>
-                      <dd>{String(qj.framework_summary || '—')}</dd>
-                    </div>
-                    <div>
-                      <dt>부적합 사유</dt>
-                      <dd>
-                        {failReasons.length ? (
-                          <ul className="audit-list">
-                            {failReasons.map((r) => (
-                              <li key={r}>{r}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          '—'
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>적합 근거</dt>
-                      <dd>
-                        {passSignals.length ? (
-                          <ul className="audit-list">
-                            {passSignals.map((r) => (
-                              <li key={r}>{r}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          '—'
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>판정 설명</dt>
-                      <dd className="audit-rationale">
-                        {String(qj.rationale || qj.error || '—')}
-                      </dd>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <dt>섹터</dt>
-                      <dd>
-                        {detailThemes.length ? (
-                          <span className="theme-chips">
-                            {detailThemes.map((t) => (
-                              <span key={t} className="theme-chip">
-                                {THEME_LABEL[t] || t}
-                              </span>
-                            ))}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </dd>
-                    </div>
-                    <div className="details-span">
-                      <dt>요약</dt>
-                      <dd className="audit-rationale">
-                        {detailSummary || String(qj.error || '—')}
-                      </dd>
-                    </div>
-                  </>
-                )}
-              </dl>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
     </>
   )
 }

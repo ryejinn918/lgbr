@@ -367,6 +367,86 @@
   background: #fff;
 }
 
+/* Reports: table | audit detail side-by-side; pager stays below full width. */
+.report-workspace {
+  margin-top: 0.85rem;
+}
+
+.report-workspace.has-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 34%);
+  gap: 0 1rem;
+  align-items: stretch;
+  height: min(70vh, 720px);
+}
+
+.report-workspace .report-sheet {
+  margin-top: 0;
+}
+
+.report-workspace.has-detail .report-sheet {
+  max-height: none;
+  height: 100%;
+  min-height: 0;
+}
+
+.report-workspace.has-detail .report-audit-detail {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-left: 1rem;
+  border-left: 1px solid var(--line);
+}
+
+.report-workspace .report-audit-detail .section-head {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.report-workspace .report-audit-detail .section-head h2 {
+  line-height: 1.25;
+}
+
+.report-workspace .report-audit-detail .audit-actions {
+  flex-wrap: nowrap;
+}
+
+.report-workspace .report-audit-detail .audit-actions .run-btn {
+  flex: 1 1 auto;
+  text-align: center;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .report-workspace.has-detail {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+  }
+
+  .report-workspace.has-detail .report-sheet {
+    max-height: min(50vh, 480px);
+    height: auto;
+  }
+
+  .report-workspace.has-detail .report-audit-detail {
+    height: auto;
+    max-height: min(40vh, 360px);
+    padding-left: 0;
+    padding-top: 0.75rem;
+    margin-top: 0.65rem;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
 .audit-bar-row {
   display: flex;
   flex-wrap: wrap;
@@ -753,29 +833,6 @@ a.report-original-link {
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   padding: 1.25rem 1.35rem;
-}
-
-/* Bottom audit drawer: out of document flow so the report table does not jump (CLS). */
-.audit-detail {
-  position: fixed;
-  z-index: 40;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
-  width: min(1200px, calc(100% - 2rem));
-  max-height: min(40vh, 420px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  margin: 0;
-  border-bottom: 0;
-  border-radius: 0;
-  box-shadow: 0 -4px 18px color-mix(in srgb, var(--ink) 8%, transparent);
-  background: color-mix(in srgb, var(--panel) 96%, #fff);
-}
-
-.panel.audit-detail-open {
-  /* Reserve space under the list so the last rows stay reachable above the drawer. */
-  padding-bottom: calc(min(40vh, 420px) + 1.25rem);
 }
 
 .badge-panel .badge-label {
