@@ -243,9 +243,11 @@ def run_bcg_search_job(
             progress["downloaded"] = len(summary.downloaded)
             collection_jobs_store.set_progress(job_id, progress)
 
+            # One list surface may be all-old while others still have
+            # in-period cards — keep walking allowlisted list_urls.
             if dated_on_batch and older_than_cutoff == dated_on_batch:
                 progress["stop_reason"] = "period_cutoff"
-                break
+                continue
 
         if summary.stopped:
             progress["stop_reason"] = "manual"
