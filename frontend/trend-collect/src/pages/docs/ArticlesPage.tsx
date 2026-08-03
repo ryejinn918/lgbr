@@ -21,22 +21,14 @@ const SOURCE_LABEL: Record<string, string> = {
 /** Chip order for media filter (must match API OTHER_MEDIA_SOURCES). */
 const SOURCE_FILTERS = ['all', 'arg', 'google_news'] as const
 
-const BODY_FILTERS: NewsArticleBodyFilter[] = ['all', 'yes', 'no']
-
-const BODY_LABEL: Record<NewsArticleBodyFilter, string> = {
-  all: '전체',
-  yes: '수집됨',
-  no: '미수집',
-}
-
 export function ArticlesPage() {
   const [qDraft, setQDraft] = useState('')
   const [q, setQ] = useState('')
   const [source, setSource] = useState<string>('all')
-  const [hasBody, setHasBody] = useState<NewsArticleBodyFilter>('all')
   const [offset, setOffset] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const limit = 30
+  const hasBody: NewsArticleBodyFilter = 'all'
   const articles = useNewsArticles({
     source,
     q,
@@ -50,8 +42,7 @@ export function ArticlesPage() {
     return articles.items.find((item) => item.id === selectedId) ?? null
   }, [articles.items, selectedId])
 
-  const dirty =
-    source !== 'all' || hasBody !== 'all' || q !== '' || qDraft !== ''
+  const dirty = source !== 'all' || q !== '' || qDraft !== ''
 
   function commitSource(next: string) {
     setSource(next)
@@ -59,15 +50,8 @@ export function ArticlesPage() {
     setSelectedId(null)
   }
 
-  function commitBody(next: NewsArticleBodyFilter) {
-    setHasBody(next)
-    setOffset(0)
-    setSelectedId(null)
-  }
-
   function resetFilters() {
     setSource('all')
-    setHasBody('all')
     setQ('')
     setQDraft('')
     setOffset(0)
@@ -89,10 +73,8 @@ export function ArticlesPage() {
       <div className="section-head" style={{ marginBottom: '0.75rem' }}>
         <h2>기사 통합</h2>
         <p className="section-note">
-          매체 공통 기사 리스트 ·{' '}
+          메타만 모읍니다. 원문은 남기지 않습니다 ·{' '}
           <Link to="/collect/arg/list/feed">ARG 피드</Link>
-          {' · '}
-          <Link to="/collect/arg/body/fetch">ARG 본문</Link>
         </p>
       </div>
 
@@ -139,23 +121,13 @@ export function ArticlesPage() {
           ))}
         </div>
 
-        <div className="filter-row" aria-label="본문 필터">
-          {BODY_FILTERS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className={`filter-chip${hasBody === key ? ' active' : ''}`}
-              onClick={() => commitBody(key)}
-            >
-              {BODY_LABEL[key]} {articles.bodyCounts[key] ?? 0}
-            </button>
-          ))}
+        <div className="filter-row" aria-label="필터 초기화">
           <button
             type="button"
             className="filter-chip filter-reset"
             disabled={!dirty}
             onClick={resetFilters}
-            title="매체·본문 필터·검색·페이지 초기화"
+            title="매체 필터·검색·페이지 초기화"
           >
             초기화
           </button>
@@ -169,14 +141,13 @@ export function ArticlesPage() {
                 <th className="col-published">발행</th>
                 <th className="col-provider">섹션</th>
                 <th className="col-title">제목</th>
-                <th className="col-status">본문</th>
                 <th className="col-seen">최근</th>
               </tr>
             </thead>
             <tbody>
               {articles.items.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={5}>
                     {articles.loading
                       ? '불러오는 중…'
                       : '아직 기사가 없습니다. 수집에서 리스트 발굴을 실행하세요.'}
@@ -185,7 +156,6 @@ export function ArticlesPage() {
               ) : (
                 articles.items.map((item) => {
                   const selectedRow = selectedId === item.id
-                  const hasBody = Boolean(item.has_body)
                   const originalUrl = articlePublicOriginalUrl(item.url)
                   return (
                     <tr
@@ -217,24 +187,13 @@ export function ArticlesPage() {
                               href={originalUrl}
                               target="_blank"
                               rel="noreferrer"
+                              title="원문 사이트(저장본 아님)"
                               onClick={onLinkClick}
                             >
                               원문
                             </a>
                           ) : null}
                         </div>
-                      </td>
-                      <td className="col-status">
-                        <span
-                          className={`status-pill status-${hasBody ? 'downloaded' : 'listed'}`}
-                          title={
-                            hasBody
-                              ? undefined
-                              : item.body_fetch_error || undefined
-                          }
-                        >
-                          {hasBody ? '수집됨' : '미수집'}
-                        </span>
                       </td>
                       <td
                         className="col-seen"
@@ -356,32 +315,24 @@ export function ArticlesPage() {
                   <dd>{formatTime(selected.last_seen_at)}</dd>
                 </div>
                 <div>
-                  <dt>본문</dt>
+                  <dt>원문</dt>
                   <dd>
-                    {selected.has_body && selected.body_text ? (
-                      <pre
-                        style={{
-                          whiteSpace: 'pre-wrap',
-                          margin: 0,
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        {selected.body_text}
-                      </pre>
-                    ) : selected.body_fetch_error ? (
+                    원문은 요약에만 쓰고 남기지 않습니다. 화면에는 메타만
+                    보입니다.
+                    {selectedOriginalUrl ? (
                       <>
-                        본문 채우기 실패:{' '}
-                        {selected.body_fetch_error}
-                        {' · '}
-                        <Link to="/collect/arg/body/fetch">다시 시도</Link>
+                        {' '}
+                        <a
+                          href={selectedOriginalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="원문 사이트(저장본 아님)"
+                          onClick={onLinkClick}
+                        >
+                          원문 사이트에서 확인
+                        </a>
                       </>
-                    ) : (
-                      <>
-                        본문을 아직 수집하지 않았습니다.{' '}
-                        <Link to="/collect/arg/body/fetch">본문 채우기</Link>
-                        로 가져오거나 원문 링크로 확인하세요.
-                      </>
-                    )}
+                    ) : null}
                   </dd>
                 </div>
               </dl>

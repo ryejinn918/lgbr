@@ -47,7 +47,7 @@ export function ArgFeedRunPage() {
       : 3
     if (
       !window.confirm(
-        `ARG 리스트 발굴 타입「전체」로 최근 ${months}개월 치를 가져올까요? (최대 ${pages}페이지, 본문 없음)`,
+        `ARG 리스트 발굴 타입「전체」로 최근 ${months}개월 치를 가져올까요? (최대 ${pages}페이지, 메타만)`,
       )
     ) {
       return

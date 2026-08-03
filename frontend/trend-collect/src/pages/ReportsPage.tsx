@@ -271,26 +271,26 @@ export function ReportsPage({
       : 'summary'
   const sourceTitle = SOURCE_LABEL[sourceKey] ?? sourceKey
   const sourceLede = isAll
-    ? '매체별 보고서를 한곳에서 봅니다. FnGuide·PwC·Accenture·KPMG·EY·Deloitte·HBR Korea 탭으로 나눌 수도 있습니다.'
+    ? '매체별 메타와 요약을 한곳에서 봅니다. 원문은 요약에만 쓰고 남기지 않습니다.'
     : sourceKey === 'pwc'
-      ? '삼일PwC Insights 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
+      ? '삼일PwC Insights 목록입니다. 수집 후 요약·메타만 남깁니다.'
       : sourceKey === 'accenture'
-        ? 'Accenture US Research Report 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
+        ? 'Accenture US Research Report 목록입니다. 수집 후 요약·메타만 남깁니다.'
         : sourceKey === 'kpmg'
-          ? 'KPMG US Insights 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
+          ? 'KPMG US Insights 목록입니다. 수집 후 요약·메타만 남깁니다.'
           : sourceKey === 'ey'
-            ? 'EY US Insights 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
+            ? 'EY US Insights 목록입니다. 수집 후 요약·메타만 남깁니다.'
             : sourceKey === 'deloitte'
-              ? 'Deloitte US Insights 목록입니다. 검색 실행이 목록을 넘기며 PDF를 받습니다.'
+              ? 'Deloitte US Insights 목록입니다. 수집 후 요약·메타만 남깁니다.'
               : sourceKey === 'bain'
-                ? 'Bain Insights 목록입니다. 브라우저로 한 건씩 PDF/page.pdf를 받습니다.'
+                ? 'Bain Insights 목록입니다. 수집 후 요약·메타만 남깁니다.'
                 : sourceKey === 'bcg'
-                  ? 'BCG Featured Insights 목록입니다. 브라우저로 한 건씩 PDF/page.pdf를 받습니다.'
+                  ? 'BCG Featured Insights 목록입니다. 수집 후 요약·메타만 남깁니다.'
                   : sourceKey === 'hbr'
-                    ? 'HBR.org 목록입니다. 로그인 후 Latest를 돌며 page.pdf를 받습니다.'
+                    ? 'HBR.org 목록입니다. 수집 후 요약·메타만 남깁니다.'
                     : sourceKey === 'hbrkorea'
-                      ? 'HBR Korea 목록입니다. 로그인 검색이 목록을 돌며 page.pdf를 받습니다.'
-                      : '증권사 리포트 목록입니다. 업종 분석에 쓸 만한지 품질검사한 결과가 함께 표시됩니다.'
+                      ? 'HBR Korea 목록입니다. 수집 후 요약·메타만 남깁니다.'
+                      : '증권사 리포트 목록입니다. 품질검사·요약 결과가 함께 표시됩니다. 원문은 남기지 않습니다.'
   const collectHref = isAll
     ? '/collect'
     : `/collect/${sourceKey}/list/search`
@@ -301,7 +301,7 @@ export function ReportsPage({
         <div className="section-head" style={{ marginBottom: '0.75rem' }}>
           <h2>{sourceTitle}</h2>
           <span className="section-note">
-            목록·다운로드·품질검사·요약 ·{' '}
+            목록·요약 · 원문은 남기지 않음 ·{' '}
             <Link to={collectHref}>{isAll ? '수집' : '검색 실행'}</Link>
           </span>
         </div>
@@ -332,10 +332,10 @@ export function ReportsPage({
             </span>
             <p className="section-note" style={{ margin: '0.35rem 0 0' }}>
               {isSellSidePage
-                ? '본문 PDF가 있는 리포트만 자동으로 품질검사합니다. 적합만 컨센서스 입력에 쓰입니다.'
+                ? '수집이 끝난 항목만 자동으로 품질검사합니다. 적합만 컨센서스 입력에 쓰입니다.'
                 : isAll
-                  ? '본문 PDF가 있는 리포트만 자동으로 처리합니다. FnGuide는 품질검사(적합/부적합), 그 외 매체는 요약을 추출합니다.'
-                  : '본문 PDF가 있는 문헌만 자동으로 요약·섹터를 추출합니다.'}
+                  ? '수집이 끝난 항목만 자동으로 처리합니다. FnGuide는 품질검사(적합/부적합), 그 외 매체는 요약을 추출합니다.'
+                  : '수집이 끝난 항목만 자동으로 요약·섹터를 추출합니다.'}
             </p>
           </div>
           <div className="audit-actions">
@@ -349,7 +349,7 @@ export function ReportsPage({
                     : unauditedPreset(filters),
                 )
               }
-              title={`다운로드된 ${pendingWord} 리포트만 보기`}
+              title={`수집된 ${pendingWord} 항목만 보기`}
             >
               {pendingWord}만 보기
             </button>
@@ -361,7 +361,7 @@ export function ReportsPage({
               title={
                 filters.theme !== 'all'
                   ? `${THEME_LABEL[filters.theme]} ${pendingWord}만 일괄 실행`
-                  : `다운로드된 ${pendingWord} 전부 일괄 실행`
+                  : `수집된 ${pendingWord} 전부 일괄 실행`
               }
             >
               {audit.busy ? busyWord : `${pendingWord} 일괄 실행`}
@@ -679,7 +679,7 @@ export function ReportsPage({
                           <dd>{String(qj.topic || '—')}</dd>
                         </div>
                         <div>
-                          <dt>요약 입력</dt>
+                          <dt>요약 범위</dt>
                           <dd>{detailExtractInput}</dd>
                         </div>
                         <div className="details-span">
@@ -748,7 +748,7 @@ export function ReportsPage({
                           <dd>{String(qj.short_title || '—')}</dd>
                         </div>
                         <div>
-                          <dt>요약 입력</dt>
+                          <dt>요약 범위</dt>
                           <dd>{detailExtractInput}</dd>
                         </div>
                         <div>

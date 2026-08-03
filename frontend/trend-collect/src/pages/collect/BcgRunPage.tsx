@@ -17,17 +17,17 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (progress.profile != null)
     bits.push(`profile ${String(progress.profile)}`)
   if (progress.pages_done != null)
-    bits.push(`pages ${String(progress.pages_done)}`)
-  if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
+    bits.push(`목록 ${String(progress.pages_done)}`)
+  if (progress.listed != null) bits.push(`목록항목 ${String(progress.listed)}`)
   if (progress.downloaded != null)
-    bits.push(`downloaded ${String(progress.downloaded)}`)
+    bits.push(`수집 ${String(progress.downloaded)}`)
   if (progress.skipped_existing != null)
-    bits.push(`existing ${String(progress.skipped_existing)}`)
+    bits.push(`기존 ${String(progress.skipped_existing)}`)
   if (progress.skipped_no_download != null)
-    bits.push(`no_pdf ${String(progress.skipped_no_download)}`)
+    bits.push(`수집불가 ${String(progress.skipped_no_download)}`)
   if (progress.skipped_old != null)
-    bits.push(`old ${String(progress.skipped_old)}`)
-  if (progress.failed != null) bits.push(`failed ${String(progress.failed)}`)
+    bits.push(`기간외 ${String(progress.skipped_old)}`)
+  if (progress.failed != null) bits.push(`실패 ${String(progress.failed)}`)
   if (progress.current_title)
     bits.push(String(progress.current_title).slice(0, 60))
   return bits.length ? bits.join(' · ') : null
@@ -93,7 +93,7 @@ export function BcgRunPage() {
     const profileLabel = activeProfile?.label ?? profileId
     if (
       !window.confirm(
-        `BCG 검색을 시작할까요?\n${profileLabel} · 최근 ${months}개월 · 목록 상한 ${pages} · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
+        `BCG 검색을 시작할까요?\n${profileLabel} · 최근 ${months}개월 · 목록 상한 ${pages} · 처리 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -125,7 +125,7 @@ export function BcgRunPage() {
     <section className={`panel badge-panel state-${badgeState}`}>
       <p className="badge-label">검색 · 실행</p>
       <p className="badge-value">{badgeValue}</p>
-      <p className="account-line">목록에서 리포트 PDF를 받습니다.</p>
+      <p className="account-line">목록을 수집해 요약을 만듭니다.</p>
 
       {job.job?.started_at && !collection.fetchError ? (
         <p className="account-line">
@@ -185,7 +185,7 @@ export function BcgRunPage() {
           />
         </label>
         <label className="limit-field">
-          다운로드 상한
+          처리 상한
           <input
             type="number"
             min={1}

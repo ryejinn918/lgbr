@@ -116,7 +116,7 @@ export function CrawlPage() {
         <p className="badge-label">검색 · 실행</p>
         <p className="badge-value">{badgeValue}</p>
         <p className="account-line">
-          프로필 검색으로 리포트를 받습니다.
+          프로필 검색으로 목록을 모아 요약을 만듭니다.
         </p>
         <p className={`account-line state-${SESSION_CLASS[status.state]}`}>
           계정: {fetchError ? '—' : status.label}

@@ -17,14 +17,14 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (progress.catalog_label != null || progress.catalog != null)
     bits.push(String(progress.catalog_label || progress.catalog))
   if (progress.pages_done != null)
-    bits.push(`pages ${String(progress.pages_done)}`)
-  if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
+    bits.push(`목록 ${String(progress.pages_done)}`)
+  if (progress.listed != null) bits.push(`목록항목 ${String(progress.listed)}`)
   if (progress.downloaded != null)
-    bits.push(`downloaded ${String(progress.downloaded)}`)
+    bits.push(`수집 ${String(progress.downloaded)}`)
   if (progress.skipped_no_download != null)
-    bits.push(`no_pdf ${String(progress.skipped_no_download)}`)
+    bits.push(`수집불가 ${String(progress.skipped_no_download)}`)
   if (progress.skipped_existing != null)
-    bits.push(`existing ${String(progress.skipped_existing)}`)
+    bits.push(`기존 ${String(progress.skipped_existing)}`)
   if (progress.current_title)
     bits.push(String(progress.current_title).slice(0, 60))
   return bits.length ? bits.join(' · ') : null
@@ -79,7 +79,7 @@ export function PwcAdhocRunPage() {
     const delay = Math.min(10, Math.max(0, Number(itemDelaySeconds) || 0))
     if (
       !window.confirm(
-        `PwC 검색을 시작할까요?\n${catalogMeta.label} · 최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
+        `PwC 검색을 시작할까요?\n${catalogMeta.label} · 최근 ${months}개월 · 최대 ${pages}페이지 · 처리 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -111,7 +111,7 @@ export function PwcAdhocRunPage() {
       <p className="badge-label">검색 · 실행</p>
       <p className="badge-value">{badgeValue}</p>
       <p className="account-line">
-        검색 한 번에 목록과 PDF를 함께 받습니다.
+        목록을 수집해 요약을 만듭니다.
       </p>
 
       {job.job?.started_at && !collection.fetchError ? (
@@ -173,7 +173,7 @@ export function PwcAdhocRunPage() {
           />
         </label>
         <label className="limit-field">
-          다운로드 상한
+          처리 상한
           <input
             type="number"
             min={1}

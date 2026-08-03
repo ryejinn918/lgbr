@@ -17,16 +17,16 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (progress.profile != null)
     bits.push(`profile ${String(progress.profile)}`)
   if (progress.pages_done != null)
-    bits.push(`pages ${String(progress.pages_done)}`)
-  if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
+    bits.push(`목록 ${String(progress.pages_done)}`)
+  if (progress.listed != null) bits.push(`목록항목 ${String(progress.listed)}`)
   if (progress.downloaded != null)
-    bits.push(`downloaded ${String(progress.downloaded)}`)
+    bits.push(`수집 ${String(progress.downloaded)}`)
   if (progress.skipped_no_download != null)
-    bits.push(`no_pdf ${String(progress.skipped_no_download)}`)
+    bits.push(`수집불가 ${String(progress.skipped_no_download)}`)
   if (progress.skipped_existing != null)
-    bits.push(`existing ${String(progress.skipped_existing)}`)
+    bits.push(`기존 ${String(progress.skipped_existing)}`)
   if (progress.skipped_old != null)
-    bits.push(`old ${String(progress.skipped_old)}`)
+    bits.push(`기간외 ${String(progress.skipped_old)}`)
   if (progress.current_title)
     bits.push(String(progress.current_title).slice(0, 60))
   return bits.length ? bits.join(' · ') : null
@@ -94,7 +94,7 @@ export function DeloitteRunPage() {
     const profileLabel = activeProfile?.label ?? profileId
     if (
       !window.confirm(
-        `Deloitte 검색을 시작할까요?\n${profileLabel} · 최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
+        `Deloitte 검색을 시작할까요?\n${profileLabel} · 최근 ${months}개월 · 최대 ${pages}페이지 · 처리 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -127,7 +127,7 @@ export function DeloitteRunPage() {
       <p className="badge-label">검색 · 실행</p>
       <p className="badge-value">{badgeValue}</p>
       <p className="account-line">
-        인사이트 목록에서 PDF를 받습니다. 프로필별 검색어를 씁니다.
+        인사이트 목록을 수집해 요약을 만듭니다. 프로필별 검색어를 씁니다.
       </p>
 
       {job.job?.started_at && !collection.fetchError ? (
@@ -188,7 +188,7 @@ export function DeloitteRunPage() {
           />
         </label>
         <label className="limit-field">
-          다운로드 상한
+          처리 상한
           <input
             type="number"
             min={1}

@@ -100,7 +100,7 @@ export function SourceAdhocRunPage() {
         </p>
       ) : (
         <p className="account-line">
-          허브를 Chrome+CDP로 엽니다. 목록/PDF 자동 수집은 아직 없습니다. 허브:{' '}
+          허브를 Chrome+CDP로 엽니다. 목록 자동 수집은 아직 없습니다. 허브:{' '}
           <a href={hubUrl} target="_blank" rel="noreferrer">
             {hubUrl.replace(/^https?:\/\//, '')}
           </a>

@@ -135,8 +135,8 @@ function ProfileEditor({
           disabled={saving}
         />
         <span className="field-hint">
-          키워드마다 검색한 뒤, 아래 기간(기본 3개월) 안 결과를 다운로드합니다.
-          이미 받은 보고서는 다음 키워드에서 건너뜁니다.
+          키워드마다 검색한 뒤, 아래 기간(기본 3개월) 안 결과를 수집해 요약을 만듭니다.
+          이미 수집한 항목은 다음 키워드에서 건너뜁니다.
         </span>
       </label>
 

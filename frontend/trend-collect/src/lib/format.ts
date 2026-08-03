@@ -25,8 +25,8 @@ export const STATUS_LABEL: Record<string, string> = {
   all: '전체',
   listed: '목록',
   blind: '본문제한',
-  downloaded: '다운됨',
-  no_download: '다운불가',
+  downloaded: '수집됨',
+  no_download: '수집불가',
   failed: '실패',
 }
 
@@ -35,7 +35,7 @@ export const QUALITY_LABEL: Record<string, string> = {
   pass: '적합',
   fail: '부적합',
   pending: '미검사',
-  unauditable: '파일 없음',
+  unauditable: '요약 불가',
 }
 
 /** Non-FnGuide media/consulting: summary extract, not sell-side pass/fail. */
@@ -44,7 +44,7 @@ export const QUALITY_LABEL_SUMMARY: Record<string, string> = {
   pass: '요약됨',
   fail: '추출실패',
   pending: '미요약',
-  unauditable: '파일 없음',
+  unauditable: '요약 불가',
 }
 
 /** Unified reports tab: sell-side filter vocabulary, pending = 미완료. */
@@ -112,7 +112,7 @@ export function formatTime(value: string | null | undefined): string {
 /** Matches crawler quality_audit.PDF_PAGES. */
 export const EXTRACT_PDF_PAGES = 5
 
-/** 「요약 입력」: 절단 시 ``첫 5페이지``, 아니면 ``전체``. */
+/** 「요약 범위」: 절단 시 ``일부``, 아니면 ``전부``. */
 export function formatExtractInput(
   pageCount: number | null | undefined,
   extract?: QualityExtractMeta | null,
@@ -122,9 +122,9 @@ export function formatExtractInput(
     Number.isFinite(total) && total > EXTRACT_PDF_PAGES
   const truncatedFlag =
     extract?.truncated === 1 || extract?.truncated === true
-  if (truncatedPages) return `첫 ${EXTRACT_PDF_PAGES}페이지`
-  if (truncatedFlag) return '앞부분만 사용'
-  if (Number.isFinite(total) && total > 0) return '전체'
+  if (truncatedPages) return '일부'
+  if (truncatedFlag) return '일부'
+  if (Number.isFinite(total) && total > 0) return '전부'
   return '—'
 }
 
@@ -171,12 +171,12 @@ export function formatProgress(
   if (downloaded != null) {
     bits.push(
       limit != null
-        ? `downloaded=${downloaded}/${limit}`
-        : `downloaded=${downloaded}`,
+        ? `수집 ${downloaded}/${limit}`
+        : `수집 ${downloaded}`,
     )
   }
-  if (listed != null) bits.push(`listed=${listed}`)
-  if (skippedBlind != null) bits.push(`skipped_blind=${skippedBlind}`)
+  if (listed != null) bits.push(`목록 ${listed}`)
+  if (skippedBlind != null) bits.push(`본문제한 ${skippedBlind}`)
   if (rpt) bits.push(`rpt=${rpt}`)
   return bits.length ? bits.join(' · ') : JSON.stringify(progress)
 }
@@ -194,12 +194,12 @@ export function formatCrawlResult(
     const existing = progress.skipped_existing
     const noDl = progress.skipped_no_download
     const bits: string[] = []
-    if (downloaded != null) bits.push(`downloaded=${downloaded}`)
-    if (listed != null) bits.push(`listed=${listed}`)
-    if (blind != null) bits.push(`blind=${blind}`)
-    if (existing != null) bits.push(`existing=${existing}`)
-    if (noDl != null) bits.push(`no_dl=${noDl}`)
-    if (failed != null) bits.push(`failed=${failed}`)
+    if (downloaded != null) bits.push(`수집 ${downloaded}`)
+    if (listed != null) bits.push(`목록 ${listed}`)
+    if (blind != null) bits.push(`본문제한 ${blind}`)
+    if (existing != null) bits.push(`기존 ${existing}`)
+    if (noDl != null) bits.push(`수집불가 ${noDl}`)
+    if (failed != null) bits.push(`실패 ${failed}`)
     if (bits.length) return bits.join(' ')
   }
   if (!message) return null

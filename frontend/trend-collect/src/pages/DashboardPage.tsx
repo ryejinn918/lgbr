@@ -115,12 +115,12 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (!progress) return null
   const bits: string[] = []
   if (progress.pages_done != null)
-    bits.push(`pages ${String(progress.pages_done)}`)
-  if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
+    bits.push(`목록 ${String(progress.pages_done)}`)
+  if (progress.listed != null) bits.push(`목록항목 ${String(progress.listed)}`)
   if (progress.downloaded != null)
-    bits.push(`downloaded ${String(progress.downloaded)}`)
+    bits.push(`수집 ${String(progress.downloaded)}`)
   if (progress.skipped_no_download != null)
-    bits.push(`no_pdf ${String(progress.skipped_no_download)}`)
+    bits.push(`수집불가 ${String(progress.skipped_no_download)}`)
   if (progress.current_title)
     bits.push(String(progress.current_title).slice(0, 48))
   return bits.length ? bits.join(' · ') : null
@@ -387,9 +387,7 @@ export function DashboardPage() {
   }
 
   async function onStopArg() {
-    const label =
-      argView.kind === 'fetch_body' ? 'ARG 본문 채우기' : 'ARG 피드'
-    if (!window.confirm(`${label} 잡을 중단할까요?`)) return
+    if (!window.confirm('ARG 피드 잡을 중단할까요?')) return
     try {
       await argActive.stopFeed()
     } catch (err) {
@@ -897,11 +895,7 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="ARG"
-              meta={[
-                '무계정',
-                '일간지',
-                argView.kind === 'fetch_body' ? '본문' : '피드',
-              ]}
+              meta={['무계정', '일간지', '피드']}
               statusLabel={
                 argOffline
                   ? 'API Offline'
@@ -926,8 +920,6 @@ export function DashboardPage() {
               links={
                 <>
                   <Link to="/collect/arg/list/feed">피드</Link>
-                  {' · '}
-                  <Link to="/collect/arg/body/fetch">본문</Link>
                   {' · '}
                   <Link to="/docs/articles">기사</Link>
                 </>

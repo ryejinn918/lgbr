@@ -59,13 +59,14 @@ const CORE_JOBS: Record<'fnguide' | 'arg', CollectJob[]> = {
       means: 'feed',
       settingsLabel: '타입',
     },
-    {
-      id: 'body',
-      label: '본문',
-      stage: 'body',
-      means: 'fetch',
-      settingsLabel: null,
-    },
+    // Body fetch hidden — compliance: do not expose body retention UI.
+    // {
+    //   id: 'body',
+    //   label: '본문',
+    //   stage: 'body',
+    //   means: 'fetch',
+    //   settingsLabel: null,
+    // },
   ],
 }
 
@@ -198,9 +199,9 @@ export function meansLabel(means: CollectMeans): string {
     case 'search':
       return '검색'
     case 'download':
-      return '다운로드'
+      return '처리'
     case 'fetch':
-      return '본문'
+      return '처리'
   }
 }
 
