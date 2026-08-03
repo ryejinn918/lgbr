@@ -480,6 +480,7 @@ async def audit_start(request: Request) -> JSONResponse:
         limit=body.get("limit"),
         force=bool(body.get("force")),
         theme=str(body["theme"]) if body.get("theme") is not None else None,
+        source=str(body["source"]) if body.get("source") is not None else None,
         concurrency=body.get("concurrency"),
         report_id=(
             str(body["report_id"]) if body.get("report_id") is not None else None

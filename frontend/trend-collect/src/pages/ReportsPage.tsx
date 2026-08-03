@@ -189,6 +189,7 @@ export function ReportsPage({
   async function onStartPending() {
     const ok = await audit.startPending({
       theme: filters.theme !== 'all' ? filters.theme : undefined,
+      source: source !== 'all' ? source : undefined,
     })
     if (ok) void reports.refresh()
   }

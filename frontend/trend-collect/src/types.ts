@@ -243,6 +243,7 @@ export type AuditJob = {
   force?: boolean
   limit?: number | null
   theme?: string | null
+  source?: string | null
   report_id?: string | null
   concurrency?: number
   model?: string | null

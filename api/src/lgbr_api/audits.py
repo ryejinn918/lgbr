@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from lgbr_api.source_registry import SOURCES
+
 ROOT = Path(__file__).resolve().parents[3]
 AUDIT_LOG = ROOT / ".crawler" / "audit.log"
 JOB_PATH = ROOT / ".crawler" / "audit_job.json"
@@ -29,6 +31,7 @@ VALID_THEMES = frozenset(
     }
 )
 THEME_OTHER = "other"
+VALID_AUDIT_SOURCES = frozenset({"fnguide", "arg"}) | frozenset(SOURCES)
 DEFAULT_CONCURRENCY = 8
 MIN_CONCURRENCY = 1
 MAX_CONCURRENCY = 32
@@ -44,6 +47,7 @@ _IDLE: dict[str, Any] = {
     "force": False,
     "limit": None,
     "theme": None,
+    "source": None,
     "report_id": None,
     "concurrency": DEFAULT_CONCURRENCY,
     "model": None,
@@ -158,6 +162,7 @@ def start_audit(
     limit: Any = None,
     force: bool = False,
     theme: str | None = None,
+    source: str | None = None,
     concurrency: Any = None,
     report_id: str | None = None,
 ) -> dict[str, Any]:
@@ -177,6 +182,25 @@ def start_audit(
                 "can_start": True,
             }
         theme_filter = theme
+
+    source_filter: str | None = None
+    if source and source != "all":
+        source_s = str(source).strip().lower()
+        if source_s not in VALID_AUDIT_SOURCES:
+            return {
+                "ok": False,
+                "status": 400,
+                "state": "error",
+                "label": "오류",
+                "message": (
+                    "매체는 "
+                    + ", ".join(sorted(VALID_AUDIT_SOURCES))
+                    + " 중 하나여야 합니다."
+                ),
+                "audit": None,
+                "can_start": True,
+            }
+        source_filter = source_s
 
     rid: str | None = None
     if report_id:
@@ -281,6 +305,7 @@ def start_audit(
         "force": bool(force) or rid is not None,
         "limit": report_limit,
         "theme": theme_filter,
+        "source": source_filter,
         "report_id": rid,
         "concurrency": conc,
         "model": None,
@@ -303,6 +328,8 @@ def start_audit(
         cmd.append("--force")
     if theme_filter:
         cmd.extend(["--theme", theme_filter])
+    if source_filter:
+        cmd.extend(["--source", source_filter])
     if rid:
         cmd.extend(["--report-id", rid])
 

@@ -15,6 +15,7 @@ export type AuditView = {
   refresh: () => Promise<void>
   startPending: (opts?: {
     theme?: string
+    source?: string
     limit?: number
   }) => Promise<boolean>
   startOne: (reportId: string) => Promise<boolean>
@@ -87,9 +88,10 @@ export function useAudit(): AuditView {
   )
 
   const startPending = useCallback(
-    async (opts?: { theme?: string; limit?: number }) => {
+    async (opts?: { theme?: string; source?: string; limit?: number }) => {
       const body: Record<string, unknown> = { force: false }
       if (opts?.theme && opts.theme !== 'all') body.theme = opts.theme
+      if (opts?.source && opts.source !== 'all') body.source = opts.source
       if (opts?.limit != null) body.limit = opts.limit
       return start(body)
     },
