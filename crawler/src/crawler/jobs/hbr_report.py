@@ -311,11 +311,12 @@ def _process_item(
         "publish_date_raw": item.publish_date_raw,
         "provider": "HBR",
     }
+    published = item.published_at
     reports_store.upsert_listed(
         source=SOURCE,
         source_key=item.source_key,
         title=item.title,
-        published_at=item.published_at,
+        published_at=published,
         attrs=attrs,
     )
     summary.listed += 1
@@ -334,12 +335,19 @@ def _process_item(
     try:
         meta = capture_article_pdf(page, item.url, dest)
         title = str(meta.get("title") or "").strip() or item.title
+        detail_pub = meta.get("published_at")
+        detail_raw = str(meta.get("date_raw") or "").strip()
+        # Detail page date beats URL year/month day-1 fallback from the list.
+        if detail_pub is not None:
+            published = detail_pub
+            if detail_raw:
+                attrs["publish_date_raw"] = detail_raw
         pages = pdf_page_count(dest)
         reports_store.mark_downloaded(
             source=SOURCE,
             source_key=item.source_key,
             title=title,
-            published_at=item.published_at,
+            published_at=published,
             page_count=pages,
             file_path=str(dest),
             file_name=dest.name,

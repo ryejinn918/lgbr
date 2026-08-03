@@ -338,12 +338,16 @@ def probe_and_collect(
         try:
             meta = capture_article_pdf(page, it.url, dest)
             title = str(meta.get("title") or "").strip() or it.title
+            published = meta.get("published_at") or it.published_at
+            detail_raw = str(meta.get("date_raw") or "").strip()
+            if detail_raw:
+                attrs["publish_date_raw"] = detail_raw
             pages = pdf_page_count(dest)
             reports_store.mark_downloaded(
                 source=SOURCE,
                 source_key=key,
                 title=title,
-                published_at=it.published_at,
+                published_at=published,
                 file_path=str(dest),
                 page_count=pages,
                 attrs={**attrs, "capture": "page.pdf", "asset_id": asset_id},
@@ -351,7 +355,7 @@ def probe_and_collect(
             already.add(key)
             result["downloaded"] += 1
             print(
-                f"downloaded {result['downloaded']} {it.published_at} {title[:70]}",
+                f"downloaded {result['downloaded']} {published} {title[:70]}",
                 flush=True,
             )
         except HbrBlockedError as exc:

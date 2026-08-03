@@ -82,8 +82,11 @@ def open_latest(page: Page) -> None:
 
 
 def collect_list_items(page: Page) -> list[HbrListItem]:
+    # Dates live beside the title link (not inside it). Climb parents for
+    # "Month D, YYYY"; do not stop early when the <a> text itself is long.
     raw = page.evaluate(
         """() => {
+          const DATE_RE = /\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b/;
           const out = [];
           const seen = new Set();
           for (const a of document.querySelectorAll('a[href*="/20"]')) {
@@ -91,11 +94,20 @@ def collect_list_items(page: Page) -> list[HbrListItem]:
             if (!/hbr\\.org\\/\\d{4}\\/\\d{2}\\/[a-z0-9-]+\\/?$/i.test(href)) continue;
             if (seen.has(href)) continue;
             seen.add(href);
+            let dateRaw = '';
+            let dateRoot = null;
+            let el = a.parentElement;
+            for (let i = 0; i < 8 && el; i++) {
+              const m = (el.innerText || '').match(DATE_RE);
+              if (m) { dateRaw = m[0]; dateRoot = el; break; }
+              el = el.parentElement;
+            }
             let root = a;
             for (let i = 0; i < 6 && root; i++) {
               if ((root.innerText || '').trim().length > 30) break;
               root = root.parentElement;
             }
+            root = dateRoot || root || a;
             const titleEl = root && root.querySelector(
               'h2, h3, h4, [class*=\"title\"], [class*=\"hed\"], [class*=\"Hed\"]'
             );
@@ -105,14 +117,10 @@ def collect_list_items(page: Page) -> list[HbrListItem]:
               const parts = href.split('/').filter(Boolean);
               title = parts[parts.length - 1].replace(/-/g, ' ');
             }
-            const text = ((root && root.innerText) || '').trim();
-            const dm = text.match(
-              /\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b/
-            );
             out.push({
               href,
               title: title.slice(0, 300),
-              date_raw: dm ? dm[0] : '',
+              date_raw: dateRaw,
             });
             if (out.length >= 400) break;
           }
@@ -127,7 +135,7 @@ def collect_list_items(page: Page) -> list[HbrListItem]:
             continue
         slug, ym = parsed
         date_raw = str(row.get("date_raw") or "")
-        published = _parse_long_date(date_raw) or ym
+        published = parse_publish_date(date_raw) or ym
         items.append(
             HbrListItem(
                 source_key=slug,
@@ -168,6 +176,23 @@ def _parse_long_date(text: str) -> date | None:
         return None
     try:
         return date(int(m.group(3)), mo, int(m.group(2)))
+    except ValueError:
+        return None
+
+
+def parse_publish_date(text: str) -> date | None:
+    """Parse HBR list/detail date text or ISO ``YYYY-MM-DD`` / datetime."""
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    parsed = _parse_long_date(raw)
+    if parsed:
+        return parsed
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", raw)
+    if not m:
+        return None
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     except ValueError:
         return None
 
@@ -244,6 +269,22 @@ def capture_article_pdf(
           });
           const pdfs = [...document.querySelectorAll('a[href*=".pdf"]')]
             .map(a => a.href).filter(h => /\\.pdf(\\?|$)/i.test(h));
+          const DATE_RE = /\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b/;
+          const timeEl = document.querySelector('time');
+          const metaPub = document.querySelector(
+            'meta[property="article:published_time"], meta[name="article:published_time"], meta[property="og:updated_time"]'
+          );
+          const ld = [...document.querySelectorAll('script[type="application/ld+json"]')]
+            .map((el) => el.textContent || '').join('\\n');
+          const ldMatch = ld.match(/"datePublished"\\s*:\\s*"([^"]+)"/);
+          const byline = (main.slice(0, 800).match(DATE_RE) || [])[0] || '';
+          const dateRaw = (
+            (timeEl && (timeEl.getAttribute('datetime') || timeEl.innerText))
+            || (metaPub && metaPub.getAttribute('content'))
+            || (ldMatch && ldMatch[1])
+            || byline
+            || ''
+          ).trim();
           return {
             url: location.href,
             title: (document.querySelector('h1')?.innerText || document.title || '').trim(),
@@ -251,6 +292,7 @@ def capture_article_pdf(
             sample: main.slice(0, 500),
             paywallEl,
             pdfs: pdfs.slice(0, 5),
+            date_raw: dateRaw,
           };
         }"""
     )
@@ -262,6 +304,9 @@ def capture_article_pdf(
     main_len = int(sig.get("main_len") or 0)
     if main_len < min_body_chars:
         raise HbrBlockedError(f"thin body at {url} (len={main_len})")
+
+    date_raw = str(sig.get("date_raw") or "").strip()
+    published = parse_publish_date(date_raw)
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     pdf_hrefs = list(sig.get("pdfs") or [])
@@ -280,6 +325,8 @@ def capture_article_pdf(
             "title": sig.get("title"),
             "capture": "pdf_href",
             "pdf_href": href,
+            "date_raw": date_raw,
+            "published_at": published,
         }
 
     page.pdf(path=str(dest), format="A4", print_background=True)
@@ -297,9 +344,15 @@ def capture_article_pdf(
         if _DENIED_RE.search(txt) or _PAYWALL_RE.search(txt[:800]):
             dest.unlink(missing_ok=True)
             raise HbrBlockedError(f"paywall/denied in page.pdf for {url}")
+        if not published:
+            published = parse_publish_date(txt[:1200])
+            if published and not date_raw:
+                date_raw = published.isoformat()
     return {
         "bytes": dest.stat().st_size,
         "body_len": main_len,
         "title": sig.get("title"),
         "capture": "page.pdf",
+        "date_raw": date_raw,
+        "published_at": published,
     }
