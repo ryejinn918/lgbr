@@ -24,8 +24,8 @@ class MemoryStorage {
 }
 
 const base: AxisFields = {
-  thesis: '긴장',
-  cutLogic: '분리 이유',
+  thesis: '주제',
+  cutLogic: '축 나눈 이유',
   pillars: '축 1\n축 2',
 }
 
@@ -35,7 +35,7 @@ describe('axis draft persistence', () => {
   })
 
   it('restores an edited draft by run id', () => {
-    const values = { ...base, thesis: '수정한 긴장' }
+    const values = { ...base, thesis: '수정한 주제' }
     writeAxisDraft('run-1', base, values)
 
     expect(readAxisDraft('run-1')).toMatchObject({
@@ -54,7 +54,7 @@ describe('axis draft persistence', () => {
   })
 
   it('does not drop a conflicted draft that matches only the old server value', () => {
-    const currentServer = { ...base, thesis: '서버에서 바뀐 긴장' }
+    const currentServer = { ...base, thesis: '서버에서 바뀐 주제' }
     writeAxisDraft('run-1', base, base, currentServer)
 
     expect(readAxisDraft('run-1')).toMatchObject({
@@ -71,7 +71,7 @@ describe('axis draft persistence', () => {
   })
 
   it('clears a submitted draft', () => {
-    writeAxisDraft('run-1', base, { ...base, thesis: '제출할 긴장' })
+    writeAxisDraft('run-1', base, { ...base, thesis: '제출할 주제' })
     clearAxisDraft('run-1')
 
     expect(readAxisDraft('run-1')).toBeNull()

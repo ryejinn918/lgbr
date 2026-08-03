@@ -34,7 +34,7 @@ export const NAV = {
 /** Frame product views (API kinds stay filled_frame / consensus_frame). */
 export const FRAME_TAB = {
   filled: '보고서',
-  consensus: '골격',
+  consensus: '개요',
   materials: '근거 보고서',
 } as const
 
@@ -44,7 +44,7 @@ export const STAGE_LABEL: Record<string, string> = {
   thesis: '분석 축 잡기',
   select: '보고서 선별',
   doc: '보고서 요약',
-  consensus: '골격',
+  consensus: '개요',
   fill: '보고서',
 }
 
@@ -59,7 +59,7 @@ export const EVENT_LABEL: Record<string, string> = {
   cache_miss: '새로 요약',
   compress_done: '요약 완료',
   doc_failed: '요약 실패',
-  frame_validated: '골격 완료',
+  frame_validated: '개요 완료',
   filled_done: '보고서 완료',
   ended: '완료',
   error: '오류',

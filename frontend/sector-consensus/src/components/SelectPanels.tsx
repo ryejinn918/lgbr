@@ -150,7 +150,7 @@ export function SelectPanels() {
               if (!packRun.id || !status.can_start) return
               if (
                 !window.confirm(
-                  '이 선별 팩을 유지한 채 요약·골격·보고서를 이어서 만들까요?',
+                  '이 선별 결과를 유지한 채 요약·개요·보고서를 이어서 만들까요?',
                 )
               ) {
                 return
@@ -209,7 +209,7 @@ export function SelectPanels() {
             {packCriteria?.pillar_sketch &&
             packCriteria.pillar_sketch.length > 0 ? (
               <>
-                <p className="section-note">다룰 주제</p>
+                <p className="section-note">분석 축</p>
                 <ul className="select-review-list">
                   {packCriteria.pillar_sketch.map((p, i) => (
                     <li key={`${i}-${p}`}>{p}</li>
@@ -221,7 +221,7 @@ export function SelectPanels() {
         )}
         {packRun && packDocs.length === 0 && !docsError && (
           <p className="section-note">
-            아직 보고서 선별 전입니다. 선별이 끝나면 주요문헌·보조문헌 목록과
+            아직 보고서 선별 전입니다. 선별이 끝나면 주요 보고서·보조 보고서 목록과
             이유가 채워집니다.
           </p>
         )}
@@ -232,8 +232,8 @@ export function SelectPanels() {
                 <th className="col-role">구분</th>
                 <th>제목</th>
                 <th>증권사</th>
-                <th>쪽</th>
-                <th>선정이유</th>
+                <th>쪽 수</th>
+                <th>선정 이유</th>
               </tr>
             </thead>
             <tbody>
@@ -253,8 +253,8 @@ export function SelectPanels() {
                       <tr className={`input-group-row role-${role}`}>
                         <td colSpan={5}>
                           {role === 'core'
-                            ? `주요문헌 · ${coreDocs.length}건`
-                            : `보조문헌 · ${biblioDocs.length}건`}
+                            ? `주요 보고서 · ${coreDocs.length}건`
+                            : `보조 보고서 · ${biblioDocs.length}건`}
                         </td>
                       </tr>
                     )}
@@ -289,7 +289,7 @@ export function SelectPanels() {
           <p className="section-note">
             최근 3개월 · 후보 {inputs.length}
             {poolQpCount != null ? ` · 품질 통과 ${poolQpCount}` : ''}
-            {' · AI 축 선정에 쓰는 품질감사 요약'}
+            {' · 분석 축 선정에 쓰는 품질 요약'}
           </p>
         </div>
         {inputError && <p className="error-line">{inputError}</p>}
@@ -300,7 +300,7 @@ export function SelectPanels() {
               <th className="col-theme">테마</th>
               <th className="col-provider">증권사</th>
               <th className="col-date">일자</th>
-              <th className="col-pages">쪽</th>
+              <th className="col-pages">쪽 수</th>
               <th className="col-quality">품질</th>
               <th className="col-framework">요약</th>
             </tr>

@@ -185,8 +185,8 @@ export function FramesPage() {
   const materialGroups = useMemo(
     () =>
       [
-        { key: 'core' as const, label: '주요문헌', items: coreDocs },
-        { key: 'biblio' as const, label: '보조문헌', items: biblioDocs },
+        { key: 'core' as const, label: '주요 보고서', items: coreDocs },
+        { key: 'biblio' as const, label: '보조 보고서', items: biblioDocs },
       ].filter((g) => g.items.length > 0),
     [coreDocs, biblioDocs],
   )
@@ -257,7 +257,7 @@ export function FramesPage() {
     if (!packRun?.id || !status.can_start) return
     if (
       !window.confirm(
-        '이 선별 팩을 유지한 채 요약·골격·보고서를 이어서 만들까요?',
+        '이 선별 결과를 유지한 채 요약·개요·보고서를 이어서 만들까요?',
       )
     ) {
       return
@@ -280,7 +280,7 @@ export function FramesPage() {
           {THEME_LABEL[theme]} · {NAV.frames}
         </h1>
         <p className="lede">
-          요약·골격·보고서와, 근거로 쓴 보고서 요약을 봅니다.
+          요약·개요·보고서와, 근거로 쓴 보고서 요약을 봅니다.
         </p>
         {packRun && packLabel ? (
           <p className="section-note">
@@ -350,7 +350,7 @@ export function FramesPage() {
         {tab === 'filled' && (
           <div className="section-note-row">
             <p className="section-note">
-              골격에 근거와 수치를 채운 보고서입니다.
+              개요에 근거와 수치를 채운 보고서입니다.
             </p>
             {frameBody && (
               <button type="button" className="btn-copy" onClick={() => void onCopyFrame()}>
@@ -362,7 +362,7 @@ export function FramesPage() {
         {tab === 'consensus' && (
           <div className="section-note-row">
             <p className="section-note">
-              여러 보고서가 모인 총론·핵심 주제 수준의 골격입니다.
+              여러 보고서가 모인 총론·핵심 주제 수준의 개요입니다.
             </p>
             {frameBody && (
               <button type="button" className="btn-copy" onClick={() => void onCopyFrame()}>
@@ -373,7 +373,7 @@ export function FramesPage() {
         )}
         {tab === 'materials' && (
           <p className="section-note">
-            주요문헌·보조문헌으로 나눈 선별 보고서와 문서별 요약입니다.
+            주요 보고서·보조 보고서로 나눈 선별 보고서와 문서별 요약입니다.
             {selectedDocs.length > 0
               ? ` · 주요 ${coreDocs.length} · 보조 ${biblioDocs.length}`
               : ''}
@@ -462,7 +462,7 @@ export function FramesPage() {
                   <p className="section-note">
                     {selectedDoc.provider ?? '—'}
                     {selectedDoc.slice_count != null
-                      ? ` · 요약 구간 ${selectedDoc.slice_count}개`
+                      ? ` · 요약 ${selectedDoc.slice_count}조각`
                       : ''}
                   </p>
                   {selectedDoc.select_why ? (

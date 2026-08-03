@@ -46,11 +46,11 @@ function AxesReview({
 }) {
   return (
     <>
-      <p className="section-note">긴장</p>
+      <p className="section-note">주제</p>
       <p className="select-review-body">{thesis}</p>
       {cutLogic ? (
         <>
-          <p className="section-note">분리 이유</p>
+          <p className="section-note">축 나눈 이유</p>
           <p className="select-review-body">{cutLogic}</p>
         </>
       ) : null}
@@ -230,7 +230,7 @@ export function AxesPage() {
           {THEME_LABEL[theme]} · {NAV.axes}
         </h1>
         <p className="lede">
-          산업 긴장을 분석 축으로 정리한 뒤, 확인하면 보고서 선별까지 이
+          산업 주제를 분석 축으로 정리한 뒤, 확인하면 보고서 선별까지 이
           화면에서 이어집니다.
         </p>
       </header>
@@ -254,7 +254,7 @@ export function AxesPage() {
       {showWorkForm && (
         <section className="panel">
           <div className="section-head">
-            <h2>긴장 · 분석 축</h2>
+            <h2>주제 · 분석 축</h2>
           </div>
           {cuttingAxes ? (
             <p className="section-note">분석 축 잡는 중…</p>
@@ -270,7 +270,7 @@ export function AxesPage() {
           ) : canEdit ? (
             <>
               <label className="section-note" htmlFor="thesis">
-                긴장 (한 줄)
+                주제 (한 줄)
               </label>
               <textarea
                 id="thesis"
@@ -285,7 +285,7 @@ export function AxesPage() {
                 style={{ width: '100%', marginBottom: '0.75rem' }}
               />
               <label className="section-note" htmlFor="cut_logic">
-                분리 이유
+                축 나눈 이유
               </label>
               <textarea
                 id="cut_logic"
