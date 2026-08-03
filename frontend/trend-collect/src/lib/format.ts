@@ -112,7 +112,7 @@ export function formatTime(value: string | null | undefined): string {
 /** Matches crawler quality_audit.PDF_PAGES. */
 export const EXTRACT_PDF_PAGES = 5
 
-/** 「요약 입력」: 절단 시 ``첫 5페이지 이후 후략``, 아니면 ``전체``. */
+/** 「요약 입력」: 절단 시 ``첫 5페이지``, 아니면 ``전체``. */
 export function formatExtractInput(
   pageCount: number | null | undefined,
   extract?: QualityExtractMeta | null,
@@ -122,7 +122,7 @@ export function formatExtractInput(
     Number.isFinite(total) && total > EXTRACT_PDF_PAGES
   const truncatedFlag =
     extract?.truncated === 1 || extract?.truncated === true
-  if (truncatedPages) return `첫 ${EXTRACT_PDF_PAGES}페이지 이후 후략`
+  if (truncatedPages) return `첫 ${EXTRACT_PDF_PAGES}페이지`
   if (truncatedFlag) return '앞부분만 사용'
   if (Number.isFinite(total) && total > 0) return '전체'
   return '—'
