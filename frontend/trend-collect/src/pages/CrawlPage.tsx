@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCrawlProfiles } from '../hooks/useCrawlProfiles'
 import { useSessionStatus } from '../hooks/useSessionStatus'
@@ -29,7 +28,6 @@ export function CrawlPage() {
     requestLogout,
   } = useSessionStatus()
   const profiles = useCrawlProfiles()
-  const [debugMode, setDebugMode] = useState(false)
 
   const crawlMode = crawl.crawl?.mode ?? null
   const isMine = isFnguideCrawlMode(crawlMode)
@@ -43,9 +41,6 @@ export function CrawlPage() {
   const blockedByError = isMine && crawl.state === 'error'
   // Own last-run stays visible when idle (same as media search job history).
   const showRunMeta = isMine
-  const showLiveCdp =
-    fnguideBusy &&
-    !!(crawl.crawl?.cdp_port || crawl.crawl?.cdp_http_url)
   const canStart = crawl.can_start === true && !crawlBusy
   const canStop = crawlBusy || sessionOpen
   const resultLine = showRunMeta
@@ -81,9 +76,9 @@ export function CrawlPage() {
     : fnguideBusy && stale
       ? '응답 없음'
       : fnguideBusy || blockedByError
-        ? `FnGuide · ${crawl.label}`
+        ? 'FnGuide · 검색 중'
         : otherBusy
-          ? 'FnGuide · 대기 (다른 세션이 브라우저 사용 중)'
+          ? 'FnGuide · 대기'
           : isMine
             ? `FnGuide · ${crawl.label}`
             : 'FnGuide · 유휴'
@@ -92,23 +87,22 @@ export function CrawlPage() {
     const searchLabel = crawlModeTypeLabel(mode)
     const periodMonths =
       profiles.items.find((p) => p.mode === mode)?.period_months ?? 3
-    const label = debugMode
-      ? `${searchLabel} ${periodMonths}개월치 다운로드 후 debug(CDP)로 전환할까요?`
-      : `${searchLabel} ${periodMonths}개월치 리포트를 다운로드할까요?`
-    if (!window.confirm(label)) {
+    if (
+      !window.confirm(
+        `FnGuide 검색을 시작할까요?\n${searchLabel} · 최근 ${periodMonths}개월`,
+      )
+    ) {
       return
     }
     try {
-      await startCrawl(mode, {
-        debug: isSearchProfileMode(mode) ? debugMode : false,
-      })
+      await startCrawl(mode)
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '실행 실패')
     }
   }
 
   async function onStop() {
-    if (!window.confirm('크롤을 종료하고 로그아웃할까요?')) return
+    if (!window.confirm('FnGuide 검색을 종료하고 로그아웃할까요?')) return
     try {
       await requestLogout()
     } catch (err) {
@@ -122,15 +116,14 @@ export function CrawlPage() {
         <p className="badge-label">검색 · 실행</p>
         <p className="badge-value">{badgeValue}</p>
         <p className="account-line">
-          프로필 검색으로 리포트를 받습니다. debug·애드혹은 CDP로 브라우저를
-          엽니다.
+          프로필 검색으로 리포트를 받습니다.
         </p>
         <p className={`account-line state-${SESSION_CLASS[status.state]}`}>
           계정: {fetchError ? '—' : status.label}
         </p>
         {showRunMeta && crawl.crawl?.started_at && !fetchError ? (
           <p className="account-line">
-            시작 {formatTime(crawl.crawl.started_at)}
+            검색 시작 {formatTime(crawl.crawl.started_at)}
             {crawl.crawl.ended_at
               ? ` · 종료 ${formatTime(crawl.crawl.ended_at)}`
               : ''}
@@ -142,23 +135,10 @@ export function CrawlPage() {
             {isSearchProfileMode(crawl.crawl.mode) && crawl.crawl.period_months
               ? ` · ${crawl.crawl.period_months}개월`
               : ''}
-            {crawl.crawl.debug ? ' · debug' : ''}
-            {fnguideBusy && crawl.crawl.cdp_port
-              ? ` · CDP ${crawl.crawl.cdp_port}`
-              : fnguideBusy &&
-                  (crawl.crawl.mode === 'adhoc' || crawl.crawl.debug)
-                ? ' · CDP 대기'
-                : ''}
           </p>
-        ) : null}
-        {showRunMeta && crawl.crawl?.asset_id && !fetchError ? (
-          <p className="account-line">애셋: {crawl.crawl.asset_id}</p>
         ) : null}
         {showRunMeta && resultLine && !fetchError ? (
           <p className="account-line">결과: {resultLine}</p>
-        ) : null}
-        {showLiveCdp && crawl.crawl?.cdp_http_url && !fetchError ? (
-          <p className="account-line">CDP: {crawl.crawl.cdp_http_url}</p>
         ) : null}
         {fnguideBusy && !fetchError ? (
           <p className="account-line">{formatProgress(crawl.progress)}</p>
@@ -215,15 +195,6 @@ export function CrawlPage() {
         </p>
 
         <div className="actions">
-          <label className="limit-field">
-            <span>debug</span>
-            <input
-              type="checkbox"
-              checked={debugMode}
-              disabled={!canStart || requestingStart || !!fetchError}
-              onChange={(e) => setDebugMode(e.target.checked)}
-            />
-          </label>
           {SEARCH_PROFILE_MODES.map((mode) => (
             <button
               key={mode}
@@ -241,7 +212,7 @@ export function CrawlPage() {
             disabled={!canStop || requestingStop || !!fetchError}
             onClick={() => void onStop()}
           >
-            {requestingStop ? '요청 중…' : '종료'}
+            {requestingStop ? '요청 중…' : '검색 중단'}
           </button>
         </div>
       </section>

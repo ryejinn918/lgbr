@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollectionJob } from '../../hooks/useCollectionJob'
-import { useSessionStatus } from '../../hooks/useSessionStatus'
-import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
+import { CRAWL_CLASS, formatTime } from '../../lib/format'
 import {
   DEFAULT_PWC_CATALOG,
   PWC_CATALOGS,
@@ -31,7 +30,7 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   return bits.length ? bits.join(' · ') : null
 }
 
-/** PwC list/search: adhoc CDP browser + automated list-while-download. */
+/** PwC list/search: automated list-while-download. */
 export function PwcAdhocRunPage() {
   const [catalog, setCatalog] = useState<PwcCatalogId>(DEFAULT_PWC_CATALOG)
   const [periodMonths, setPeriodMonths] = useState(3)
@@ -39,59 +38,30 @@ export function PwcAdhocRunPage() {
   const [itemDelaySeconds, setItemDelaySeconds] = useState(2)
   /** Empty = no download cap (full period). */
   const [limit, setLimit] = useState('')
-  const session = useSessionStatus()
   const collection = useCollectionJob({ source: 'pwc', capability: 'search' })
   const catalogMeta = getPwcCatalog(catalog)
 
-  const crawl = session.crawl
-  const crawlBusy =
-    crawl.state === 'starting' ||
-    crawl.state === 'active' ||
-    crawl.state === 'stopping'
   const job = collection.status
   const searchBusy =
     job.state === 'starting' ||
     job.state === 'active' ||
     job.state === 'stopping'
-  const canStartAdhoc = crawl.can_start === true && !crawlBusy && !searchBusy
-  const canStartSearch = job.can_start === true && !searchBusy && !crawlBusy
-  const badgeState = session.fetchError
+  const canStartSearch = job.can_start === true && !searchBusy
+  const badgeState = collection.fetchError
     ? 'offline'
-    : CRAWL_CLASS[searchBusy ? job.state : crawl.state] ?? 'ended'
-  const crawlProgress = crawl.progress ?? crawl.crawl?.progress ?? {}
+    : CRAWL_CLASS[job.state] ?? 'ended'
   const searchProgress = formatSearchProgress(
     (job.progress ?? job.job?.progress ?? undefined) as
       | Record<string, unknown>
       | undefined,
   )
-  const isPwcAdhoc = crawl.crawl?.mode === 'pwc'
-  const cdpPort = crawl.crawl?.cdp_port
-  const badgeValue = session.fetchError || collection.fetchError
+  const badgeValue = collection.fetchError
     ? 'API Offline'
     : searchBusy
-      ? `PwC · 검색 · ${job.label}`
-      : isPwcAdhoc
-        ? `PwC · 애드혹 · ${crawl.label}`
-        : crawlBusy
-          ? 'PwC · 대기 (다른 세션이 브라우저 사용 중)'
-          : job.job
-            ? `PwC · ${job.label}`
-            : 'PwC · 유휴'
-
-  async function onStartAdhoc() {
-    if (
-      !window.confirm(
-        `PwC 애드혹(${catalogMeta.label})을 시작할까요?\n${catalogMeta.hubUrl}`,
-      )
-    ) {
-      return
-    }
-    try {
-      await session.startCrawl('pwc', { catalog })
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '실행 실패')
-    }
-  }
+      ? 'PwC · 검색 중'
+      : job.job
+        ? `PwC · ${job.label}`
+        : 'PwC · 유휴'
 
   async function onStartSearch() {
     const pages = Math.min(50, Math.max(1, Number(maxPages) || 20))
@@ -109,7 +79,7 @@ export function PwcAdhocRunPage() {
     const delay = Math.min(10, Math.max(0, Number(itemDelaySeconds) || 0))
     if (
       !window.confirm(
-        `PwC 검색(${catalogMeta.label})을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
+        `PwC 검색을 시작할까요?\n${catalogMeta.label} · 최근 ${months}개월 · 최대 ${pages}페이지 · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -127,17 +97,8 @@ export function PwcAdhocRunPage() {
     }
   }
 
-  async function onStopAdhoc() {
-    if (!window.confirm('PwC 애드혹 브라우저를 종료할까요?')) return
-    try {
-      await session.requestLogout()
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '종료 요청 실패')
-    }
-  }
-
   async function onStopSearch() {
-    if (!window.confirm('PwC 검색 작업을 중단할까요?')) return
+    if (!window.confirm('PwC 검색을 중단할까요?')) return
     try {
       await collection.stopFeed()
     } catch (err) {
@@ -164,18 +125,6 @@ export function PwcAdhocRunPage() {
         <p className="account-line">{searchProgress}</p>
       ) : null}
 
-      {isPwcAdhoc && cdpPort && !session.fetchError ? (
-        <p className="account-line">
-          CDP <code>http://127.0.0.1:{String(cdpPort)}</code>
-          {typeof crawlProgress.url === 'string'
-            ? ` · ${crawlProgress.url}`
-            : ''}
-        </p>
-      ) : null}
-      {!session.fetchError && crawlBusy ? (
-        <p className="account-line">{formatProgress(crawlProgress)}</p>
-      ) : null}
-
       <p className="account-line">
         목록 타입:{' '}
         <Link to="/collect/pwc/list/search/types">한국 / 국제</Link>
@@ -189,7 +138,7 @@ export function PwcAdhocRunPage() {
           <select
             value={catalog}
             onChange={(e) => setCatalog(e.target.value as PwcCatalogId)}
-            disabled={searchBusy || crawlBusy}
+            disabled={searchBusy}
           >
             {PWC_CATALOGS.map((c) => (
               <option key={c.id} value={c.id}>
@@ -260,20 +209,6 @@ export function PwcAdhocRunPage() {
           onClick={() => void onStopSearch()}
         >
           {collection.requestingStop ? '중단 중…' : '검색 중단'}
-        </button>
-        <button
-          type="button"
-          disabled={!canStartAdhoc || session.requestingStart}
-          onClick={() => void onStartAdhoc()}
-        >
-          {session.requestingStart ? '시작 중…' : '애드혹'}
-        </button>
-        <button
-          type="button"
-          disabled={(!crawlBusy && !isPwcAdhoc) || session.requestingStop}
-          onClick={() => void onStopAdhoc()}
-        >
-          {session.requestingStop ? '종료 중…' : '애드혹 종료'}
         </button>
       </div>
     </section>

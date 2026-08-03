@@ -1,26 +1,21 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollectionJob } from '../../hooks/useCollectionJob'
-import { useSessionStatus } from '../../hooks/useSessionStatus'
 import {
   BCG_PROFILES,
   DEFAULT_BCG_PROFILE,
   getBcgProfile,
   type BcgProfileId,
 } from '../../lib/bcgProfiles'
-import { CRAWL_CLASS, formatProgress, formatTime } from '../../lib/format'
-import { getMediaSource } from '../../lib/mediaSources'
+import { CRAWL_CLASS, formatTime } from '../../lib/format'
 
 const PERIOD_OPTIONS = [3, 6, 12] as const
-const HUB = getMediaSource('bcg')?.hubUrl ?? ''
 
 function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (!progress) return null
   const bits: string[] = []
   if (progress.profile != null)
     bits.push(`profile ${String(progress.profile)}`)
-  if (progress.list_url != null)
-    bits.push(`list ${String(progress.list_url).replace(/^https?:\/\/[^/]+/, '')}`)
   if (progress.pages_done != null)
     bits.push(`pages ${String(progress.pages_done)}`)
   if (progress.listed != null) bits.push(`listed ${String(progress.listed)}`)
@@ -29,17 +24,16 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (progress.skipped_existing != null)
     bits.push(`existing ${String(progress.skipped_existing)}`)
   if (progress.skipped_no_download != null)
-    bits.push(`no_dl ${String(progress.skipped_no_download)}`)
+    bits.push(`no_pdf ${String(progress.skipped_no_download)}`)
   if (progress.skipped_old != null)
     bits.push(`old ${String(progress.skipped_old)}`)
   if (progress.failed != null) bits.push(`failed ${String(progress.failed)}`)
-  if (progress.capture) bits.push(String(progress.capture))
   if (progress.current_title)
     bits.push(String(progress.current_title).slice(0, 60))
   return bits.length ? bits.join(' · ') : null
 }
 
-/** BCG: allowlisted theme list surfaces → PDF/page.pdf one-by-one + CDP adhoc. */
+/** BCG: theme list surfaces → PDF one-by-one. */
 export function BcgRunPage() {
   const [profileId, setProfileId] = useState<BcgProfileId>(DEFAULT_BCG_PROFILE)
   const [periodMonths, setPeriodMonths] = useState<number>(
@@ -48,61 +42,38 @@ export function BcgRunPage() {
   const [maxPages, setMaxPages] = useState(10)
   const [limit, setLimit] = useState('')
   const [itemDelaySeconds, setItemDelaySeconds] = useState(2)
-  const session = useSessionStatus()
   const collection = useCollectionJob({
     source: 'bcg',
     capability: 'search',
   })
 
-  const crawl = session.crawl
-  const crawlBusy =
-    crawl.state === 'starting' ||
-    crawl.state === 'active' ||
-    crawl.state === 'stopping'
   const job = collection.status
   const searchBusy =
     job.state === 'starting' ||
     job.state === 'active' ||
     job.state === 'stopping'
-  const canStartAdhoc = crawl.can_start === true && !crawlBusy && !searchBusy
-  const canStartSearch = job.can_start === true && !searchBusy && !crawlBusy
-  const badgeState = session.fetchError
+  const canStartSearch = job.can_start === true && !searchBusy
+  const badgeState = collection.fetchError
     ? 'offline'
-    : (CRAWL_CLASS[searchBusy ? job.state : crawl.state] ?? 'ended')
-  const crawlProgress = crawl.progress ?? crawl.crawl?.progress ?? {}
+    : (CRAWL_CLASS[job.state] ?? 'ended')
   const searchProgress = formatSearchProgress(
     (job.progress ?? job.job?.progress ?? undefined) as
       | Record<string, unknown>
       | undefined,
   )
-  const isBCGAdhoc = crawl.crawl?.mode === 'bcg'
-  const cdpPort = crawl.crawl?.cdp_port
   const activeProfile = getBcgProfile(profileId)
-  const badgeValue = session.fetchError || collection.fetchError
+  const badgeValue = collection.fetchError
     ? 'API Offline'
     : searchBusy
-      ? `BCG · 검색 · ${job.label}`
-      : isBCGAdhoc
-        ? `BCG · 애드혹 · ${crawl.label}`
-        : crawlBusy
-          ? 'BCG · 대기 (다른 세션이 브라우저 사용 중)'
-          : job.job
-            ? `BCG · ${job.label}`
-            : 'BCG · 유휴'
+      ? 'BCG · 검색 중'
+      : job.job
+        ? `BCG · ${job.label}`
+        : 'BCG · 유휴'
 
   function onProfileChange(next: BcgProfileId) {
     setProfileId(next)
     const prof = getBcgProfile(next)
     if (prof) setPeriodMonths(prof.periodMonths)
-  }
-
-  async function onStartAdhoc() {
-    if (!window.confirm(`BCG 애드혹을 시작할까요?\n${HUB}`)) return
-    try {
-      await session.startCrawl('bcg')
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '실행 실패')
-    }
   }
 
   async function onStartSearch() {
@@ -119,10 +90,10 @@ export function BcgRunPage() {
         : Math.min(200, Math.max(1, Number(limRaw) || 0)) || undefined
     const limLabel = lim == null ? '제한 없음' : String(lim)
     const delay = Math.min(10, Math.max(0, Number(itemDelaySeconds) || 0))
-    const surfaces = (activeProfile?.listUrls ?? []).join('\n')
+    const profileLabel = activeProfile?.label ?? profileId
     if (
       !window.confirm(
-        `BCG 검색(${activeProfile?.label ?? profileId})을 시작할까요?\n확인된 목록만(HTTP):\n${surfaces}\n최근 ${months}개월 · 목록 URL 상한 ${pages} · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
+        `BCG 검색을 시작할까요?\n${profileLabel} · 최근 ${months}개월 · 목록 상한 ${pages} · 다운로드 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -141,17 +112,8 @@ export function BcgRunPage() {
     }
   }
 
-  async function onStopAdhoc() {
-    if (!window.confirm('BCG 애드혹 브라우저를 종료할까요?')) return
-    try {
-      await session.requestLogout()
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '종료 요청 실패')
-    }
-  }
-
   async function onStopSearch() {
-    if (!window.confirm('BCG 검색 작업을 중단할까요?')) return
+    if (!window.confirm('BCG 검색을 중단할까요?')) return
     try {
       await collection.stopFeed()
     } catch (err) {
@@ -163,11 +125,7 @@ export function BcgRunPage() {
     <section className={`panel badge-panel state-${badgeState}`}>
       <p className="badge-label">검색 · 실행</p>
       <p className="badge-value">{badgeValue}</p>
-      <p className="account-line">
-        검색은 HTTP로 allowlist 목록 HTML→상세 PDF를 받습니다. PDF 링크가 없을 때만
-        page.pdf(브라우저) 폴백. 카드의 `/publications/연도/slug`만 사용하고 임의 URL은
-        만들지 않습니다. 애드혹·probe는 Chrome+CDP입니다.
-      </p>
+      <p className="account-line">목록에서 리포트 PDF를 받습니다.</p>
 
       {job.job?.started_at && !collection.fetchError ? (
         <p className="account-line">
@@ -178,18 +136,6 @@ export function BcgRunPage() {
       ) : null}
       {searchProgress ? (
         <p className="account-line">{searchProgress}</p>
-      ) : null}
-
-      {isBCGAdhoc && cdpPort && !session.fetchError ? (
-        <p className="account-line">
-          CDP <code>http://127.0.0.1:{String(cdpPort)}</code>
-          {typeof crawlProgress.url === 'string'
-            ? ` · ${crawlProgress.url}`
-            : ''}
-        </p>
-      ) : null}
-      {!session.fetchError && crawlBusy ? (
-        <p className="account-line">{formatProgress(crawlProgress)}</p>
       ) : null}
 
       <p className="account-line">
@@ -228,7 +174,7 @@ export function BcgRunPage() {
           </select>
         </label>
         <label className="limit-field">
-          목록 URL 상한
+          목록 상한
           <input
             type="number"
             min={1}
@@ -276,29 +222,7 @@ export function BcgRunPage() {
         >
           {collection.requestingStop ? '중단 중…' : '검색 중단'}
         </button>
-        <button
-          type="button"
-          disabled={!canStartAdhoc || session.requestingStart}
-          onClick={() => void onStartAdhoc()}
-        >
-          {session.requestingStart ? '시작 중…' : '애드혹'}
-        </button>
-        <button
-          type="button"
-          disabled={(!crawlBusy && !isBCGAdhoc) || session.requestingStop}
-          onClick={() => void onStopAdhoc()}
-        >
-          {session.requestingStop ? '종료 중…' : '애드혹 종료'}
-        </button>
       </div>
-      {activeProfile ? (
-        <p className="account-line">
-          목록 {activeProfile.listUrls.length}곳 ·{' '}
-          {activeProfile.listUrls
-            .map((u) => u.replace(/^https?:\/\/www\.bcg\.com/, ''))
-            .join(' · ')}
-        </p>
-      ) : null}
     </section>
   )
 }

@@ -89,27 +89,28 @@ export const MEDIA_SOURCES: MediaSource[] = [
     requiresLogin: true,
     loginUrl: 'https://www.hbrkorea.com/member/login',
   },
-  {
-    id: 'nikkei',
-    label: 'Nikkei',
-    hubUrl: 'https://www.nikkei.com/',
-    hasSearch: false,
-    hasCatalogs: false,
-    requiresLogin: true,
-    loginUrl: 'https://www.nikkei.com/login',
-  },
-  {
-    id: 'nikkeixtech',
-    label: 'Nikkei xTECH',
-    hubUrl: 'https://xtech.nikkei.com/',
-    hasSearch: false,
-    hasCatalogs: false,
-    requiresLogin: true,
-    loginUrl:
-      'https://bpsso.nikkei.com/ep/auth/prev/?ts=nxt&ru=' +
-      'https%3A%2F%2Fbpsso.nikkei.com%2Fep%2Fcookie%2F%3Fru%3D' +
-      'https%253A%252F%252Fxtech.nikkei.com%252F',
-  },
+  // Adhoc-only — hide from Collect nav (browser hold not exposed in UI).
+  // {
+  //   id: 'nikkei',
+  //   label: 'Nikkei',
+  //   hubUrl: 'https://www.nikkei.com/',
+  //   hasSearch: false,
+  //   hasCatalogs: false,
+  //   requiresLogin: true,
+  //   loginUrl: 'https://www.nikkei.com/login',
+  // },
+  // {
+  //   id: 'nikkeixtech',
+  //   label: 'Nikkei xTECH',
+  //   hubUrl: 'https://xtech.nikkei.com/',
+  //   hasSearch: false,
+  //   hasCatalogs: false,
+  //   requiresLogin: true,
+  //   loginUrl:
+  //     'https://bpsso.nikkei.com/ep/auth/prev/?ts=nxt&ru=' +
+  //     'https%3A%2F%2Fbpsso.nikkei.com%2Fep%2Fcookie%2F%3Fru%3D' +
+  //     'https%253A%252F%252Fxtech.nikkei.com%252F',
+  // },
 ]
 
 export type MediaSourceId = (typeof MEDIA_SOURCES)[number]['id']

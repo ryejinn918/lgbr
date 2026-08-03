@@ -70,10 +70,7 @@ export function CollectShell() {
     <div className="collect-shell">
       <header className="monitor-header">
         <h1>수집</h1>
-        <p className="lede">
-          매체를 고르고, 작업을 실행합니다. 설정이 있는 작업은 아래 탭에서
-          프로필·목록을 고릅니다.
-        </p>
+        <p className="lede">매체를 고르고 검색을 실행합니다.</p>
       </header>
 
       <nav className="subnav" aria-label="수집 매체">
