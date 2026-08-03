@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from crawler.quality_audit import (
+    EMPTY_BODY_SUMMARY,
     MEDIA_SUMMARY_MAX_CHARS,
     PDF_PAGES,
     SUMMARY_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     apply_source_pass_policy,
     build_extract_meta,
+    empty_body_quality_result,
+    is_thin_body_text,
     normalize_for_source,
     normalize_media_result,
     normalize_result,
@@ -245,3 +248,30 @@ def test_build_extract_meta_unknown_page_count():
         truncated_by_chars=False,
     )
     assert meta == {"truncated": 0}
+
+
+def test_is_thin_body_text_empty_and_one_sentence():
+    assert is_thin_body_text("") is True
+    assert is_thin_body_text("   \n\t  ") is True
+    assert is_thin_body_text("Banks are investing in AI.") is True
+    assert is_thin_body_text("Banks are investing in AI") is True
+
+
+def test_is_thin_body_text_two_sentences():
+    assert (
+        is_thin_body_text(
+            "Banks are investing in AI. Contact centers still struggle."
+        )
+        is False
+    )
+
+
+def test_empty_body_quality_result_schema():
+    out = empty_body_quality_result(extract={"truncated": 0})
+    assert out["pass"] is False
+    assert out["summary"] == EMPTY_BODY_SUMMARY
+    assert out["framework_summary"] == EMPTY_BODY_SUMMARY
+    assert out["themes"] == []
+    assert out["empty_body"] is True
+    assert out["short_title"] == ""
+    assert out["extract"] == {"truncated": 0}

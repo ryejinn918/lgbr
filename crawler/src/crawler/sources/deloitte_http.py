@@ -295,7 +295,13 @@ def fetch_list_page(
     return items, has_more
 
 
+def _is_deloitte_host(host: str) -> bool:
+    h = (host or "").lower().split(":")[0]
+    return h == "deloitte.com" or h.endswith(".deloitte.com")
+
+
 def find_pdf_url(detail_html: str, *, page_url: str) -> str | None:
+    """Pick a Deloitte-hosted PDF only (ignore cited third-party .pdf links)."""
     rows = _PdfHrefParser.extract(detail_html)
     if not rows:
         for href in re.findall(
@@ -308,6 +314,8 @@ def find_pdf_url(detail_html: str, *, page_url: str) -> str | None:
         abs_url = urljoin(page_url, cleaned)
         abs_url = _strip_fragment(abs_url)
         if not re.search(r"\.pdf($|\?)", abs_url, re.I):
+            continue
+        if not _is_deloitte_host(urlparse(abs_url).netloc):
             continue
         resolved.append((abs_url, (aria or "").lower(), (text or "").lower()))
     if not resolved:
@@ -373,6 +381,8 @@ def download_pdf(
     session: requests.Session | None = None,
     timeout: float = 120.0,
 ) -> int:
+    if not _is_deloitte_host(urlparse(url).netloc):
+        raise RuntimeError(f"refusing non-Deloitte PDF host: {url}")
     path = Path(dest_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     sess = session or make_session()
@@ -387,6 +397,8 @@ def download_pdf(
     )
     if not data.startswith(b"%PDF"):
         raise RuntimeError(f"not a PDF ({url}): magic={data[:8]!r}")
+    if len(data) < 20_000:
+        raise RuntimeError(f"PDF too small ({url}): bytes={len(data)}")
     path.write_bytes(data)
     return len(data)
 

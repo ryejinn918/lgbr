@@ -93,6 +93,34 @@ def _dismiss_cookie_banner(page: Page) -> str | None:
     return None
 
 
+def _ensure_body_painted(page: Page) -> bool:
+    """Unstick fade-in ``body { opacity: 0 }`` before screenshot/page.pdf.
+
+    Deloitte Insights keeps ``document.body`` at opacity 0 until a client
+    fade-in runs. The OneTrust modal still paints on top, so screenshots look
+    fine until Accept/Decline — then the modal is gone and page.pdf is blank
+    white while DOM text remains. Force opacity when computed style is < 1.
+    """
+    try:
+        return bool(
+            page.evaluate(
+                """() => {
+                  const body = document.body;
+                  if (!body) return false;
+                  const op = Number(getComputedStyle(body).opacity);
+                  if (!Number.isFinite(op) || op >= 0.99) return false;
+                  body.style.setProperty('opacity', '1', 'important');
+                  document.documentElement.style.setProperty(
+                    'opacity', '1', 'important'
+                  );
+                  return true;
+                }"""
+            )
+        )
+    except Exception:
+        return False
+
+
 def _wait_for_print_ready(
     page: Page,
     *,
@@ -196,6 +224,7 @@ def capture_url_as_pdf(
     body_len = int(detail.get("body_len") or 0)
     if body_len < min_body_chars:
         raise EmptyPagePdfError(f"empty body at {url} (len={body_len})")
+    opacity_forced = _ensure_body_painted(page)
     dest.parent.mkdir(parents=True, exist_ok=True)
     page.pdf(path=str(dest), format="A4", print_background=True)
     pdf_bytes = dest.stat().st_size if dest.is_file() else 0
@@ -218,6 +247,7 @@ def capture_url_as_pdf(
         "pdf_text_len": pdf_text_len,
         "title": detail.get("title"),
         "cookie_clicked": clicked,
+        "opacity_forced": opacity_forced,
     }
 
 

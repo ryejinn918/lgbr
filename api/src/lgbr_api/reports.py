@@ -193,14 +193,18 @@ def _quality_label(row: dict[str, Any]) -> str:
 
 
 def _themes_from_attrs(attrs: dict[str, Any]) -> list[str]:
-    raw = attrs.get("themes")
-    out: list[str] = []
-    if isinstance(raw, list):
-        for item in raw:
+    """Resolve desk themes for display chips.
+
+    When ``attrs.themes`` is present as a list (including ``[]`` from an
+    empty-body audit), that value wins — do not fall back to crawl_profile.
+    Legacy ``theme`` / ``crawl_profile`` apply only when themes was never set.
+    """
+    if "themes" in attrs and isinstance(attrs.get("themes"), list):
+        out: list[str] = []
+        for item in attrs["themes"]:
             s = str(item).strip()
-            if s in VALID_THEMES:
+            if s in VALID_THEMES and s not in out:
                 out.append(s)
-    if out:
         return out
     legacy = attrs.get("theme")
     if legacy is not None:

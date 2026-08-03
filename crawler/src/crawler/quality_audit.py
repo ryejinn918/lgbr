@@ -166,6 +166,35 @@ Language (mandatory):
 """
 
 MEDIA_SUMMARY_MAX_CHARS = 6000
+EMPTY_BODY_SUMMARY = "본문없음"
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?。…])\s+")
+
+
+def is_thin_body_text(text: str) -> bool:
+    """True when extracted body is empty or at most one sentence."""
+    normalized = " ".join((text or "").split()).strip()
+    if not normalized:
+        return True
+    parts = [p for p in _SENTENCE_SPLIT_RE.split(normalized) if p.strip()]
+    return len(parts) <= 1
+
+
+def empty_body_quality_result(
+    *, extract: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Fixed media result when PDF text is too thin to summarize."""
+    out: dict[str, Any] = {
+        "pass": False,
+        "confidence": 0.0,
+        "short_title": "",
+        "summary": EMPTY_BODY_SUMMARY,
+        "framework_summary": EMPTY_BODY_SUMMARY,
+        "themes": [],
+        "empty_body": True,
+    }
+    if extract:
+        out["extract"] = dict(extract)
+    return out
 
 
 def system_prompt_for_source(source: str) -> str:
@@ -729,13 +758,36 @@ async def audit_targets(
 ) -> dict[str, int]:
     api_key = openrouter_api_key()
     sem = asyncio.Semaphore(max(1, concurrency))
-    stats = {"ok": 0, "fail_api": 0, "pass": 0, "reject": 0}
+    stats = {
+        "ok": 0,
+        "fail_api": 0,
+        "pass": 0,
+        "reject": 0,
+        "empty_body": 0,
+    }
     lock = asyncio.Lock()
 
     async with httpx.AsyncClient(timeout=120.0) as client:
 
         async def run_one(target: AuditTarget) -> None:
             try:
+                if (
+                    not is_fnguide_source(target.source)
+                    and is_thin_body_text(target.text)
+                ):
+                    result = empty_body_quality_result(extract=target.extract)
+                    await asyncio.to_thread(
+                        save_quality, target.id, result=result, model=model
+                    )
+                    async with lock:
+                        stats["ok"] += 1
+                        stats["reject"] += 1
+                        stats["empty_body"] += 1
+                    print(
+                        f"empty_body {target.source_key} {target.title[:60]}"
+                    )
+                    return
+
                 result = await _classify_one(
                     client,
                     api_key=api_key,
