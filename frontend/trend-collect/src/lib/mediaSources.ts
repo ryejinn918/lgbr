@@ -49,13 +49,14 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hasSearch: true,
     hasCatalogs: false,
   },
-  {
-    id: 'mckinsey',
-    label: 'McKinsey',
-    hubUrl: 'https://www.mckinsey.com/',
-    hasSearch: true,
-    hasCatalogs: false,
-  },
+  // Broken / disabled — hide from Collect nav and dashboard.
+  // {
+  //   id: 'mckinsey',
+  //   label: 'McKinsey',
+  //   hubUrl: 'https://www.mckinsey.com/',
+  //   hasSearch: true,
+  //   hasCatalogs: false,
+  // },
   {
     id: 'bain',
     label: 'Bain',

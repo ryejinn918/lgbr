@@ -56,13 +56,14 @@ SOURCES: dict[str, SourceDef] = {
         hub_url="https://www.deloitte.com/us/en/insights.html",
         has_search=True,
     ),
-    "mckinsey": SourceDef(
-        id="mckinsey",
-        label="McKinsey",
-        abbrev="mk",
-        hub_url="https://www.mckinsey.com/",
-        has_search=True,
-    ),
+    # Broken / disabled — omit from API source lists until fixed.
+    # "mckinsey": SourceDef(
+    #     id="mckinsey",
+    #     label="McKinsey",
+    #     abbrev="mk",
+    #     hub_url="https://www.mckinsey.com/",
+    #     has_search=True,
+    # ),
     "bain": SourceDef(
         id="bain",
         label="Bain",

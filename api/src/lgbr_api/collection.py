@@ -40,7 +40,7 @@ SEARCH_ALLOWLIST = frozenset(
         "hbrkorea",
         "bain",
         "hbr",
-        "mckinsey",
+        # "mckinsey",  # broken / disabled
         "bcg",
     }
 )
@@ -361,7 +361,7 @@ SOURCE_DEFAULT_CATALOG = {
     "hbrkorea": DEFAULT_HBRKOREA_CATALOG,
     "bain": DEFAULT_BAIN_CATALOG,
     "hbr": DEFAULT_HBR_CATALOG,
-    "mckinsey": DEFAULT_MCKINSEY_CATALOG,
+    # "mckinsey": DEFAULT_MCKINSEY_CATALOG,  # broken / disabled
     "bcg": DEFAULT_BCG_CATALOG,
 }
 SOURCE_CATALOGS = {
@@ -373,7 +373,7 @@ SOURCE_CATALOGS = {
     "hbrkorea": HBRKOREA_CATALOGS,
     "bain": BAIN_CATALOGS,
     "hbr": HBR_CATALOGS,
-    "mckinsey": MCKINSEY_CATALOGS,
+    # "mckinsey": MCKINSEY_CATALOGS,  # broken / disabled
     "bcg": BCG_CATALOGS,
 }
 

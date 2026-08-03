@@ -170,10 +170,6 @@ export function DashboardPage() {
     source: 'hbrkorea',
     capability: 'search',
   })
-  const mckinseySearch = useCollectionJob({
-    source: 'mckinsey',
-    capability: 'search',
-  })
   const bainSearch = useCollectionJob({
     source: 'bain',
     capability: 'search',
@@ -190,21 +186,6 @@ export function DashboardPage() {
   const crawlMode = crawl.crawl?.mode ?? null
   const fnguideOwned =
     isBusy(crawl.state) && isFnguideCrawlMode(crawlMode)
-  const pwcAdhoc =
-    isBusy(crawl.state) && crawlMode === 'pwc'
-  const accentureAdhoc =
-    isBusy(crawl.state) && crawlMode === 'accenture'
-  const kpmgAdhoc =
-    isBusy(crawl.state) && crawlMode === 'kpmg'
-  const eyAdhoc = isBusy(crawl.state) && crawlMode === 'ey'
-  const deloitteAdhoc = isBusy(crawl.state) && crawlMode === 'deloitte'
-  const mckinseyAdhoc = isBusy(crawl.state) && crawlMode === 'mckinsey'
-  const bainAdhoc = isBusy(crawl.state) && crawlMode === 'bain'
-  const bcgAdhoc = isBusy(crawl.state) && crawlMode === 'bcg'
-  const hbrAdhoc = isBusy(crawl.state) && crawlMode === 'hbr'
-  const hbrkoreaAdhoc = isBusy(crawl.state) && crawlMode === 'hbrkorea'
-  const nikkeiAdhoc = isBusy(crawl.state) && crawlMode === 'nikkei'
-  const nikkeixtechAdhoc = isBusy(crawl.state) && crawlMode === 'nikkeixtech'
 
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
@@ -215,22 +196,9 @@ export function DashboardPage() {
   const eySearchBusy = isBusy(eySearch.status.state)
   const deloitteSearchBusy = isBusy(deloitteSearch.status.state)
   const hbrkoreaSearchBusy = isBusy(hbrkoreaSearch.status.state)
-  const mckinseySearchBusy = isBusy(mckinseySearch.status.state)
   const bainSearchBusy = isBusy(bainSearch.status.state)
   const bcgSearchBusy = isBusy(bcgSearch.status.state)
   const hbrSearchBusy = isBusy(hbrSearch.status.state)
-  const pwcBusy = pwcSearchBusy || pwcAdhoc
-  const accentureBusy = accentureSearchBusy || accentureAdhoc
-  const kpmgBusy = kpmgSearchBusy || kpmgAdhoc
-  const eyBusy = eySearchBusy || eyAdhoc
-  const deloitteBusy = deloitteSearchBusy || deloitteAdhoc
-  const mckinseyBusy = mckinseySearchBusy || mckinseyAdhoc
-  const bainBusy = bainSearchBusy || bainAdhoc
-  const bcgBusy = bcgSearchBusy || bcgAdhoc
-  const hbrBusy = hbrSearchBusy || hbrAdhoc
-  const hbrkoreaBusy = hbrkoreaSearchBusy || hbrkoreaAdhoc
-  const nikkeiBusy = nikkeiAdhoc
-  const nikkeixtechBusy = nikkeixtechAdhoc
 
   const crawlProgress = crawl.progress ?? {}
   const pwcProgress = (pwcSearch.status.progress ??
@@ -250,9 +218,6 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const hbrkoreaProgress = (hbrkoreaSearch.status.progress ??
     hbrkoreaSearch.status.job?.progress ??
-    {}) as Record<string, unknown>
-  const mckinseyProgress = (mckinseySearch.status.progress ??
-    mckinseySearch.status.job?.progress ??
     {}) as Record<string, unknown>
   const bainProgress = (bainSearch.status.progress ??
     bainSearch.status.job?.progress ??
@@ -336,12 +301,6 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
-  const countsMk = useReports({
-    source: 'mckinsey',
-    limit: 1,
-    offset: 0,
-    poll: true,
-  })
   const countsBn = useReports({
     source: 'bain',
     limit: 1,
@@ -373,64 +332,49 @@ export function DashboardPage() {
     argView.status.state,
   )
   const pwcBadge = jobBadgeClass(
-    !!(pwcSearch.fetchError || (pwcAdhoc && fetchError)),
-    pwcBusy,
-    pwcSearchBusy ? pwcSearch.status.state : crawl.state,
+    !!pwcSearch.fetchError,
+    pwcSearchBusy,
+    pwcSearch.status.state,
   )
   const accentureBadge = jobBadgeClass(
-    !!(accentureSearch.fetchError || (accentureAdhoc && fetchError)),
-    accentureBusy,
-    accentureSearchBusy ? accentureSearch.status.state : crawl.state,
+    !!accentureSearch.fetchError,
+    accentureSearchBusy,
+    accentureSearch.status.state,
   )
   const kpmgBadge = jobBadgeClass(
-    !!(kpmgSearch.fetchError || (kpmgAdhoc && fetchError)),
-    kpmgBusy,
-    kpmgSearchBusy ? kpmgSearch.status.state : crawl.state,
+    !!kpmgSearch.fetchError,
+    kpmgSearchBusy,
+    kpmgSearch.status.state,
   )
   const eyBadge = jobBadgeClass(
-    !!(eySearch.fetchError || (eyAdhoc && fetchError)),
-    eyBusy,
-    eySearchBusy ? eySearch.status.state : crawl.state,
+    !!eySearch.fetchError,
+    eySearchBusy,
+    eySearch.status.state,
   )
   const deloitteBadge = jobBadgeClass(
-    !!(deloitteSearch.fetchError || (deloitteAdhoc && fetchError)),
-    deloitteBusy,
-    deloitteSearchBusy ? deloitteSearch.status.state : crawl.state,
-  )
-  const mckinseyBadge = jobBadgeClass(
-    !!(mckinseySearch.fetchError || (mckinseyAdhoc && fetchError)),
-    mckinseyBusy,
-    mckinseySearchBusy ? mckinseySearch.status.state : crawl.state,
+    !!deloitteSearch.fetchError,
+    deloitteSearchBusy,
+    deloitteSearch.status.state,
   )
   const bainBadge = jobBadgeClass(
-    !!(bainSearch.fetchError || (bainAdhoc && fetchError)),
-    bainBusy,
-    bainSearchBusy ? bainSearch.status.state : crawl.state,
+    !!bainSearch.fetchError,
+    bainSearchBusy,
+    bainSearch.status.state,
   )
   const bcgBadge = jobBadgeClass(
-    !!(bcgSearch.fetchError || (bcgAdhoc && fetchError)),
-    bcgBusy,
-    bcgSearchBusy ? bcgSearch.status.state : crawl.state,
+    !!bcgSearch.fetchError,
+    bcgSearchBusy,
+    bcgSearch.status.state,
   )
   const hbrBadge = jobBadgeClass(
-    !!(hbrSearch.fetchError || (hbrAdhoc && fetchError)),
-    hbrBusy,
-    hbrSearchBusy ? hbrSearch.status.state : crawl.state,
+    !!hbrSearch.fetchError,
+    hbrSearchBusy,
+    hbrSearch.status.state,
   )
   const hbrkoreaBadge = jobBadgeClass(
-    !!(hbrkoreaSearch.fetchError || (hbrkoreaAdhoc && fetchError)),
-    hbrkoreaBusy,
-    hbrkoreaSearchBusy ? hbrkoreaSearch.status.state : crawl.state,
-  )
-  const nikkeixtechBadge = jobBadgeClass(
-    !!(nikkeixtechAdhoc && fetchError),
-    nikkeixtechBusy,
-    crawl.state,
-  )
-  const nikkeiBadge = jobBadgeClass(
-    !!(nikkeiAdhoc && fetchError),
-    nikkeiBusy,
-    crawl.state,
+    !!hbrkoreaSearch.fetchError,
+    hbrkoreaSearchBusy,
+    hbrkoreaSearch.status.state,
   )
 
   async function onStopFnguide() {
@@ -460,34 +404,17 @@ export function DashboardPage() {
       | 'kpmg'
       | 'ey'
       | 'deloitte'
-      | 'mckinsey'
       | 'bain'
       | 'bcg'
       | 'hbr'
-      | 'hbrkorea'
-      | 'nikkeixtech'
-      | 'nikkei',
-    searchBusy: boolean,
-    adhoc: boolean,
-    stopSearch?: () => Promise<unknown>,
+      | 'hbrkorea',
+    stopSearch: () => Promise<unknown>,
   ) {
-    if (searchBusy) {
-      if (!stopSearch) return
-      if (!window.confirm(`${source} 검색 작업을 중단할까요?`)) return
-      try {
-        await stopSearch()
-      } catch (err) {
-        window.alert(err instanceof Error ? err.message : '중단 실패')
-      }
-      return
-    }
-    if (adhoc) {
-      if (!window.confirm(`${source} 애드혹 브라우저를 종료할까요?`)) return
-      try {
-        await requestLogout()
-      } catch (err) {
-        window.alert(err instanceof Error ? err.message : '종료 요청 실패')
-      }
+    if (!window.confirm(`${source} 검색 작업을 중단할까요?`)) return
+    try {
+      await stopSearch()
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '중단 실패')
     }
   }
 
@@ -503,113 +430,73 @@ export function DashboardPage() {
     ? 'API Offline'
     : pwcSearchBusy
       ? pwcSearch.status.label
-      : pwcAdhoc
-        ? crawl.label
-        : pwcSearch.status.job
-          ? pwcSearch.status.label
-          : '유휴'
+      : pwcSearch.status.job
+        ? pwcSearch.status.label
+        : '유휴'
 
   const accentureValue = accentureSearch.fetchError
     ? 'API Offline'
     : accentureSearchBusy
       ? accentureSearch.status.label
-      : accentureAdhoc
-        ? crawl.label
-        : accentureSearch.status.job
-          ? accentureSearch.status.label
-          : '유휴'
+      : accentureSearch.status.job
+        ? accentureSearch.status.label
+        : '유휴'
 
   const kpmgValue = kpmgSearch.fetchError
     ? 'API Offline'
     : kpmgSearchBusy
       ? kpmgSearch.status.label
-      : kpmgAdhoc
-        ? crawl.label
-        : kpmgSearch.status.job
-          ? kpmgSearch.status.label
-          : '유휴'
+      : kpmgSearch.status.job
+        ? kpmgSearch.status.label
+        : '유휴'
 
   const eyValue = eySearch.fetchError
     ? 'API Offline'
     : eySearchBusy
       ? eySearch.status.label
-      : eyAdhoc
-        ? crawl.label
-        : eySearch.status.job
-          ? eySearch.status.label
-          : '유휴'
+      : eySearch.status.job
+        ? eySearch.status.label
+        : '유휴'
 
   const deloitteValue = deloitteSearch.fetchError
     ? 'API Offline'
     : deloitteSearchBusy
       ? deloitteSearch.status.label
-      : deloitteAdhoc
-        ? crawl.label
-        : deloitteSearch.status.job
-          ? deloitteSearch.status.label
-          : '유휴'
+      : deloitteSearch.status.job
+        ? deloitteSearch.status.label
+        : '유휴'
 
   const hbrValue = hbrSearch.fetchError
     ? 'API Offline'
     : hbrSearchBusy
       ? hbrSearch.status.label
-      : hbrAdhoc
-        ? crawl.label
-        : hbrSearch.status.job
-          ? hbrSearch.status.label
-          : '유휴'
+      : hbrSearch.status.job
+        ? hbrSearch.status.label
+        : '유휴'
 
   const hbrkoreaValue = hbrkoreaSearch.fetchError
     ? 'API Offline'
     : hbrkoreaSearchBusy
       ? hbrkoreaSearch.status.label
-      : hbrkoreaAdhoc
-        ? crawl.label
-        : hbrkoreaSearch.status.job
-          ? hbrkoreaSearch.status.label
-          : '유휴'
-
-  const mckinseyValue = mckinseySearch.fetchError
-    ? 'API Offline'
-    : mckinseySearchBusy
-      ? mckinseySearch.status.label
-      : mckinseyAdhoc
-        ? crawl.label
-        : mckinseySearch.status.job
-          ? mckinseySearch.status.label
-          : '유휴'
+      : hbrkoreaSearch.status.job
+        ? hbrkoreaSearch.status.label
+        : '유휴'
 
   const bainValue = bainSearch.fetchError
     ? 'API Offline'
     : bainSearchBusy
       ? bainSearch.status.label
-      : bainAdhoc
-        ? crawl.label
-        : bainSearch.status.job
-          ? bainSearch.status.label
-          : '유휴'
+      : bainSearch.status.job
+        ? bainSearch.status.label
+        : '유휴'
 
   const bcgValue = bcgSearch.fetchError
     ? 'API Offline'
     : bcgSearchBusy
       ? bcgSearch.status.label
-      : bcgAdhoc
-        ? crawl.label
-        : bcgSearch.status.job
-          ? bcgSearch.status.label
-          : '유휴'
-
-  const nikkeixtechValue = fetchError
-    ? 'API Offline'
-    : nikkeixtechAdhoc
-      ? crawl.label
-      : '유휴'
-
-  const nikkeiValue = fetchError
-    ? 'API Offline'
-    : nikkeiAdhoc
-      ? crawl.label
-      : '유휴'
+      : bcgSearch.status.job
+        ? bcgSearch.status.label
+        : '유휴'
 
   const fnguideLastAt = fnguideOwned
     ? jobTimestamp(crawl.crawl)
@@ -628,32 +515,17 @@ export function DashboardPage() {
 
   function mediaLastAt(
     searchJob: CollectionJobRecord | null | undefined,
-    adhoc: boolean,
   ) {
-    const fromJob = jobTimestamp(searchJob)
-    if (fromJob) return fromJob
-    if (adhoc) return jobTimestamp(crawl.crawl)
-    return null
+    return jobTimestamp(searchJob)
   }
 
   function mediaProgress(
     searchBusy: boolean,
-    adhoc: boolean,
     progress: Record<string, unknown>,
     message: string | null | undefined,
   ) {
     if (searchBusy) {
       return formatSearchProgress(progress) || message || '—'
-    }
-    if (adhoc) {
-      const bits = [
-        typeof crawlProgress.url === 'string' ? crawlProgress.url : null,
-        crawl.crawl?.cdp_port != null
-          ? `CDP ${crawl.crawl.cdp_port}`
-          : null,
-        formatProgress(crawlProgress),
-      ].filter(Boolean)
-      return bits.length ? bits.join(' · ') : null
     }
     return null
   }
@@ -710,15 +582,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="PwC"
-              meta={['무계정', '리포트', '검색', pwcAdhoc ? '애드혹' : '']}
+              meta={['무계정', '리포트', '검색']}
               statusLabel={pwcValue}
               stateClass={pwcBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(pwcSearch.status.job, pwcAdhoc)}
+              lastCollectedAt={mediaLastAt(pwcSearch.status.job)}
               lastDocAt={countsPwc.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 pwcSearchBusy,
-                pwcAdhoc,
                 pwcProgress,
                 pwcSearch.status.job?.message,
               )}
@@ -730,24 +601,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                pwcBusy
+                pwcSearchBusy
                   ? {
-                      label: (pwcSearchBusy
-                        ? pwcSearch.requestingStop
-                        : requestingStop)
+                      label: pwcSearch.requestingStop
                         ? '요청 중…'
-                        : pwcSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: pwcSearchBusy
-                        ? pwcSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: pwcSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'pwc',
-                          pwcSearchBusy,
-                          pwcAdhoc,
-                          () => pwcSearch.stopFeed(),
+                        void onStopMedia('pwc', () =>
+                          pwcSearch.stopFeed(),
                         ),
                     }
                   : null
@@ -755,23 +617,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="Accenture"
-              meta={[
-                '무계정',
-                '리포트',
-                '검색',
-                accentureAdhoc ? '애드혹' : '',
-              ]}
+              meta={['무계정', '리포트', '검색']}
               statusLabel={accentureValue}
               stateClass={accentureBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(
-                accentureSearch.status.job,
-                accentureAdhoc,
-              )}
+              lastCollectedAt={mediaLastAt(accentureSearch.status.job)}
               lastDocAt={countsAc.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 accentureSearchBusy,
-                accentureAdhoc,
                 accentureProgress,
                 accentureSearch.status.job?.message,
               )}
@@ -783,24 +636,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                accentureBusy
+                accentureSearchBusy
                   ? {
-                      label: (accentureSearchBusy
-                        ? accentureSearch.requestingStop
-                        : requestingStop)
+                      label: accentureSearch.requestingStop
                         ? '요청 중…'
-                        : accentureSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: accentureSearchBusy
-                        ? accentureSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: accentureSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'accenture',
-                          accentureSearchBusy,
-                          accentureAdhoc,
-                          () => accentureSearch.stopFeed(),
+                        void onStopMedia('accenture', () =>
+                          accentureSearch.stopFeed(),
                         ),
                     }
                   : null
@@ -808,15 +652,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="KPMG"
-              meta={['무계정', '리포트', '검색', kpmgAdhoc ? '애드혹' : '']}
+              meta={['무계정', '리포트', '검색']}
               statusLabel={kpmgValue}
               stateClass={kpmgBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(kpmgSearch.status.job, kpmgAdhoc)}
+              lastCollectedAt={mediaLastAt(kpmgSearch.status.job)}
               lastDocAt={countsKp.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 kpmgSearchBusy,
-                kpmgAdhoc,
                 kpmgProgress,
                 kpmgSearch.status.job?.message,
               )}
@@ -828,24 +671,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                kpmgBusy
+                kpmgSearchBusy
                   ? {
-                      label: (kpmgSearchBusy
-                        ? kpmgSearch.requestingStop
-                        : requestingStop)
+                      label: kpmgSearch.requestingStop
                         ? '요청 중…'
-                        : kpmgSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: kpmgSearchBusy
-                        ? kpmgSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: kpmgSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'kpmg',
-                          kpmgSearchBusy,
-                          kpmgAdhoc,
-                          () => kpmgSearch.stopFeed(),
+                        void onStopMedia('kpmg', () =>
+                          kpmgSearch.stopFeed(),
                         ),
                     }
                   : null
@@ -853,15 +687,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="EY"
-              meta={['무계정', '리포트', '검색', eyAdhoc ? '애드혹' : '']}
+              meta={['무계정', '리포트', '검색']}
               statusLabel={eyValue}
               stateClass={eyBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(eySearch.status.job, eyAdhoc)}
+              lastCollectedAt={mediaLastAt(eySearch.status.job)}
               lastDocAt={countsEy.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 eySearchBusy,
-                eyAdhoc,
                 eyProgress,
                 eySearch.status.job?.message,
               )}
@@ -873,24 +706,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                eyBusy
+                eySearchBusy
                   ? {
-                      label: (eySearchBusy
-                        ? eySearch.requestingStop
-                        : requestingStop)
+                      label: eySearch.requestingStop
                         ? '요청 중…'
-                        : eySearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: eySearchBusy
-                        ? eySearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: eySearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'ey',
-                          eySearchBusy,
-                          eyAdhoc,
-                          () => eySearch.stopFeed(),
+                        void onStopMedia('ey', () =>
+                          eySearch.stopFeed(),
                         ),
                     }
                   : null
@@ -898,23 +722,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="Deloitte"
-              meta={[
-                '무계정',
-                '리포트',
-                '검색',
-                deloitteAdhoc ? '애드혹' : '',
-              ]}
+              meta={['무계정', '리포트', '검색']}
               statusLabel={deloitteValue}
               stateClass={deloitteBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(
-                deloitteSearch.status.job,
-                deloitteAdhoc,
-              )}
+              lastCollectedAt={mediaLastAt(deloitteSearch.status.job)}
               lastDocAt={countsDl.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 deloitteSearchBusy,
-                deloitteAdhoc,
                 deloitteProgress,
                 deloitteSearch.status.job?.message,
               )}
@@ -926,77 +741,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                deloitteBusy
+                deloitteSearchBusy
                   ? {
-                      label: (deloitteSearchBusy
-                        ? deloitteSearch.requestingStop
-                        : requestingStop)
+                      label: deloitteSearch.requestingStop
                         ? '요청 중…'
-                        : deloitteSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: deloitteSearchBusy
-                        ? deloitteSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: deloitteSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'deloitte',
-                          deloitteSearchBusy,
-                          deloitteAdhoc,
-                          () => deloitteSearch.stopFeed(),
-                        ),
-                    }
-                  : null
-              }
-            />
-            <CollectJobCard
-              title="McKinsey"
-              meta={[
-                '무계정',
-                '리포트',
-                '검색',
-                mckinseyAdhoc ? '애드혹' : '',
-              ]}
-              statusLabel={mckinseyValue}
-              stateClass={mckinseyBadge}
-              freshnessKind="report"
-              lastCollectedAt={mediaLastAt(
-                mckinseySearch.status.job,
-                mckinseyAdhoc,
-              )}
-              lastDocAt={countsMk.items[0]?.last_seen_at ?? null}
-              progressLine={mediaProgress(
-                mckinseySearchBusy,
-                mckinseyAdhoc,
-                mckinseyProgress,
-                mckinseySearch.status.job?.message,
-              )}
-              links={
-                <>
-                  <Link to="/collect/mckinsey/list/search">검색 실행</Link>
-                  {' · '}
-                  <Link to="/docs/reports/mckinsey">보고서</Link>
-                </>
-              }
-              stop={
-                mckinseyBusy
-                  ? {
-                      label: (mckinseySearchBusy
-                        ? mckinseySearch.requestingStop
-                        : requestingStop)
-                        ? '요청 중…'
-                        : mckinseySearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: mckinseySearchBusy
-                        ? mckinseySearch.requestingStop
-                        : requestingStop || !!fetchError,
-                      onClick: () =>
-                        void onStopMedia(
-                          'mckinsey',
-                          mckinseySearchBusy,
-                          mckinseyAdhoc,
-                          () => mckinseySearch.stopFeed(),
+                        void onStopMedia('deloitte', () =>
+                          deloitteSearch.stopFeed(),
                         ),
                     }
                   : null
@@ -1004,23 +757,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="Bain"
-              meta={[
-                '무계정',
-                '리포트',
-                '검색',
-                bainAdhoc ? '애드혹' : '',
-              ]}
+              meta={['무계정', '리포트', '검색']}
               statusLabel={bainValue}
               stateClass={bainBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(
-                bainSearch.status.job,
-                bainAdhoc,
-              )}
+              lastCollectedAt={mediaLastAt(bainSearch.status.job)}
               lastDocAt={countsBn.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 bainSearchBusy,
-                bainAdhoc,
                 bainProgress,
                 bainSearch.status.job?.message,
               )}
@@ -1032,24 +776,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                bainBusy
+                bainSearchBusy
                   ? {
-                      label: (bainSearchBusy
-                        ? bainSearch.requestingStop
-                        : requestingStop)
+                      label: bainSearch.requestingStop
                         ? '요청 중…'
-                        : bainSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: bainSearchBusy
-                        ? bainSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: bainSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'bain',
-                          bainSearchBusy,
-                          bainAdhoc,
-                          () => bainSearch.stopFeed(),
+                        void onStopMedia('bain', () =>
+                          bainSearch.stopFeed(),
                         ),
                     }
                   : null
@@ -1057,23 +792,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="BCG"
-              meta={[
-                '무계정',
-                '리포트',
-                '검색',
-                bcgAdhoc ? '애드혹' : '',
-              ]}
+              meta={['무계정', '리포트', '검색']}
               statusLabel={bcgValue}
               stateClass={bcgBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(
-                bcgSearch.status.job,
-                bcgAdhoc,
-              )}
+              lastCollectedAt={mediaLastAt(bcgSearch.status.job)}
               lastDocAt={countsBcg.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 bcgSearchBusy,
-                bcgAdhoc,
                 bcgProgress,
                 bcgSearch.status.job?.message,
               )}
@@ -1085,24 +811,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                bcgBusy
+                bcgSearchBusy
                   ? {
-                      label: (bcgSearchBusy
-                        ? bcgSearch.requestingStop
-                        : requestingStop)
+                      label: bcgSearch.requestingStop
                         ? '요청 중…'
-                        : bcgSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: bcgSearchBusy
-                        ? bcgSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: bcgSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'bcg',
-                          bcgSearchBusy,
-                          bcgAdhoc,
-                          () => bcgSearch.stopFeed(),
+                        void onStopMedia('bcg', () =>
+                          bcgSearch.stopFeed(),
                         ),
                     }
                   : null
@@ -1110,20 +827,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="HBR"
-              meta={[
-                '계정',
-                '리포트',
-                '검색',
-                hbrAdhoc ? '애드혹' : '',
-              ]}
+              meta={['계정', '리포트', '검색']}
               statusLabel={hbrValue}
               stateClass={hbrBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(hbrSearch.status.job, hbrAdhoc)}
+              lastCollectedAt={mediaLastAt(hbrSearch.status.job)}
               lastDocAt={countsHb.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 hbrSearchBusy,
-                hbrAdhoc,
                 hbrProgress,
                 hbrSearch.status.job?.message,
               )}
@@ -1135,24 +846,15 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                hbrBusy
+                hbrSearchBusy
                   ? {
-                      label: (hbrSearchBusy
-                        ? hbrSearch.requestingStop
-                        : requestingStop)
+                      label: hbrSearch.requestingStop
                         ? '요청 중…'
-                        : hbrSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: hbrSearchBusy
-                        ? hbrSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: hbrSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'hbr',
-                          hbrSearchBusy,
-                          hbrAdhoc,
-                          () => hbrSearch.stopFeed(),
+                        void onStopMedia('hbr', () =>
+                          hbrSearch.stopFeed(),
                         ),
                     }
                   : null
@@ -1160,23 +862,14 @@ export function DashboardPage() {
             />
             <CollectJobCard
               title="HBR Korea"
-              meta={[
-                '계정',
-                '리포트',
-                '검색',
-                hbrkoreaAdhoc ? '애드혹' : '',
-              ]}
+              meta={['계정', '리포트', '검색']}
               statusLabel={hbrkoreaValue}
               stateClass={hbrkoreaBadge}
               freshnessKind="report"
-              lastCollectedAt={mediaLastAt(
-                hbrkoreaSearch.status.job,
-                hbrkoreaAdhoc,
-              )}
+              lastCollectedAt={mediaLastAt(hbrkoreaSearch.status.job)}
               lastDocAt={countsHk.items[0]?.last_seen_at ?? null}
               progressLine={mediaProgress(
                 hbrkoreaSearchBusy,
-                hbrkoreaAdhoc,
                 hbrkoreaProgress,
                 hbrkoreaSearch.status.job?.message,
               )}
@@ -1188,105 +881,16 @@ export function DashboardPage() {
                 </>
               }
               stop={
-                hbrkoreaBusy
+                hbrkoreaSearchBusy
                   ? {
-                      label: (hbrkoreaSearchBusy
-                        ? hbrkoreaSearch.requestingStop
-                        : requestingStop)
+                      label: hbrkoreaSearch.requestingStop
                         ? '요청 중…'
-                        : hbrkoreaSearchBusy
-                          ? '검색 중단'
-                          : '애드혹 종료',
-                      disabled: hbrkoreaSearchBusy
-                        ? hbrkoreaSearch.requestingStop
-                        : requestingStop || !!fetchError,
+                        : '검색 중단',
+                      disabled: hbrkoreaSearch.requestingStop,
                       onClick: () =>
-                        void onStopMedia(
-                          'hbrkorea',
-                          hbrkoreaSearchBusy,
-                          hbrkoreaAdhoc,
-                          () => hbrkoreaSearch.stopFeed(),
+                        void onStopMedia('hbrkorea', () =>
+                          hbrkoreaSearch.stopFeed(),
                         ),
-                    }
-                  : null
-              }
-            />
-            <CollectJobCard
-              title="Nikkei xTECH"
-              meta={[
-                '계정',
-                '애드혹',
-                nikkeixtechAdhoc ? '로그인' : '',
-              ]}
-              statusLabel={nikkeixtechValue}
-              stateClass={nikkeixtechBadge}
-              freshnessKind="article"
-              lastCollectedAt={
-                nikkeixtechAdhoc ? jobTimestamp(crawl.crawl) : null
-              }
-              progressLine={
-                nikkeixtechAdhoc
-                  ? mediaProgress(
-                      false,
-                      true,
-                      crawlProgress,
-                      crawl.crawl?.message,
-                    )
-                  : null
-              }
-              links={
-                <>
-                  <Link to="/collect/nikkeixtech/list/search">
-                    애드혹 실행
-                  </Link>
-                </>
-              }
-              stop={
-                nikkeixtechBusy
-                  ? {
-                      label: requestingStop ? '요청 중…' : '애드혹 종료',
-                      disabled: requestingStop || !!fetchError,
-                      onClick: () =>
-                        void onStopMedia(
-                          'nikkeixtech',
-                          false,
-                          nikkeixtechAdhoc,
-                        ),
-                    }
-                  : null
-              }
-            />
-            <CollectJobCard
-              title="Nikkei"
-              meta={['계정', '애드혹', nikkeiAdhoc ? '로그인' : '']}
-              statusLabel={nikkeiValue}
-              stateClass={nikkeiBadge}
-              freshnessKind="article"
-              lastCollectedAt={
-                nikkeiAdhoc ? jobTimestamp(crawl.crawl) : null
-              }
-              progressLine={
-                nikkeiAdhoc
-                  ? mediaProgress(
-                      false,
-                      true,
-                      crawlProgress,
-                      crawl.crawl?.message,
-                    )
-                  : null
-              }
-              links={
-                <>
-                  <Link to="/collect/nikkei/list/search">애드혹 실행</Link>
-                </>
-              }
-              stop={
-                nikkeiBusy
-                  ? {
-                      label: requestingStop ? '요청 중…' : '애드혹 종료',
-                      disabled: requestingStop || !!fetchError,
-                      onClick: () =>
-                        void onStopMedia('nikkei', false, nikkeiAdhoc),
                     }
                   : null
               }
@@ -1487,6 +1091,30 @@ export function DashboardPage() {
             keys={COUNT_KEYS_MEDIA}
             error={countsDl.error}
             total={countsDl.counts.all ?? 0}
+          />
+          <CountRow
+            label="Bain"
+            source="bain"
+            counts={countsBn.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsBn.error}
+            total={countsBn.counts.all ?? 0}
+          />
+          <CountRow
+            label="BCG"
+            source="bcg"
+            counts={countsBcg.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsBcg.error}
+            total={countsBcg.counts.all ?? 0}
+          />
+          <CountRow
+            label="HBR"
+            source="hbr"
+            counts={countsHb.counts}
+            keys={COUNT_KEYS_MEDIA}
+            error={countsHb.error}
+            total={countsHb.counts.all ?? 0}
           />
           <CountRow
             label="HBR Korea"
