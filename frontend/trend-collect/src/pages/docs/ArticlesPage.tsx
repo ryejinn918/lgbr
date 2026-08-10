@@ -16,10 +16,11 @@ const SOURCE_LABEL: Record<string, string> = {
   all: '전체',
   arg: 'ARG',
   google_news: 'Google News',
+  nikkei: 'Nikkei',
 }
 
 /** Chip order for media filter (must match API OTHER_MEDIA_SOURCES). */
-const SOURCE_FILTERS = ['all', 'arg', 'google_news'] as const
+const SOURCE_FILTERS = ['all', 'arg', 'google_news', 'nikkei'] as const
 
 export function ArticlesPage() {
   const [qDraft, setQDraft] = useState('')
@@ -157,6 +158,11 @@ export function ArticlesPage() {
                 articles.items.map((item) => {
                   const selectedRow = selectedId === item.id
                   const originalUrl = articlePublicOriginalUrl(item.url)
+                  const displayTitle =
+                    (item.title_ko && item.title_ko.trim()) || item.title
+                  const showOriginal =
+                    Boolean(item.title_ko && item.title_ko.trim()) &&
+                    item.title_ko !== item.title
                   return (
                     <tr
                       key={item.id}
@@ -177,10 +183,22 @@ export function ArticlesPage() {
                         <div className="report-title-inner">
                           <span
                             className="report-title-text"
-                            title={item.title}
+                            title={
+                              showOriginal
+                                ? `${displayTitle} / ${item.title}`
+                                : item.title
+                            }
                           >
-                            {item.title}
+                            {displayTitle}
                           </span>
+                          {showOriginal ? (
+                            <span
+                              className="section-note"
+                              style={{ display: 'block', marginTop: 2 }}
+                            >
+                              {item.title}
+                            </span>
+                          ) : null}
                           {originalUrl ? (
                             <a
                               className="report-file-link report-original-link"
@@ -279,7 +297,17 @@ export function ArticlesPage() {
                 </div>
                 <div>
                   <dt>제목</dt>
-                  <dd>{selected.title}</dd>
+                  <dd>
+                    {(selected.title_ko && selected.title_ko.trim()) ||
+                      selected.title}
+                    {selected.title_ko &&
+                    selected.title_ko.trim() &&
+                    selected.title_ko !== selected.title ? (
+                      <div className="section-note" style={{ marginTop: 4 }}>
+                        원문: {selected.title}
+                      </div>
+                    ) : null}
+                  </dd>
                 </div>
                 <div>
                   <dt>섹션</dt>

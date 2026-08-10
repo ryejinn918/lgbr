@@ -8,6 +8,8 @@ import {
 import { CrawlPage } from '../CrawlPage'
 import { ArgFeedRunPage } from './ArgFeedRunPage'
 import { ArgFetchBodyRunPage } from './ArgFetchBodyRunPage'
+import { NikkeiFeedRunPage } from './NikkeiFeedRunPage'
+import { NikkeiFetchBodyRunPage } from './NikkeiFetchBodyRunPage'
 import { getMediaSource } from '../../lib/mediaSources'
 import { AccentureRunPage } from './AccentureRunPage'
 import { BainRunPage } from './BainRunPage'
@@ -42,6 +44,12 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'arg' && ctx.stage === 'body' && ctx.means === 'fetch') {
     return <ArgFetchBodyRunPage />
+  }
+  if (ctx.source === 'nikkei' && ctx.stage === 'list' && ctx.means === 'feed') {
+    return <NikkeiFeedRunPage />
+  }
+  if (ctx.source === 'nikkei' && ctx.stage === 'body' && ctx.means === 'fetch') {
+    return <NikkeiFetchBodyRunPage />
   }
   if (ctx.source === 'pwc' && ctx.stage === 'list' && ctx.means === 'search') {
     return <PwcAdhocRunPage />

@@ -29,7 +29,20 @@ JOB_STATE_LABELS = {
     "error": "오류",
 }
 
-FEED_ALLOWLIST = frozenset({"arg"})
+FEED_ALLOWLIST = frozenset({"arg", "nikkei"})
+NIKKEI_SECTIONS = frozenset(
+    {
+        "news",
+        "business",
+        "economy",
+        "markets",
+        "technology",
+        "international",
+        "sports",
+        "society",
+    }
+)
+DEFAULT_NIKKEI_SECTION = "economy"
 SEARCH_ALLOWLIST = frozenset(
     {
         "pwc",
@@ -177,6 +190,7 @@ def start_feed(
     source: str = "arg",
     max_pages: int | None = None,
     period_months: int | None = None,
+    section: str | None = None,
 ) -> dict[str, Any]:
     source_s = (source or "").strip().lower()
     if source_s not in FEED_ALLOWLIST:
@@ -216,6 +230,22 @@ def start_feed(
             "can_start": False,
         }
 
+    section_s: str | None = None
+    if source_s == "nikkei":
+        section_s = (section or DEFAULT_NIKKEI_SECTION).strip().lower()
+        if section_s not in NIKKEI_SECTIONS:
+            return {
+                "ok": False,
+                "status": 400,
+                "label": "오류",
+                "message": (
+                    "section must be one of: "
+                    + ", ".join(sorted(NIKKEI_SECTIONS))
+                ),
+                "job": None,
+                "can_start": False,
+            }
+
     reconcile_stale_jobs()
     open_job = _conflict_open_job(source_s)
     if open_job:
@@ -252,23 +282,27 @@ def start_feed(
         log_f.write(
             f"\n--- feed start {_now().isoformat()} "
             f"id={job['id']} source={source_s} "
+            f"section={section_s or '-'} "
             f"period_months={months} max_pages={pages} ---\n"
         )
         log_f.flush()
+        cmd = [
+            str(python),
+            "-m",
+            "crawler",
+            "feed",
+            "run",
+            "--job-id",
+            job["id"],
+            "--max-pages",
+            str(pages),
+            "--period-months",
+            str(months),
+        ]
+        if section_s:
+            cmd.extend(["--section", section_s])
         subprocess.Popen(
-            [
-                str(python),
-                "-m",
-                "crawler",
-                "feed",
-                "run",
-                "--job-id",
-                job["id"],
-                "--max-pages",
-                str(pages),
-                "--period-months",
-                str(months),
-            ],
+            cmd,
             cwd=str(ROOT),
             stdout=log_f,
             stderr=subprocess.STDOUT,
@@ -648,7 +682,7 @@ MAX_BODY_LIMIT = 1000
 DEFAULT_DELAY_SECONDS = 1.0
 MIN_DELAY_SECONDS = 0.5
 MAX_DELAY_SECONDS = 5.0
-BODY_ALLOWLIST = frozenset({"arg"})
+BODY_ALLOWLIST = frozenset({"arg", "nikkei"})
 
 
 def start_fetch_body(

@@ -67,20 +67,23 @@ export function useCollectionJob(opts?: {
   async function startFeed(opts?: {
     maxPages?: number
     periodMonths?: number
+    section?: string
   }) {
     const maxPages = opts?.maxPages ?? 50
     const periodMonths = opts?.periodMonths ?? 3
     setRequestingStart(true)
     try {
+      const body: Record<string, unknown> = {
+        source,
+        capability: 'feed',
+        max_pages: maxPages,
+        period_months: periodMonths,
+      }
+      if (opts?.section) body.section = opts.section
       const res = await fetch('/api/collection/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source,
-          capability: 'feed',
-          max_pages: maxPages,
-          period_months: periodMonths,
-        }),
+        body: JSON.stringify(body),
       })
       const data = (await res.json()) as CollectionJobResponse & {
         ok?: boolean

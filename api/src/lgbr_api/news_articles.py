@@ -10,7 +10,7 @@ from uuid import UUID
 from lgbr_api.db import connect
 
 # Document-lane news sources (filter chips / list allowlist).
-OTHER_MEDIA_SOURCES = frozenset({"arg", "google_news"})
+OTHER_MEDIA_SOURCES = frozenset({"arg", "google_news", "nikkei"})
 VALID_BODY = frozenset({"all", "yes", "no"})
 
 
@@ -200,9 +200,15 @@ def _serialize(row: dict[str, Any]) -> dict[str, Any]:
     elif attrs is None:
         out["attrs"] = {}
     section = None
-    if isinstance(out.get("attrs"), dict):
-        section = out["attrs"].get("section")
+    title_ko = None
+    attrs_obj = out.get("attrs")
+    if isinstance(attrs_obj, dict):
+        section = attrs_obj.get("section")
+        raw_ko = attrs_obj.get("title_ko")
+        if raw_ko is not None and str(raw_ko).strip():
+            title_ko = str(raw_ko).strip()
     out["section"] = section or out.get("publisher")
+    out["title_ko"] = title_ko
     body = out.get("body_text")
     out["has_body"] = bool(body and str(body).strip())
     return out

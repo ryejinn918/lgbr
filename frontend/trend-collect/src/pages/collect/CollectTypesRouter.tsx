@@ -6,6 +6,7 @@ import {
   type CollectStage,
 } from '../../lib/collectNav'
 import { ArgFeedTypesPage } from './ArgFeedTypesPage'
+import { NikkeiFeedTypesPage } from './NikkeiFeedTypesPage'
 import { PwcTypesPage } from './PwcTypesPage'
 import { SearchTypesPage } from './SearchTypesPage'
 
@@ -27,6 +28,9 @@ export function CollectTypesRouter() {
   }
   if (ctx.source === 'arg' && ctx.means === 'feed') {
     return <ArgFeedTypesPage />
+  }
+  if (ctx.source === 'nikkei' && ctx.means === 'feed') {
+    return <NikkeiFeedTypesPage />
   }
   if (ctx.source === 'pwc' && ctx.means === 'search') {
     return <PwcTypesPage />

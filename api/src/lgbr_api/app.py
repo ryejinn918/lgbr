@@ -380,7 +380,14 @@ async def collection_start(request: Request) -> JSONResponse:
             },
             status_code=400,
         )
-    result = start_feed(source=source, max_pages=pages, period_months=months)
+    section_raw = body.get("section")
+    section = str(section_raw).strip() if section_raw is not None else None
+    result = start_feed(
+        source=source,
+        max_pages=pages,
+        period_months=months,
+        section=section,
+    )
     status = int(result.pop("status", 200 if result.get("ok") else 400))
     return JSONResponse(result, status_code=status)
 

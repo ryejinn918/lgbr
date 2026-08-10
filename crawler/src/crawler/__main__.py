@@ -166,6 +166,11 @@ def main() -> None:
             f"{MIN_PERIOD_MONTHS}–{MAX_PERIOD_MONTHS})"
         ),
     )
+    feed_run.add_argument(
+        "--section",
+        default=None,
+        help="Nikkei section id (economy, business, markets, …)",
+    )
     feed_current = feed_sub.add_parser(
         "current",
         help="Show latest/open feed collection job",
@@ -470,6 +475,7 @@ def main() -> None:
                     args.job_id,
                     max_pages=args.max_pages,
                     period_months=args.period_months,
+                    section=getattr(args, "section", None),
                 )
             except Exception as exc:
                 print(

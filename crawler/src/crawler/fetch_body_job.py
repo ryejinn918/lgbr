@@ -9,6 +9,7 @@ from uuid import UUID
 from crawler import collection_jobs_store, news_articles_store
 from crawler.sources import FEED_ALLOWLIST
 from crawler.sources import arg_body
+from crawler.sources import nikkei_body
 from crawler.sources.arg_http import make_session
 
 DEFAULT_LIMIT = 200
@@ -62,6 +63,13 @@ def run_fetch_body_job(
     try:
         if source == "arg":
             result = _run_arg_bodies(
+                job_id,
+                limit=limit,
+                delay_seconds=delay,
+                progress=progress,
+            )
+        elif source == "nikkei":
+            result = _run_nikkei_bodies(
                 job_id,
                 limit=limit,
                 delay_seconds=delay,
@@ -197,6 +205,203 @@ def _run_arg_bodies(
             "total": total,
             "fetched": fetched,
             "failed": failed,
+            "stop_reason": stop_reason,
+            "message": message,
+            "delay_seconds": delay_seconds,
+        }
+    )
+    return progress
+
+
+def _attrs_dict(row: dict[str, Any]) -> dict[str, Any]:
+    attrs = row.get("attrs")
+    if isinstance(attrs, dict):
+        return attrs
+    if isinstance(attrs, str) and attrs.strip():
+        import json
+
+        try:
+            parsed = json.loads(attrs)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _run_nikkei_bodies(
+    job_id: UUID | str,
+    *,
+    limit: int,
+    delay_seconds: float,
+    progress: dict[str, Any],
+) -> dict[str, Any]:
+    from crawler.article_summary import summarize_article_text, summary_attrs
+    from crawler.article_title_translate import ensure_title_ko
+
+    pending = news_articles_store.list_pending_bodies(
+        nikkei_body.SOURCE, limit=limit
+    )
+    total = len(pending)
+    fetched = failed = done = summarized = 0
+    stop_reason = "done"
+    progress.update(
+        {
+            "total": total,
+            "done": 0,
+            "fetched": 0,
+            "failed": 0,
+            "summarized": 0,
+        }
+    )
+    collection_jobs_store.set_progress(job_id, progress)
+
+    if total == 0:
+        progress.update(
+            {
+                "stage": "done",
+                "stop_reason": "nothing_pending",
+                "message": "채울 본문 없음",
+            }
+        )
+        return progress
+
+    def _reuse_body(row: dict[str, Any]) -> bool:
+        attrs = _attrs_dict(row)
+        existing_body = row.get("body_text")
+        return bool(
+            existing_body
+            and str(existing_body).strip()
+            and not attrs.get("summarized_at")
+        )
+
+    needs_browser = any(not _reuse_body(r) for r in pending)
+    browser: nikkei_body.NikkeiBodyBrowser | None = None
+    try:
+        if needs_browser:
+            browser = nikkei_body.NikkeiBodyBrowser(headless=True)
+            collection_jobs_store.set_message(job_id, "Nikkei 로그인 중…")
+            browser.start()
+        for i, row in enumerate(pending):
+            if collection_jobs_store.stop_requested(job_id):
+                stop_reason = "stop_requested"
+                break
+
+            key = str(row.get("source_key") or "")
+            url = str(row.get("url") or "") or None
+            article_id = row["id"]
+            title = str(row.get("title") or "")
+            attrs = _attrs_dict(row)
+            reuse_body = _reuse_body(row)
+            progress.update(
+                {
+                    "stage": "fetch_body",
+                    "current_key": key,
+                    "done": done,
+                    "total": total,
+                    "fetched": fetched,
+                    "failed": failed,
+                    "summarized": summarized,
+                    "delay_seconds": delay_seconds,
+                    "reuse_body": reuse_body,
+                }
+            )
+            collection_jobs_store.set_progress(job_id, progress)
+            collection_jobs_store.set_message(
+                job_id, f"Nikkei 본문·요약 {done + 1}/{total} · {key}"
+            )
+
+            if not attrs.get("title_ko"):
+                try:
+                    ensure_title_ko(article_id, title)
+                except Exception:
+                    pass
+
+            raw_text: str | None = None
+            err: str | None = None
+            if reuse_body:
+                raw_text = str(row.get("body_text") or "").strip()
+            else:
+                if browser is None:
+                    news_articles_store.mark_body_failed(
+                        article_id, error="browser unavailable"
+                    )
+                    failed += 1
+                else:
+                    body, err = nikkei_body.fetch_article_safe(
+                        key, url=url, browser=browser
+                    )
+                    if body is not None:
+                        raw_text = body.body_text
+                        fetched += 1
+                    else:
+                        news_articles_store.mark_body_failed(
+                            article_id, error=err or "unknown"
+                        )
+                        failed += 1
+                        if err and (
+                            "HTTP 429" in err
+                            or "logged out" in err.lower()
+                            or "Login" in err
+                        ):
+                            time.sleep(BACKOFF_SECONDS)
+
+            if raw_text:
+                try:
+                    result = summarize_article_text(
+                        title=title,
+                        source=nikkei_body.SOURCE,
+                        raw_text=raw_text,
+                    )
+                    news_articles_store.mark_body_fetched(
+                        article_id,
+                        body_text=str(result["summary"]).strip(),
+                        attrs=summary_attrs(result),
+                    )
+                    summarized += 1
+                except Exception as exc:
+                    news_articles_store.mark_body_failed(
+                        article_id, error=f"summarize: {exc}"
+                    )
+                    failed += 1
+
+            done += 1
+            progress.update(
+                {
+                    "done": done,
+                    "fetched": fetched,
+                    "failed": failed,
+                    "summarized": summarized,
+                    "current_key": key,
+                }
+            )
+            collection_jobs_store.set_progress(job_id, progress)
+
+            if i < total - 1 and not collection_jobs_store.stop_requested(
+                job_id
+            ):
+                time.sleep(
+                    delay_seconds if not reuse_body else min(delay_seconds, 1.0)
+                )
+    finally:
+        if browser is not None:
+            browser.close()
+
+    message = {
+        "done": (
+            f"본문 요약 완료 (요약 {summarized}, 추출 {fetched}, 실패 {failed})"
+        ),
+        "stop_requested": "사용자 중단",
+        "nothing_pending": "채울 본문 없음",
+    }.get(stop_reason, stop_reason)
+
+    progress.update(
+        {
+            "stage": "done",
+            "done": done,
+            "total": total,
+            "fetched": fetched,
+            "failed": failed,
+            "summarized": summarized,
             "stop_reason": stop_reason,
             "message": message,
             "delay_seconds": delay_seconds,

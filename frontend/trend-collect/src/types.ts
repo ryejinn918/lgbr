@@ -359,6 +359,8 @@ export type NewsArticleRecord = {
   source: string
   source_key: string
   title: string
+  /** Korean display title for foreign sources (e.g. Nikkei). */
+  title_ko?: string | null
   snippet?: string | null
   url: string
   published_at: string | null

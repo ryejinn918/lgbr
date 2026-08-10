@@ -8,6 +8,10 @@ export type MediaSource = {
   hubUrl: string
   hasSearch: boolean
   hasCatalogs: boolean
+  /** List expansion via RSS/HTML feed (ARG-style), not report search. */
+  hasFeed?: boolean
+  /** Separate fetch_body stage for news articles. */
+  hasFetchBody?: boolean
   /** Account login before CDP hold (FnGuide-style). */
   requiresLogin?: boolean
   loginUrl?: string
@@ -89,16 +93,18 @@ export const MEDIA_SOURCES: MediaSource[] = [
     requiresLogin: true,
     loginUrl: 'https://www.hbrkorea.com/member/login',
   },
+  {
+    id: 'nikkei',
+    label: 'Nikkei',
+    hubUrl: 'https://www.nikkei.com/',
+    hasSearch: false,
+    hasCatalogs: false,
+    hasFeed: true,
+    hasFetchBody: true,
+    requiresLogin: true,
+    loginUrl: 'https://www.nikkei.com/login',
+  },
   // Adhoc-only — hide from Collect nav (browser hold not exposed in UI).
-  // {
-  //   id: 'nikkei',
-  //   label: 'Nikkei',
-  //   hubUrl: 'https://www.nikkei.com/',
-  //   hasSearch: false,
-  //   hasCatalogs: false,
-  //   requiresLogin: true,
-  //   loginUrl: 'https://www.nikkei.com/login',
-  // },
   // {
   //   id: 'nikkeixtech',
   //   label: 'Nikkei xTECH',

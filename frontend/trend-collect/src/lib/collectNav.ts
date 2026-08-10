@@ -72,6 +72,27 @@ const CORE_JOBS: Record<'fnguide' | 'arg', CollectJob[]> = {
 
 function mediaJobs(sourceId: string): CollectJob[] {
   const meta = getMediaSource(sourceId)
+  if (meta?.hasFeed) {
+    const jobs: CollectJob[] = [
+      {
+        id: 'feed',
+        label: '피드',
+        stage: 'list',
+        means: 'feed',
+        settingsLabel: '섹션',
+      },
+    ]
+    if (meta.hasFetchBody) {
+      jobs.push({
+        id: 'body',
+        label: '본문',
+        stage: 'body',
+        means: 'fetch',
+        settingsLabel: null,
+      })
+    }
+    return jobs
+  }
   return [
     {
       id: 'search',
