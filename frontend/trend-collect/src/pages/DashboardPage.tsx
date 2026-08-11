@@ -5,7 +5,6 @@ import { CoverageGrass } from '../components/CoverageGrass'
 import { useCollectionJob } from '../hooks/useCollectionJob'
 import { useCoverage } from '../hooks/useCoverage'
 import { useFnguideLatestCrawl } from '../hooks/useFnguideLatestCrawl'
-import { useNewsArticles } from '../hooks/useNewsArticles'
 import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import {
@@ -39,28 +38,6 @@ const SOURCE_LABEL: Record<string, string> = {
 function sourceLabel(source: string | null | undefined) {
   if (!source) return '—'
   return SOURCE_LABEL[source] ?? source
-}
-
-const COUNT_KEYS_FN = [
-  'downloaded',
-  'blind',
-  'listed',
-  'no_download',
-  'failed',
-] as const
-
-const COUNT_KEYS_MEDIA = [
-  'downloaded',
-  'listed',
-  'no_download',
-  'failed',
-] as const
-
-const COUNT_KEYS_NEWS = ['yes', 'no'] as const
-
-const ARTICLE_BODY_LABEL: Record<(typeof COUNT_KEYS_NEWS)[number], string> = {
-  yes: '본문있음',
-  no: '본문없음',
 }
 
 function isBusy(state: string) {
@@ -347,8 +324,6 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
-  const countsArgArticles = useNewsArticles({ source: 'arg', limit: 1 })
-  const countsNikkeiArticles = useNewsArticles({ source: 'nikkei', limit: 1 })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -1117,180 +1092,6 @@ export function DashboardPage() {
           </>
         )}
       </section>
-
-      <section className="panel">
-        <div className="section-head">
-          <h2>문서 카운트</h2>
-          <span className="section-note">Docs 탭으로 이동</span>
-        </div>
-        <div className="dash-count-rows">
-          <CountRow
-            label="FnGuide"
-            source="fnguide"
-            counts={countsFg.counts}
-            keys={COUNT_KEYS_FN}
-            error={countsFg.error}
-            total={countsFg.counts.all ?? 0}
-          />
-          <CountRow
-            label="PwC"
-            source="pwc"
-            counts={countsPwc.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsPwc.error}
-            total={countsPwc.counts.all ?? 0}
-          />
-          <CountRow
-            label="Accenture"
-            source="accenture"
-            counts={countsAc.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsAc.error}
-            total={countsAc.counts.all ?? 0}
-          />
-          <CountRow
-            label="KPMG"
-            source="kpmg"
-            counts={countsKp.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsKp.error}
-            total={countsKp.counts.all ?? 0}
-          />
-          <CountRow
-            label="EY"
-            source="ey"
-            counts={countsEy.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsEy.error}
-            total={countsEy.counts.all ?? 0}
-          />
-          <CountRow
-            label="Deloitte"
-            source="deloitte"
-            counts={countsDl.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsDl.error}
-            total={countsDl.counts.all ?? 0}
-          />
-          <CountRow
-            label="Bain"
-            source="bain"
-            counts={countsBn.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsBn.error}
-            total={countsBn.counts.all ?? 0}
-          />
-          <CountRow
-            label="BCG"
-            source="bcg"
-            counts={countsBcg.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsBcg.error}
-            total={countsBcg.counts.all ?? 0}
-          />
-          <CountRow
-            label="HBR"
-            source="hbr"
-            counts={countsHb.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsHb.error}
-            total={countsHb.counts.all ?? 0}
-          />
-          <CountRow
-            label="HBR Korea"
-            source="hbrkorea"
-            counts={countsHk.counts}
-            keys={COUNT_KEYS_MEDIA}
-            error={countsHk.error}
-            total={countsHk.counts.all ?? 0}
-          />
-          <ArticleCountRow
-            label="ARG"
-            source="arg"
-            counts={countsArgArticles.bodyCounts}
-            error={countsArgArticles.fetchError}
-          />
-          <ArticleCountRow
-            label="Nikkei"
-            source="nikkei"
-            counts={countsNikkeiArticles.bodyCounts}
-            error={countsNikkeiArticles.fetchError}
-          />
-        </div>
-      </section>
     </>
-  )
-}
-
-function CountRow({
-  label,
-  source,
-  counts,
-  keys,
-  error,
-  total,
-}: {
-  label: string
-  source: string
-  counts: Record<string, number>
-  keys: readonly string[]
-  error: string | null
-  total: number
-}) {
-  return (
-    <div className="dash-count-row">
-      <div className="dash-count-label">
-        <Link to={`/docs/reports/${source}`}>{label}</Link>
-        <span className="section-note">전체 {total}건</span>
-      </div>
-      {error ? <p className="warn">{error}</p> : null}
-      <div className="count-tiles dash-count-tiles">
-        {keys.map((key) => (
-          <Link
-            key={key}
-            to={`/docs/reports/${source}?status=${key}`}
-            className={`count-tile status-${key}`}
-          >
-            <span className="count-label">{STATUS_LABEL[key] || key}</span>
-            <span className="count-value">{counts[key] ?? 0}</span>
-          </Link>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function ArticleCountRow({
-  label,
-  source,
-  counts,
-  error,
-}: {
-  label: string
-  source: string
-  counts: { all: number; yes: number; no: number }
-  error: string | null
-}) {
-  const articlesTo = `/docs/articles?source=${source}`
-  return (
-    <div className="dash-count-row">
-      <div className="dash-count-label">
-        <Link to={articlesTo}>{label}</Link>
-        <span className="section-note">전체 {counts.all ?? 0}건</span>
-      </div>
-      {error ? <p className="warn">{error}</p> : null}
-      <div className="count-tiles dash-count-tiles">
-        {COUNT_KEYS_NEWS.map((key) => (
-          <Link
-            key={key}
-            to={articlesTo}
-            className={`count-tile status-${key === 'yes' ? 'downloaded' : 'listed'}`}
-          >
-            <span className="count-label">{ARTICLE_BODY_LABEL[key]}</span>
-            <span className="count-value">{counts[key] ?? 0}</span>
-          </Link>
-        ))}
-      </div>
-    </div>
   )
 }
