@@ -46,12 +46,16 @@ export function CoverageGrass({
       ...weeks.map((week, i) => {
         const count = row.counts[i] ?? 0
         const level = intensity(count, rowMax)
+        const summary = `${row.label} · ${week} · ${count}건`
         return (
           <div
             key={`${row.id}-${week}`}
             className={`coverage-cell level-${level}`}
-            title={`${row.label} · ${week} · ${count}건`}
-          />
+            title={summary}
+            aria-label={summary}
+          >
+            {count > 0 ? count : ''}
+          </div>
         )
       }),
     ]

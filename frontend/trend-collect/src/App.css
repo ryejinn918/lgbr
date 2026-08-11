@@ -122,26 +122,39 @@
 }
 
 .coverage-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   aspect-ratio: 1;
-  min-height: 14px;
+  min-height: 22px;
   border-radius: 2px;
   background: color-mix(in srgb, var(--line) 70%, #fff);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: color-mix(in srgb, var(--muted) 70%, var(--ink));
+  user-select: none;
 }
 
 .coverage-cell.level-1 {
   background: color-mix(in srgb, var(--active) 22%, #fff);
+  color: color-mix(in srgb, var(--ink) 55%, var(--muted));
 }
 
 .coverage-cell.level-2 {
   background: color-mix(in srgb, var(--active) 40%, #fff);
+  color: color-mix(in srgb, var(--ink) 72%, #fff);
 }
 
 .coverage-cell.level-3 {
   background: color-mix(in srgb, var(--active) 62%, #fff);
+  color: color-mix(in srgb, #fff 88%, var(--panel));
 }
 
 .coverage-cell.level-4 {
   background: var(--active);
+  color: #fff;
 }
 
 .coverage-cell.legend {
@@ -149,6 +162,7 @@
   height: 12px;
   min-height: 12px;
   aspect-ratio: auto;
+  font-size: 0;
 }
 
 .coverage-legend {
