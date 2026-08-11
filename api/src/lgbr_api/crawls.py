@@ -19,7 +19,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 from uuid import UUID
 
-from lgbr_api.asset_id import make_asset_id
+from lgbr_api.asset_id import LIMITED_MODES, make_asset_id
 from lgbr_api.db import CRAWL_STATE_LABELS, connect, database_url
 from lgbr_api.sessions import get_current_session, request_logout
 from lgbr_api.source_registry import (
@@ -514,16 +514,6 @@ def shutdown_open_crawl(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
 VALID_MODES = valid_crawl_modes()
 NO_ACCOUNT_MODES = no_account_modes()
 CDP_STATUS_MODES = cdp_modes()
-LIMITED_MODES = frozenset(
-    {
-        "ai",
-        "physical_ai",
-        "appliance",
-        "display",
-        "automotive",
-        "petrochemical",
-    }
-)
 DEFAULT_PERIOD_MONTHS = 3
 
 
