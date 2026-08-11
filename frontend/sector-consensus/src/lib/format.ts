@@ -1,10 +1,14 @@
 import { labelEvent, labelStage } from './labels'
 
+const KST = 'Asia/Seoul'
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleString('ko-KR', {
+    timeZone: KST,
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -13,18 +17,24 @@ export function formatTime(iso: string | null | undefined): string {
   })
 }
 
-/** Published date for compact table cells (YYYY-MM-DD). */
+/** Published date for compact table cells (YYYY-MM-DD, KST). */
 export function formatPubDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (!Number.isNaN(d.getTime())) {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-  }
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso)
-  return m ? m[1] : iso
+  const trimmed = iso.trim()
+  if (DATE_ONLY_RE.test(trimmed)) return trimmed
+  const d = new Date(trimmed)
+  if (Number.isNaN(d.getTime())) return iso
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: KST,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const y = parts.find((p) => p.type === 'year')?.value
+  const m = parts.find((p) => p.type === 'month')?.value
+  const day = parts.find((p) => p.type === 'day')?.value
+  if (!y || !m || !day) return iso
+  return `${y}-${m}-${day}`
 }
 
 export function formatProgress(progress: Record<string, unknown>): string {

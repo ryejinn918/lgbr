@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 from curl_cffi.requests import Session
 
@@ -17,6 +18,7 @@ from crawler.sources.nikkei_sections import NikkeiSection, get_section
 
 SOURCE = "nikkei"
 PUBLISHER = "日本経済新聞"
+JST = ZoneInfo("Asia/Tokyo")
 
 _NS = {
     "rss": "http://purl.org/rss/1.0/",
@@ -63,10 +65,9 @@ def _parse_dc_date(raw: str | None) -> datetime | None:
         except (TypeError, ValueError, IndexError):
             return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        dt = dt.astimezone(timezone.utc)
-    return dt
+        # wor.jp / Nikkei W3CDTF without offset is Japan local time.
+        dt = dt.replace(tzinfo=JST)
+    return dt.astimezone(timezone.utc)
 
 
 def _local_tag(tag: str) -> str:

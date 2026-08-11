@@ -102,11 +102,28 @@ export function formatAuditStats(
 
 export { THEME_LABEL } from './themes'
 
+const KST = 'Asia/Seoul'
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function formatKstYmd(ms: number): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: KST,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(ms))
+  const y = parts.find((p) => p.type === 'year')?.value
+  const m = parts.find((p) => p.type === 'month')?.value
+  const d = parts.find((p) => p.type === 'day')?.value
+  if (!y || !m || !d) return '—'
+  return `${y}-${m}-${d}`
+}
+
 export function formatTime(value: string | null | undefined): string {
   if (!value) return '—'
   const ms = Date.parse(value)
   if (Number.isNaN(ms)) return value
-  return new Date(ms).toLocaleString()
+  return new Date(ms).toLocaleString('ko-KR', { timeZone: KST })
 }
 
 /** Matches crawler quality_audit.PDF_PAGES. */
@@ -128,18 +145,14 @@ export function formatExtractInput(
   return '—'
 }
 
-/** Report published_at (DATE / ISO date) → YYYY-MM-DD. */
+/** published_at → YYYY-MM-DD in KST. Date-only (reports DATE) passed through. */
 export function formatPublishedAt(value: string | null | undefined): string {
   if (!value) return '—'
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(value)
-  if (m) return m[1]
-  const ms = Date.parse(value)
+  const trimmed = value.trim()
+  if (DATE_ONLY_RE.test(trimmed)) return trimmed
+  const ms = Date.parse(trimmed)
   if (Number.isNaN(ms)) return value
-  const d = new Date(ms)
-  const y = d.getFullYear()
-  const mo = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${mo}-${day}`
+  return formatKstYmd(ms)
 }
 
 export function formatRelative(value: string | null | undefined): string {
