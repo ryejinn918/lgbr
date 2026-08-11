@@ -24,23 +24,44 @@ _DENIED_RE = re.compile(
     r"access\s*denied|errors\.edgesuite|reference\s*#",
     re.I,
 )
+# Do not match bare "HBR Executive" — that hits the Executive Agenda series title.
 _PAYWALL_RE = re.compile(
     r"subscribe\s+to\s+read|already a subscriber|sign in to read|"
-    r"member[-\s]?only|unlock this|hbr executive",
+    r"member[-\s]?only|unlock this|"
+    r"subscribe\s+to\s+hbr\s+executive|executive-offer",
     re.I,
 )
+
+
+def looks_paywalled(text: str) -> bool:
+    """True when page/PDF text looks like a subscribe gate (not Agenda branding)."""
+    return bool(_PAYWALL_RE.search(text or ""))
 
 
 class HbrCaptureError(RuntimeError):
     pass
 
 
+# Maps to reports.status: blind (본문제한) vs no_download (수집불가).
+KIND_BLIND = "blind"
+KIND_NO_DOWNLOAD = "no_download"
+
+
 class HbrBlockedError(HbrCaptureError):
     """Paywall / empty / denied — must not mark downloaded."""
 
-    def __init__(self, message: str, *, title: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        title: str | None = None,
+        kind: str = KIND_NO_DOWNLOAD,
+    ) -> None:
         super().__init__(message)
         self.title = (title or "").strip() or None
+        if kind not in (KIND_BLIND, KIND_NO_DOWNLOAD):
+            raise ValueError(f"unknown HbrBlockedError kind: {kind!r}")
+        self.kind = kind
 
 
 @dataclass(frozen=True)
@@ -280,7 +301,7 @@ def capture_article_pdf(
     url: str,
     dest: Path,
     *,
-    min_body_chars: int = 800,
+    min_body_chars: int = 400,
     min_pdf_bytes: int = 1000,
 ) -> dict[str, Any]:
     """Open one article; page.pdf only when logged-in body clears paywall gate."""
@@ -343,14 +364,32 @@ def capture_article_pdf(
     detail_title = str(sig.get("title") or "").strip() or None
     sample = str(sig.get("sample") or "")
     if _DENIED_RE.search(sample) or _DENIED_RE.search(page.content() or ""):
-        raise HbrBlockedError(f"access denied at {url}", title=detail_title)
-    if sig.get("paywallEl") or _PAYWALL_RE.search(sample):
-        raise HbrBlockedError(f"paywall at {url}", title=detail_title)
+        raise HbrBlockedError(
+            f"access denied at {url}",
+            title=detail_title,
+            kind=KIND_NO_DOWNLOAD,
+        )
+    # Subscribe-copy is a hard gate (→ blind / 본문제한, same idea as FnGuide).
+    # A visible Piano mount alone is not — HBR often leaves upsell chrome under
+    # Executive Agenda / short digests that still have a usable body for page.pdf.
+    if looks_paywalled(sample):
+        raise HbrBlockedError(
+            f"paywall at {url}",
+            title=detail_title,
+            kind=KIND_BLIND,
+        )
     main_len = int(sig.get("main_len") or 0)
     if main_len < min_body_chars:
+        if sig.get("paywallEl"):
+            raise HbrBlockedError(
+                f"paywall/thin body at {url} (len={main_len})",
+                title=detail_title,
+                kind=KIND_BLIND,
+            )
         raise HbrBlockedError(
             f"thin body at {url} (len={main_len})",
             title=detail_title,
+            kind=KIND_NO_DOWNLOAD,
         )
 
     date_raw = str(sig.get("date_raw") or "").strip()
@@ -389,11 +428,12 @@ def capture_article_pdf(
             check=False,
         )
         txt = proc.stdout or ""
-        if _DENIED_RE.search(txt) or _PAYWALL_RE.search(txt[:800]):
+        if _DENIED_RE.search(txt) or looks_paywalled(txt[:800]):
             dest.unlink(missing_ok=True)
             raise HbrBlockedError(
                 f"paywall/denied in page.pdf for {url}",
                 title=detail_title,
+                kind=KIND_BLIND,
             )
         if not published:
             published = parse_publish_date(txt[:1200])

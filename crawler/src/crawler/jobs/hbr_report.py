@@ -15,6 +15,7 @@ from crawler.hbr_session import HbrSession
 from crawler.jobs.media_pace import clamp_item_delay_seconds, pace_after_item
 from crawler.paths import browser_profile_dir
 from crawler.sources.hbr_browser import (
+    KIND_BLIND,
     HbrBlockedError,
     HbrCaptureError,
     HbrListItem,
@@ -42,6 +43,7 @@ class HbrJobSummary:
     listed: int = 0
     downloaded: list[str] = field(default_factory=list)
     skipped_existing: int = 0
+    skipped_blind: int = 0
     skipped_no_download: int = 0
     skipped_old: int = 0
     failed: int = 0
@@ -51,7 +53,8 @@ class HbrJobSummary:
     def as_message(self) -> str:
         return (
             f"downloaded={len(self.downloaded)} listed={self.listed} "
-            f"existing={self.skipped_existing} no_dl={self.skipped_no_download} "
+            f"existing={self.skipped_existing} blind={self.skipped_blind} "
+            f"no_dl={self.skipped_no_download} "
             f"old={self.skipped_old} failed={self.failed} pages={self.pages_done}"
         )
 
@@ -118,6 +121,7 @@ def run_hbr_search_job(
         "listed": 0,
         "downloaded": 0,
         "skipped_existing": 0,
+        "skipped_blind": 0,
         "skipped_no_download": 0,
         "skipped_old": 0,
         "failed": 0,
@@ -364,17 +368,29 @@ def _process_item(
         progress["last_pdf"] = str(dest)
         progress["capture"] = meta.get("capture")
     except HbrBlockedError as exc:
-        summary.skipped_no_download += 1
-        progress["skipped_no_download"] = summary.skipped_no_download
         if dest.is_file():
             dest.unlink(missing_ok=True)
         detail_title = (exc.title or "").strip() or None
+        # Paywall / entitlement gate → blind (본문제한), same role as FnGuide.
+        if exc.kind == KIND_BLIND:
+            summary.skipped_blind += 1
+            progress["skipped_blind"] = summary.skipped_blind
+            status = reports_store.STATUS_BLIND
+        else:
+            summary.skipped_no_download += 1
+            progress["skipped_no_download"] = summary.skipped_no_download
+            status = reports_store.STATUS_NO_DOWNLOAD
         reports_store.mark_status(
             source=SOURCE,
             source_key=item.source_key,
-            status=reports_store.STATUS_NO_DOWNLOAD,
+            status=status,
             title=detail_title,
-            attrs={**attrs, "error": str(exc)},
+            attrs={
+                **attrs,
+                "error": str(exc),
+                "blind": status == reports_store.STATUS_BLIND,
+                "block_kind": exc.kind,
+            },
         )
     except (HbrCaptureError, Exception) as exc:
         summary.failed += 1

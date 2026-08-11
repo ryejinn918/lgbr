@@ -13,6 +13,8 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (progress.listed != null) bits.push(`목록항목 ${String(progress.listed)}`)
   if (progress.downloaded != null)
     bits.push(`수집 ${String(progress.downloaded)}`)
+  if (progress.skipped_blind != null)
+    bits.push(`본문제한 ${String(progress.skipped_blind)}`)
   if (progress.skipped_no_download != null)
     bits.push(`수집불가 ${String(progress.skipped_no_download)}`)
   if (progress.skipped_existing != null)

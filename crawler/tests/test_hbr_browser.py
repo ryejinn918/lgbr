@@ -6,6 +6,7 @@ from datetime import date
 
 from crawler.sources.hbr_browser import (
     is_weak_link_title,
+    looks_paywalled,
     parse_article_url,
     parse_publish_date,
     title_from_slug,
@@ -23,6 +24,17 @@ def test_is_weak_link_title() -> None:
     assert is_weak_link_title("Read more")
     assert is_weak_link_title("ab")
     assert not is_weak_link_title("Bring Back Managing for Value")
+
+
+def test_looks_paywalled_ignores_executive_agenda() -> None:
+    assert not looks_paywalled(
+        "HBR Executive Agenda Crafting Strategy in the Age of AI "
+        "by Adi Ignatius Summary. In this issue of the HBR Executive Agenda"
+    )
+    assert looks_paywalled("Subscribe to read the full article")
+    assert looks_paywalled("Already a subscriber? Sign in to read")
+    assert looks_paywalled("Subscribe to HBR Executive for full access")
+    assert not looks_paywalled("member benefits for HBR readers")
 
 
 def test_parse_article_url_uses_month_day_one() -> None:
