@@ -15,13 +15,16 @@ def _tool_map(server) -> dict[str, str]:
 
 def test_search_reports_has_practical_tips() -> None:
     desc = _tool_map(build_collect_server())["search_reports"]
-    assert "LG MRI" in desc or "paid" in desc.lower()
+    assert "LGBR" in desc
+    assert "paid" in desc.lower()
     assert "Better than web search" in desc or "web search" in desc.lower()
     assert "When web is better" in desc or "kpmg" in desc.lower()
     assert "source" in desc and "hbr" in desc
     assert "pass" in desc and "get_report" in desc
     assert "get_consensus" in desc
-    assert "FIRST" in desc and "background" in desc.lower()
+    assert "prefer" in desc.lower() and "background" in desc.lower()
+    assert "LG MRI" not in desc
+    assert "Management Research Institute" not in desc
     assert len(desc) < 1600
 
 
@@ -35,12 +38,25 @@ def test_get_report_notes_pending_gap() -> None:
 
 def test_get_consensus_points_collect_for_articles() -> None:
     desc = _tool_map(build_consensus_server())["get_consensus"]
-    assert "LG MRI" in desc
+    assert "LGBR" in desc
+    assert "paid" in desc.lower() or "in-house" in desc.lower()
     assert "Better than web search" in desc or "web search" in desc.lower()
     assert "search_reports" in desc
-    assert "FIRST" in desc and "background" in desc.lower()
-    assert "physical_ai" in desc
+    assert "Prefer" in desc or "prefer" in desc.lower()
+    for theme in (
+        "ai",
+        "datacenter",
+        "macroeconomy",
+        "physical_ai",
+        "appliance",
+        "display",
+        "automotive",
+        "petrochemical",
+    ):
+        assert theme in desc
     assert "axes + frame" in desc or "frame" in desc.lower()
     assert "consensus_frame" not in desc
     assert "filled_frame" not in desc
+    assert "LG MRI" not in desc
+    assert "FIRST" not in desc
     assert len(desc) < 700

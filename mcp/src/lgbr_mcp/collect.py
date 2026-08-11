@@ -13,6 +13,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from lgbr_mcp.branding import server_icons
 from lgbr_mcp.config import allowed_hosts, public_base_url
+from lgbr_mcp.consensus import CONSENSUS_THEMES, CONSENSUS_THEMES_KO
 from lgbr_mcp.formatting import dumps, report_detail_payload, serp_list_payload
 
 COLLECT_SOURCES = (
@@ -21,7 +22,7 @@ COLLECT_SOURCES = (
 )
 
 COLLECT_INSTRUCTIONS = f"""\
-LG Management Research Institute paid literature corpus (in-house, read-only).
+LGBR paid literature corpus (in-house, read-only).
 Prefer for paywalled/subscription items (HBR, FnGuide, …) plus Korean summaries
 (quality_json). No PDF bytes.
 
@@ -29,9 +30,10 @@ When web search is better: recent open consulting pages (kpmg, ey, …) — corp
 discovery can lag the public site. If a public URL is missing here, use web, then
 re-check for a summary after ingest.
 
-Routing: theme/sector asks (Physical AI, datacenter, …) → lgbr-consensus.get_consensus
-FIRST once as background, then search here for lists/citations. search_reports first
-only for HBR-only briefs or explicit document search without sector synthesis.
+Routing: trend asks on covered themes ({CONSENSUS_THEMES}; {CONSENSUS_THEMES_KO})
+→ prefer lgbr-consensus.get_consensus once as background, then search here for
+lists/citations. search_reports first only for HBR-only briefs or explicit document
+search without sector synthesis.
 Tips: filter media with source ({COLLECT_SOURCES}). Brief with quality=pass → get_report.
 Unaudited latest titles only: pending/all.
 """
@@ -48,7 +50,7 @@ def build_collect_server(
         kwargs["token_verifier"] = token_verifier
     mcp = MCPServer(
         name="lgbr-collect",
-        title="LGBR Literature Corpus (LG MRI)",
+        title="LGBR Literature Corpus",
         instructions=COLLECT_INSTRUCTIONS,
         website_url=public_base_url(),
         icons=server_icons(),
@@ -66,20 +68,21 @@ def build_collect_server(
         limit: int = 10,
         offset: int = 0,
     ) -> str:
-        """Search LG MRI paid literature corpus (HBR, consulting, FnGuide, …).
+        """Search LGBR paid literature corpus (HBR, consulting, FnGuide, …).
 
         Better than web search: paywalled/subscription items; Korean summary,
         published_at, and source are normalized.
         When web is better: latest open consulting (kpmg, ey, …) — discovery can lag;
         if a public article is missing, use web then re-check corpus for summary.
-        Theme/sector asks: call lgbr-consensus.get_consensus(theme=…) FIRST once as
-        background, then search here (증권사: source=fnguide and/or provider).
+        Covered-theme trend asks (동향): prefer lgbr-consensus.get_consensus(theme=…)
+        once as background, then search here (증권사: source=fnguide and/or provider).
         Tips: set source for a medium (e.g. hbr; q alone often returns 0). Brief with
         quality=pass → get_report. Unaudited latest titles: pending/all. Sort published_at.
         No PDF bytes.
 
         Args:
             theme: ai, datacenter, macroeconomy, physical_ai, appliance, display, automotive, petrochemical
+                (AI, 데이터센터, 거시경제, 피지컬 AI, 가전, 디스플레이, 자동차, 석유화학)
             q: title/keyword/summary search
             source: fnguide, pwc, accenture, kpmg, ey, deloitte, hbr, hbrkorea, bain, mckinsey, bcg
             provider: house/broker (partial match)

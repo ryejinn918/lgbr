@@ -13,12 +13,22 @@ from lgbr_mcp.branding import server_icons
 from lgbr_mcp.config import public_base_url
 from lgbr_mcp.formatting import dumps
 
-CONSENSUS_INSTRUCTIONS = """\
-LG MRI paid sector-trend draft (read-only): axes + frame (filled preferred).
-When the user asks about a covered theme (ai, physical_ai, datacenter, …), call
-get_consensus(theme=…) once first as background — then lgbr-collect for lists/citations.
-Not a report SERP or 1-year inventory (~recent FnGuide QP frame). Skip if already
-read this turn, or HBR-only / single-document asks. Lists: lgbr-collect.
+# Keep in sync with consensus runs_store.THEMES / collect theme args.
+CONSENSUS_THEMES = (
+    "ai, datacenter, macroeconomy, physical_ai, appliance, display, "
+    "automotive, petrochemical"
+)
+CONSENSUS_THEMES_KO = (
+    "AI, 데이터센터, 거시경제, 피지컬 AI, 가전, 디스플레이, 자동차, 석유화학"
+)
+
+CONSENSUS_INSTRUCTIONS = f"""\
+LGBR paid sector-consensus draft (in-house, read-only).
+Covered themes only: {CONSENSUS_THEMES}
+({CONSENSUS_THEMES_KO}). Prefer as background for those trend asks (e.g. 피지컬 AI 동향):
+worth checking get_consensus(theme=…) before web or report lists.
+Returns axes + frame (filled preferred) — not a SERP. Then lgbr-collect for citations.
+Skip if already read this turn, or HBR-only / single-document asks.
 """
 
 _AXES_KEYS = (
@@ -40,7 +50,7 @@ def build_consensus_server(
         kwargs["token_verifier"] = token_verifier
     mcp = MCPServer(
         name="lgbr-consensus",
-        title="LGBR Sector Consensus (LG MRI)",
+        title="LGBR Sector Consensus",
         instructions=CONSENSUS_INSTRUCTIONS,
         website_url=public_base_url(),
         icons=server_icons(),
@@ -49,16 +59,16 @@ def build_consensus_server(
 
     @mcp.tool()
     def get_consensus(theme: str = "ai") -> str:
-        """LG MRI sector-trend draft (latest ended): axes + frame (filled preferred).
+        """LGBR paid in-house sector frame (latest ended): axes + frame (filled preferred).
 
-        Call FIRST once as background when the user asks about a covered theme/sector
-        (e.g. Physical AI, datacenter) — including report lists or “동향·테마 정리”.
-        Better than web search for in-house sector frame; better than starting with
-        search_reports for theme context. Then lgbr-collect.search_reports → get_report.
+        Prefer for covered-theme trend asks — worth checking once before web or
+        search_reports. Better than web search for curated FnGuide-based sector
+        thesis/frame. Then lgbr-collect.search_reports → get_report for citations.
         Skip: already read this turn; HBR-only or single-document asks.
 
         Args:
             theme: ai, datacenter, macroeconomy, physical_ai, appliance, display, automotive, petrochemical
+                (AI, 데이터센터, 거시경제, 피지컬 AI, 가전, 디스플레이, 자동차, 석유화학)
         """
         return dumps(_get_consensus(theme=theme))
 
