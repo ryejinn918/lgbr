@@ -11,7 +11,8 @@ from mcp.server.auth.provider import TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
 
-from lgbr_mcp.config import allowed_hosts
+from lgbr_mcp.branding import server_icons
+from lgbr_mcp.config import allowed_hosts, public_base_url
 from lgbr_mcp.formatting import dumps, report_detail_payload, serp_list_payload
 
 COLLECT_SOURCES = (
@@ -60,6 +61,8 @@ def build_collect_server(
         name="lgbr-collect",
         title="LGBR 문서 코퍼스",
         instructions=COLLECT_INSTRUCTIONS,
+        website_url=public_base_url(),
+        icons=server_icons(),
         **kwargs,
     )
 

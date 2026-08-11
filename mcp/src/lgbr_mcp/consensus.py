@@ -9,6 +9,8 @@ from mcp.server import MCPServer
 from mcp.server.auth.provider import TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 
+from lgbr_mcp.branding import server_icons
+from lgbr_mcp.config import public_base_url
 from lgbr_mcp.formatting import dumps
 
 CONSENSUS_INSTRUCTIONS = """\
@@ -45,6 +47,8 @@ def build_consensus_server(
         name="lgbr-consensus",
         title="LGBR 섹터 컨센서스",
         instructions=CONSENSUS_INSTRUCTIONS,
+        website_url=public_base_url(),
+        icons=server_icons(),
         **kwargs,
     )
 

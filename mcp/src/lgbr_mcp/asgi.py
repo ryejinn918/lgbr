@@ -12,10 +12,11 @@ from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from lgbr_mcp.branding import FAVICON_PATH
 from lgbr_mcp.collect import build_collect_server, transport_security_settings
 from lgbr_mcp.config import (
     load_env,
@@ -50,6 +51,14 @@ class _McpTrailingSlashMiddleware:
 
 async def health(_: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "service": "lgbr-mcp"})
+
+
+async def favicon_svg(_: Request) -> FileResponse:
+    return FileResponse(FAVICON_PATH, media_type="image/svg+xml")
+
+
+async def favicon_ico(_: Request) -> RedirectResponse:
+    return RedirectResponse(url="/favicon.svg", status_code=302)
 
 
 def _client_registration() -> ClientRegistrationOptions:
@@ -144,6 +153,8 @@ def create_app() -> Starlette:
     return Starlette(
         routes=[
             Route("/health", health),
+            Route("/favicon.svg", favicon_svg),
+            Route("/favicon.ico", favicon_ico),
             *auth_routes,
             Mount("/mcp/collect", app=collect_http),
             Mount("/mcp/consensus", app=consensus_http),

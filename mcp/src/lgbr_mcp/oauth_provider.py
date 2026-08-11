@@ -132,6 +132,7 @@ class SimpleOAuthProvider(
         safe_state = html.escape(state, quote=True)
         html_content = f"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><title>LGBR MCP 로그인</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
 body{{font-family:system-ui,sans-serif;max-width:420px;margin:48px auto;padding:0 16px}}
 label{{display:block;margin:.75rem 0 .25rem}}
