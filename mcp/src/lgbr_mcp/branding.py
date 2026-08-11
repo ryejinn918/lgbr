@@ -8,21 +8,39 @@ from pathlib import Path
 
 from mcp.types import Icon
 
-FAVICON_PATH = Path(__file__).resolve().parent / "static" / "favicon.svg"
+_STATIC = Path(__file__).resolve().parent / "static"
+FAVICON_SVG_PATH = _STATIC / "favicon.svg"
+FAVICON_PNG_PATH = _STATIC / "favicon.png"
+FAVICON_ICO_PATH = _STATIC / "favicon.ico"
+
+# Back-compat alias used by ASGI SVG route.
+FAVICON_PATH = FAVICON_SVG_PATH
 
 
 @lru_cache(maxsize=1)
 def favicon_bytes() -> bytes:
-    return FAVICON_PATH.read_bytes()
+    return FAVICON_SVG_PATH.read_bytes()
+
+
+@lru_cache(maxsize=1)
+def favicon_png_bytes() -> bytes:
+    return FAVICON_PNG_PATH.read_bytes()
 
 
 @lru_cache(maxsize=1)
 def server_icons() -> list[Icon]:
-    encoded = base64.b64encode(favicon_bytes()).decode("ascii")
+    """Prefer PNG for clients that ignore SVG; keep SVG as scalable fallback."""
+    png = base64.b64encode(favicon_png_bytes()).decode("ascii")
+    svg = base64.b64encode(favicon_bytes()).decode("ascii")
     return [
         Icon(
-            src=f"data:image/svg+xml;base64,{encoded}",
+            src=f"data:image/png;base64,{png}",
+            mimeType="image/png",
+            sizes=["64x64"],
+        ),
+        Icon(
+            src=f"data:image/svg+xml;base64,{svg}",
             mimeType="image/svg+xml",
             sizes=["any"],
-        )
+        ),
     ]
