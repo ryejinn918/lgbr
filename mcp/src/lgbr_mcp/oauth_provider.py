@@ -28,9 +28,17 @@ MCP_SCOPE = "mcp"
 _ACCESS_TTL = 3600
 _REFRESH_TTL = 86400 * 7
 _CODE_TTL = 300
+_COMPLETED_STATE_TTL = 600
 _MAX_CLIENTS = 64
 _MAX_TOKENS = 256
 _MAX_LOGIN_FAILURES = 8
+
+_PAGE_STYLE = """
+body{font-family:system-ui,sans-serif;max-width:420px;margin:48px auto;padding:0 16px}
+label{display:block;margin:.75rem 0 .25rem}
+input{width:100%;padding:.5rem;box-sizing:border-box}
+button{margin-top:1rem;padding:.6rem 1rem;width:100%;cursor:pointer}
+"""
 
 # Open redirect / DCR abuse: only known LLM host connector callbacks.
 _ALLOWED_REDIRECT_URIS = frozenset(
@@ -90,6 +98,64 @@ class SimpleOAuthProvider(
         self.tokens: dict[str, AccessToken] = {}
         self.refresh_tokens: dict[str, RefreshToken] = {}
         self.state_mapping: dict[str, dict[str, Any]] = {}
+        self.completed_states: dict[str, float] = {}
+
+    def _prune_completed(self) -> None:
+        cutoff = time.time() - _COMPLETED_STATE_TTL
+        stale = [k for k, ts in self.completed_states.items() if ts < cutoff]
+        for key in stale:
+            del self.completed_states[key]
+
+    def _is_completed(self, state: str) -> bool:
+        self._prune_completed()
+        ts = self.completed_states.get(state)
+        if ts is None:
+            return False
+        if ts < time.time() - _COMPLETED_STATE_TTL:
+            del self.completed_states[state]
+            return False
+        return True
+
+    def _mark_completed(self, state: str) -> None:
+        self._prune_completed()
+        self.completed_states[state] = time.time()
+
+    def _done_page(self) -> HTMLResponse:
+        html_content = f"""<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><title>LGBR MCP 연결 완료</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">
+<style>{_PAGE_STYLE}</style></head><body>
+<h1>연결 완료</h1>
+<p>로그인이 끝났습니다. 이 창을 닫습니다…</p>
+<p id="fallback" hidden>
+<button type="button" onclick="window.close()">창 닫기</button>
+</p>
+<script>
+(function(){{
+  function tryClose(){{
+    window.close();
+    setTimeout(function(){{
+      var el = document.getElementById("fallback");
+      if (el) el.hidden = false;
+    }}, 400);
+  }}
+  tryClose();
+  setTimeout(tryClose, 1500);
+}})();
+</script>
+</body></html>"""
+        return HTMLResponse(html_content)
+
+    def _expired_page(self) -> HTMLResponse:
+        html_content = f"""<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><title>LGBR MCP 로그인</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<style>{_PAGE_STYLE}</style></head><body>
+<h1>로그인 세션 만료</h1>
+<p>세션이 만료되었거나 이미 사용되었습니다. Claude에서 연결을 다시 시도해 주세요.</p>
+</body></html>"""
+        return HTMLResponse(html_content, status_code=400)
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         return self.clients.get(client_id)
@@ -127,23 +193,21 @@ class SimpleOAuthProvider(
         return f"{self.login_url}?state={login_state}"
 
     async def get_login_page(self, state: str) -> HTMLResponse:
+        if state and self._is_completed(state):
+            return self._done_page()
         if not state or state not in self.state_mapping:
-            raise HTTPException(400, "Invalid or missing state")
+            return self._expired_page()
         safe_state = html.escape(state, quote=True)
         html_content = f"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><title>LGBR MCP 로그인</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<style>
-body{{font-family:system-ui,sans-serif;max-width:420px;margin:48px auto;padding:0 16px}}
-label{{display:block;margin:.75rem 0 .25rem}}
-input{{width:100%;padding:.5rem;box-sizing:border-box}}
-button{{margin-top:1rem;padding:.6rem 1rem;width:100%;cursor:pointer}}
-</style></head><body>
+<style>{_PAGE_STYLE}</style></head><body>
 <h1>LGBR MCP</h1>
 <p>Claude 커넥터 연결용 계정으로 로그인하세요.</p>
-<form method="post" action="{html.escape(self.login_url, quote=True)}">
+<form method="post" action="{html.escape(self.login_url, quote=True)}"
+      onsubmit="var b=this.querySelector('button'); if(b.disabled) return false; b.disabled=true; b.textContent='Signing in…';">
 <input type="hidden" name="state" value="{safe_state}"/>
 <label>Username<input name="username" autocomplete="username" required/></label>
 <label>Password<input name="password" type="password" autocomplete="current-password" required/></label>
@@ -160,10 +224,21 @@ button{{margin-top:1rem;padding:.6rem 1rem;width:100%;cursor:pointer}}
             state, str
         ):
             raise HTTPException(400, "Missing username, password, or state")
+        if self._is_completed(state):
+            return self._done_page()
+        if state not in self.state_mapping:
+            return self._expired_page()
         redirect_uri = await self._complete_login(username, password, state)
+        if redirect_uri is None:
+            return self._done_page()
         return RedirectResponse(url=redirect_uri, status_code=302)
 
-    async def _complete_login(self, username: str, password: str, state: str) -> str:
+    async def _complete_login(
+        self, username: str, password: str, state: str
+    ) -> str | None:
+        """Return redirect URL, or None if this state was already completed."""
+        if self._is_completed(state):
+            return None
         state_data = self.state_mapping.get(state)
         if not state_data:
             raise HTTPException(400, "Invalid state parameter")
@@ -205,6 +280,7 @@ button{{margin-top:1rem;padding:.6rem 1rem;width:100%;cursor:pointer}}
             subject=username,
         )
         del self.state_mapping[state]
+        self._mark_completed(state)
         return construct_redirect_uri(
             redirect_uri,
             code=code,

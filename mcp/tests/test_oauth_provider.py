@@ -99,6 +99,7 @@ def test_login_issues_access_token() -> None:
         with pytest.raises(HTTPException):
             await provider._complete_login("lgbr", "wrong", state)
         redirect_url = await provider._complete_login("lgbr", "secret", state)
+        assert isinstance(redirect_url, str)
         code = redirect_url.split("code=")[1].split("&")[0]
         auth_code = await provider.load_authorization_code(client, code)
         assert auth_code is not None
@@ -128,6 +129,51 @@ def test_chatgpt_redirect_login_completes() -> None:
         )
         state = url.split("state=")[1]
         redirect_url = await provider._complete_login("lgbr", "secret", state)
+        assert isinstance(redirect_url, str)
         assert redirect_url.startswith(redirect)
+
+    asyncio.run(_run())
+
+
+def test_completed_state_replay_returns_done_page() -> None:
+    provider = _provider()
+    redirect = "https://claude.ai/api/mcp/auth_callback"
+    client = _client("ok", redirect, "claude")
+
+    async def _run() -> None:
+        await provider.register_client(client)
+        url = await provider.authorize(
+            client,
+            AuthorizationParams(
+                state="st",
+                scopes=["mcp"],
+                code_challenge="challenge",
+                redirect_uri=AnyUrl(redirect),
+                redirect_uri_provided_explicitly=True,
+                resource="https://lgbrmcp.magpielabs.co.kr/mcp/collect",
+            ),
+        )
+        state = url.split("state=")[1]
+        first = await provider._complete_login("lgbr", "secret", state)
+        assert isinstance(first, str) and "code=" in first
+        assert await provider._complete_login("lgbr", "secret", state) is None
+        page = await provider.get_login_page(state)
+        assert page.status_code == 200
+        body = page.body.decode()
+        assert "window.close" in body
+        assert "연결 완료" in body
+
+    asyncio.run(_run())
+
+
+def test_unknown_state_login_page_is_friendly_expired() -> None:
+    provider = _provider()
+
+    async def _run() -> None:
+        page = await provider.get_login_page("missing-state")
+        assert page.status_code == 400
+        body = page.body.decode()
+        assert "만료" in body or "다시 시도" in body
+        assert "Invalid" not in body
 
     asyncio.run(_run())
