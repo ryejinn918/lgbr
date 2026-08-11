@@ -423,6 +423,8 @@ async def news_articles(request: Request) -> JSONResponse:
         source=request.query_params.get("source") or "all",
         q=request.query_params.get("q"),
         has_body=request.query_params.get("has_body") or "all",
+        published_from=request.query_params.get("published_from"),
+        published_to=request.query_params.get("published_to"),
         limit=limit,
         offset=offset,
     )
@@ -448,6 +450,8 @@ async def reports(request: Request) -> JSONResponse:
         provider=request.query_params.get("provider"),
         crawl_id=request.query_params.get("crawl_id"),
         sort=request.query_params.get("sort"),
+        published_from=request.query_params.get("published_from"),
+        published_to=request.query_params.get("published_to"),
         limit=limit,
         offset=offset,
     )

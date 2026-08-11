@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -14,16 +14,63 @@ OTHER_MEDIA_SOURCES = frozenset({"arg", "google_news", "nikkei"})
 VALID_BODY = frozenset({"all", "yes", "no"})
 
 
+def _parse_published_bound(value: str | None) -> datetime | None | str:
+    """Parse ISO date/datetime. Returns datetime, None if empty, or 'invalid'."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        if len(normalized) == 10 and normalized[4] == "-" and normalized[7] == "-":
+            dt = datetime.strptime(normalized, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+        else:
+            dt = datetime.fromisoformat(normalized)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return "invalid"
+
+
 def list_articles(
     *,
     source: str | None = "all",
     q: str | None = None,
     has_body: str | None = "all",
+    published_from: str | None = None,
+    published_to: str | None = None,
     limit: int = 30,
     offset: int = 0,
 ) -> dict[str, Any]:
     limit = max(1, min(int(limit), 200))
     offset = max(0, int(offset))
+
+    pub_from = _parse_published_bound(published_from)
+    if pub_from == "invalid":
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "published_from must be an ISO date or datetime",
+            "items": [],
+            "total": 0,
+            "body_counts": {},
+            "source_counts": {},
+        }
+    pub_to = _parse_published_bound(published_to)
+    if pub_to == "invalid":
+        return {
+            "ok": False,
+            "status": 400,
+            "message": "published_to must be an ISO date or datetime",
+            "items": [],
+            "total": 0,
+            "body_counts": {},
+            "source_counts": {},
+        }
 
     source_s = (source or "all").strip().lower()
     where: list[str] = []
@@ -56,6 +103,13 @@ def list_articles(
         like = f"%{q_s}%"
         params.extend([like, like, like])
 
+    if isinstance(pub_from, datetime):
+        where.append("published_at >= %s")
+        params.append(pub_from)
+    if isinstance(pub_to, datetime):
+        where.append("published_at < %s")
+        params.append(pub_to)
+
     body_s = (has_body or "all").strip().lower()
     if body_s not in VALID_BODY:
         return {
@@ -69,7 +123,7 @@ def list_articles(
         }
 
     # Body / per-source chip counts ignore the active body & source filters
-    # (same pattern as report status chips) but keep q.
+    # (same pattern as report status chips) but keep q and published_* bounds.
     base_where = ["source = ANY(%s)"]
     base_params: list[Any] = [sorted(OTHER_MEDIA_SOURCES)]
     if q_s:
@@ -78,6 +132,12 @@ def list_articles(
         )
         like = f"%{q_s}%"
         base_params.extend([like, like, like])
+    if isinstance(pub_from, datetime):
+        base_where.append("published_at >= %s")
+        base_params.append(pub_from)
+    if isinstance(pub_to, datetime):
+        base_where.append("published_at < %s")
+        base_params.append(pub_to)
     base_where_sql = " AND ".join(base_where)
 
     # Counts for the selected source (or all) ignore body filter only.
@@ -125,6 +185,8 @@ def list_articles(
         "status": 200,
         "source": source_out,
         "has_body": body_s,
+        "published_from": pub_from.isoformat() if isinstance(pub_from, datetime) else None,
+        "published_to": pub_to.isoformat() if isinstance(pub_to, datetime) else None,
         "items": items,
         "total": total,
         "limit": limit,

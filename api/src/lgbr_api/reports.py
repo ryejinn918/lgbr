@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -478,6 +478,28 @@ def _theme_counts(cur: Any, *, source: str | None = None) -> dict[str, int]:
     return counts
 
 
+def _parse_published_bound(value: str | None) -> datetime | None | str:
+    """Parse ISO date/datetime. Returns datetime, None if empty, or 'invalid'."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        if len(normalized) == 10 and normalized[4] == "-" and normalized[7] == "-":
+            dt = datetime.strptime(normalized, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+        else:
+            dt = datetime.fromisoformat(normalized)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return "invalid"
+
+
 def list_reports(
     *,
     source: str | None = None,
@@ -488,6 +510,8 @@ def list_reports(
     provider: str | None = None,
     crawl_id: str | None = None,
     sort: str | None = None,
+    published_from: str | None = None,
+    published_to: str | None = None,
     limit: int = 30,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -513,6 +537,19 @@ def list_reports(
     if sort_key not in VALID_SORTS:
         return _error(f"invalid sort: {sort_key}", sort_key=sort_key)
     order_sql = SORT_SQL[sort_key]
+
+    pub_from = _parse_published_bound(published_from)
+    if pub_from == "invalid":
+        return _error(
+            "published_from must be an ISO date or datetime",
+            sort_key=sort_key,
+        )
+    pub_to = _parse_published_bound(published_to)
+    if pub_to == "invalid":
+        return _error(
+            "published_to must be an ISO date or datetime",
+            sort_key=sort_key,
+        )
 
     status_filter: str | None = None
     if status and status != "all":
@@ -581,6 +618,12 @@ def list_reports(
             "OR coalesce(quality_json->>'framework_summary', '') ILIKE %s)"
         )
         params.extend([q_pat, q_pat, q_pat, q_pat, q_pat, q_pat])
+    if isinstance(pub_from, datetime):
+        where.append("published_at >= %s")
+        params.append(pub_from)
+    if isinstance(pub_to, datetime):
+        where.append("published_at < %s")
+        params.append(pub_to)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
 
@@ -635,6 +678,12 @@ def list_reports(
         "limit": limit,
         "offset": offset,
         "sort": sort_key,
+        "published_from": (
+            pub_from.isoformat() if isinstance(pub_from, datetime) else None
+        ),
+        "published_to": (
+            pub_to.isoformat() if isinstance(pub_to, datetime) else None
+        ),
     }
 
 
