@@ -4,7 +4,25 @@ from __future__ import annotations
 
 from datetime import date
 
-from crawler.sources.hbr_browser import parse_article_url, parse_publish_date
+from crawler.sources.hbr_browser import (
+    is_weak_link_title,
+    parse_article_url,
+    parse_publish_date,
+    title_from_slug,
+)
+
+
+def test_title_from_slug_humanizes() -> None:
+    assert (
+        title_from_slug("bring-back-managing-for-value")
+        == "bring back managing for value"
+    )
+
+
+def test_is_weak_link_title() -> None:
+    assert is_weak_link_title("Read more")
+    assert is_weak_link_title("ab")
+    assert not is_weak_link_title("Bring Back Managing for Value")
 
 
 def test_parse_article_url_uses_month_day_one() -> None:

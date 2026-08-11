@@ -38,6 +38,10 @@ class HbrCaptureError(RuntimeError):
 class HbrBlockedError(HbrCaptureError):
     """Paywall / empty / denied — must not mark downloaded."""
 
+    def __init__(self, message: str, *, title: str | None = None) -> None:
+        super().__init__(message)
+        self.title = (title or "").strip() or None
+
 
 @dataclass(frozen=True)
 class HbrListItem:
@@ -46,6 +50,26 @@ class HbrListItem:
     title: str
     published_at: date | None
     publish_date_raw: str
+
+
+_WEAK_LINK_TITLE_RE = re.compile(
+    r"^(read more|more|continue|see more|view)$",
+    re.I,
+)
+
+
+def title_from_slug(slug: str) -> str:
+    """Humanize a URL slug for list/detail fallback titles."""
+    text = re.sub(r"[-_]+", " ", (slug or "").strip())
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:300] if text else slug
+
+
+def is_weak_link_title(title: str) -> bool:
+    t = (title or "").strip()
+    if len(t) < 4:
+        return True
+    return bool(_WEAK_LINK_TITLE_RE.match(t))
 
 
 def months_ago_cutoff(months: int, *, now: datetime | None = None) -> date:
@@ -82,40 +106,50 @@ def open_latest(page: Page) -> None:
 
 
 def collect_list_items(page: Page) -> list[HbrListItem]:
-    # Dates live beside the title link (not inside it). Climb parents for
-    # "Month D, YYYY"; do not stop early when the <a> text itself is long.
+    # Dates may live on a magazine package ancestor — use that only for dateRaw.
+    # Titles must stay card-local: never querySelector on dateRoot (package hed
+    # would copy onto every article in the issue).
     raw = page.evaluate(
         """() => {
           const DATE_RE = /\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b/;
+          const WEAK_TITLE = /^(read more|more|continue|see more|view)$/i;
+          const ARTICLE_HREF = /hbr\\.org\\/\\d{4}\\/\\d{2}\\/[a-z0-9-]+\\/?$/i;
           const out = [];
           const seen = new Set();
           for (const a of document.querySelectorAll('a[href*="/20"]')) {
             const href = (a.href || '').split('#')[0].split('?')[0];
-            if (!/hbr\\.org\\/\\d{4}\\/\\d{2}\\/[a-z0-9-]+\\/?$/i.test(href)) continue;
+            if (!ARTICLE_HREF.test(href)) continue;
             if (seen.has(href)) continue;
             seen.add(href);
             let dateRaw = '';
-            let dateRoot = null;
             let el = a.parentElement;
             for (let i = 0; i < 8 && el; i++) {
               const m = (el.innerText || '').match(DATE_RE);
-              if (m) { dateRaw = m[0]; dateRoot = el; break; }
+              if (m) { dateRaw = m[0]; break; }
               el = el.parentElement;
             }
-            let root = a;
-            for (let i = 0; i < 6 && root; i++) {
-              if ((root.innerText || '').trim().length > 30) break;
-              root = root.parentElement;
+            let title = (a.innerText || '').trim().replace(/\\s+/g, ' ');
+            if (title.length < 4 || WEAK_TITLE.test(title)) {
+              title = '';
+              let node = a.parentElement;
+              for (let i = 0; i < 6 && node; i++) {
+                const links = [...node.querySelectorAll('a[href*="/20"]')]
+                  .filter((x) => ARTICLE_HREF.test((x.href || '').split('#')[0]));
+                if (links.length >= 1 && links.length <= 2) {
+                  const heading = node.querySelector('h2, h3, h4');
+                  const hed = (heading && heading.innerText || '').trim().replace(/\\s+/g, ' ');
+                  if (hed.length >= 4 && !WEAK_TITLE.test(hed)) {
+                    title = hed;
+                    break;
+                  }
+                }
+                if (links.length > 2) break;
+                node = node.parentElement;
+              }
             }
-            root = dateRoot || root || a;
-            const titleEl = root && root.querySelector(
-              'h2, h3, h4, [class*=\"title\"], [class*=\"hed\"], [class*=\"Hed\"]'
-            );
-            let title = (titleEl && titleEl.innerText || a.innerText || '')
-              .trim().replace(/\\s+/g, ' ');
-            if (title.length < 4) {
+            if (!title) {
               const parts = href.split('/').filter(Boolean);
-              title = parts[parts.length - 1].replace(/-/g, ' ');
+              title = (parts[parts.length - 1] || '').replace(/-/g, ' ');
             }
             out.push({
               href,
@@ -136,11 +170,14 @@ def collect_list_items(page: Page) -> list[HbrListItem]:
         slug, ym = parsed
         date_raw = str(row.get("date_raw") or "")
         published = parse_publish_date(date_raw) or ym
+        raw_title = str(row.get("title") or "").strip()
+        if is_weak_link_title(raw_title):
+            raw_title = title_from_slug(slug)
         items.append(
             HbrListItem(
                 source_key=slug,
                 url=url if url.startswith("http") else f"{BASE}{url}",
-                title=str(row.get("title") or slug),
+                title=raw_title or title_from_slug(slug),
                 published_at=published,
                 publish_date_raw=date_raw or (ym.isoformat() if ym else ""),
             )
@@ -285,9 +322,16 @@ def capture_article_pdf(
             || byline
             || ''
           ).trim();
+          const og = document.querySelector('meta[property="og:title"]');
+          const title = (
+            document.querySelector('h1')?.innerText
+            || (og && og.getAttribute('content'))
+            || document.title
+            || ''
+          ).trim();
           return {
             url: location.href,
-            title: (document.querySelector('h1')?.innerText || document.title || '').trim(),
+            title,
             main_len: main.length,
             sample: main.slice(0, 500),
             paywallEl,
@@ -296,14 +340,18 @@ def capture_article_pdf(
           };
         }"""
     )
+    detail_title = str(sig.get("title") or "").strip() or None
     sample = str(sig.get("sample") or "")
     if _DENIED_RE.search(sample) or _DENIED_RE.search(page.content() or ""):
-        raise HbrBlockedError(f"access denied at {url}")
+        raise HbrBlockedError(f"access denied at {url}", title=detail_title)
     if sig.get("paywallEl") or _PAYWALL_RE.search(sample):
-        raise HbrBlockedError(f"paywall at {url}")
+        raise HbrBlockedError(f"paywall at {url}", title=detail_title)
     main_len = int(sig.get("main_len") or 0)
     if main_len < min_body_chars:
-        raise HbrBlockedError(f"thin body at {url} (len={main_len})")
+        raise HbrBlockedError(
+            f"thin body at {url} (len={main_len})",
+            title=detail_title,
+        )
 
     date_raw = str(sig.get("date_raw") or "").strip()
     published = parse_publish_date(date_raw)
@@ -343,7 +391,10 @@ def capture_article_pdf(
         txt = proc.stdout or ""
         if _DENIED_RE.search(txt) or _PAYWALL_RE.search(txt[:800]):
             dest.unlink(missing_ok=True)
-            raise HbrBlockedError(f"paywall/denied in page.pdf for {url}")
+            raise HbrBlockedError(
+                f"paywall/denied in page.pdf for {url}",
+                title=detail_title,
+            )
         if not published:
             published = parse_publish_date(txt[:1200])
             if published and not date_raw:

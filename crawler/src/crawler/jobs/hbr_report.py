@@ -368,10 +368,12 @@ def _process_item(
         progress["skipped_no_download"] = summary.skipped_no_download
         if dest.is_file():
             dest.unlink(missing_ok=True)
+        detail_title = (exc.title or "").strip() or None
         reports_store.mark_status(
             source=SOURCE,
             source_key=item.source_key,
             status=reports_store.STATUS_NO_DOWNLOAD,
+            title=detail_title,
             attrs={**attrs, "error": str(exc)},
         )
     except (HbrCaptureError, Exception) as exc:

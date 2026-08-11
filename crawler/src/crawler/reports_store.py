@@ -146,7 +146,12 @@ def upsert_listed(
                 )
                 ON CONFLICT (source, source_key) DO UPDATE SET
                     crawl_id = COALESCE(EXCLUDED.crawl_id, reports.crawl_id),
-                    title = EXCLUDED.title,
+                    title = CASE
+                        WHEN reports.file_path IS NOT NULL
+                             OR reports.status = 'downloaded'
+                        THEN reports.title
+                        ELSE EXCLUDED.title
+                    END,
                     author = COALESCE(EXCLUDED.author, reports.author),
                     published_at = COALESCE(EXCLUDED.published_at, reports.published_at),
                     page_count = COALESCE(EXCLUDED.page_count, reports.page_count),
@@ -250,6 +255,7 @@ def mark_status(
     source_key: str,
     status: str,
     crawl_id: UUID | str | None = None,
+    title: str | None = None,
     attrs: dict[str, Any] | None = None,
     clear_download: bool = False,
 ) -> bool:
@@ -264,6 +270,7 @@ def mark_status(
     if status == STATUS_DOWNLOADED:
         raise ValueError("use mark_downloaded for downloaded status")
 
+    title_s = (title or "").strip() or source_key
     attrs_json = json.dumps(attrs or {}, ensure_ascii=False)
     if clear_download:
         status_sql = "EXCLUDED.status"
@@ -281,6 +288,11 @@ def mark_status(
                         ELSE EXCLUDED.status
                     END"""
         clear_sql = ""
+    title_sql = (
+        "title = EXCLUDED.title,"
+        if (title or "").strip()
+        else ""
+    )
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -292,6 +304,7 @@ def mark_status(
                 VALUES (%s, %s, %s, %s, %s, %s::jsonb, now(), now(), NULL)
                 ON CONFLICT (source, source_key) DO UPDATE SET
                     crawl_id = COALESCE(EXCLUDED.crawl_id, reports.crawl_id),
+                    {title_sql}
                     status = {status_sql},
                     {clear_sql}
                     attrs = {_ATTRS_MERGE_SQL},
@@ -302,7 +315,7 @@ def mark_status(
                     source,
                     source_key,
                     str(crawl_id) if crawl_id else None,
-                    source_key,
+                    title_s,
                     status,
                     attrs_json,
                 ),
