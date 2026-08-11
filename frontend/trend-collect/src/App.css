@@ -112,13 +112,29 @@
 }
 
 .coverage-source-label {
+  display: grid;
+  gap: 0.1rem;
+  justify-items: start;
+  min-width: 0;
+  padding-right: 0.35rem;
+}
+
+.coverage-source-name {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 0.35rem;
+  max-width: 100%;
+}
+
+.coverage-source-total {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--muted);
 }
 
 .coverage-cell {

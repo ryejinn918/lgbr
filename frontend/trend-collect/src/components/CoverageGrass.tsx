@@ -39,9 +39,15 @@ export function CoverageGrass({
 
   const cells: ReactNode[] = sources.flatMap((row) => {
     const rowMax = Math.max(0, ...row.counts)
+    const rowTotal = row.counts.reduce((sum, n) => sum + n, 0)
     return [
-      <div key={`${row.id}-label`} className="coverage-source-label">
-        {row.label}
+      <div
+        key={`${row.id}-label`}
+        className="coverage-source-label"
+        title={`${row.label} · 표시 기간 ${rowTotal}건`}
+      >
+        <span className="coverage-source-name">{row.label}</span>
+        <span className="coverage-source-total">{rowTotal}건</span>
       </div>,
       ...weeks.map((week, i) => {
         const count = row.counts[i] ?? 0
@@ -66,7 +72,7 @@ export function CoverageGrass({
       <div
         className="coverage-grid"
         style={{
-          gridTemplateColumns: `5.5rem repeat(${weeks.length}, minmax(0, 1fr))`,
+          gridTemplateColumns: `6rem repeat(${weeks.length}, minmax(0, 1fr))`,
         }}
       >
         <div className="coverage-corner" aria-hidden />
