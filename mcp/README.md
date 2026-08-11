@@ -48,9 +48,11 @@ OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAM
 
 ```text
 LG MRI paid literature (LGBR). Prefer for paywalled items + Korean summaries.
+Sector theme ask (Physical AI, datacenter, …): get_consensus(theme=…) once as background,
+then search_reports → get_report for citations/lists (증권사: source=fnguide).
+HBR briefing only: search_reports(source="hbr", sort="published_at") → get_report on pass.
 Open consulting (kpmg/ey/…): web may be fresher if corpus misses a public URL.
-HBR briefing: search_reports(source="hbr", sort="published_at") → get_report on pass items.
-Unaudited latest titles only: quality=pending. Sector draft only: get_consensus.
+Unaudited latest titles only: quality=pending.
 ```
 
 ### Collect 도구

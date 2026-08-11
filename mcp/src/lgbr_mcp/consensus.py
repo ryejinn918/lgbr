@@ -14,9 +14,11 @@ from lgbr_mcp.config import public_base_url
 from lgbr_mcp.formatting import dumps
 
 CONSENSUS_INSTRUCTIONS = """\
-LG MRI paid sector-trend draft (read-only). Prefer for literature/trend research.
-Not a web article list: internal axes + consensus_frame + filled_frame.
-Individual articles/reports: lgbr-collect.
+LG MRI paid sector-trend draft (read-only): axes + frame (filled preferred).
+When the user asks about a covered theme (ai, physical_ai, datacenter, …), call
+get_consensus(theme=…) once first as background — then lgbr-collect for lists/citations.
+Not a report SERP or 1-year inventory (~recent FnGuide QP frame). Skip if already
+read this turn, or HBR-only / single-document asks. Lists: lgbr-collect.
 """
 
 _AXES_KEYS = (
@@ -24,13 +26,6 @@ _AXES_KEYS = (
     "cut_logic",
     "pillar_sketch",
     "coverage_notes",
-    "until",
-    "resume_from",
-    "core_count",
-    "bibliography_count",
-    "quality_pass_count",
-    "pool_count",
-    "core_max",
 )
 
 
@@ -54,10 +49,13 @@ def build_consensus_server(
 
     @mcp.tool()
     def get_consensus(theme: str = "ai") -> str:
-        """LG MRI sector-trend draft (latest ended): axes + consensus_frame + filled_frame.
+        """LG MRI sector-trend draft (latest ended): axes + frame (filled preferred).
 
-        Better than web search: in-house sector frame/draft. Prefer for trend research.
-        Tip: HBR article briefings → lgbr-collect.search_reports.
+        Call FIRST once as background when the user asks about a covered theme/sector
+        (e.g. Physical AI, datacenter) — including report lists or “동향·테마 정리”.
+        Better than web search for in-house sector frame; better than starting with
+        search_reports for theme context. Then lgbr-collect.search_reports → get_report.
+        Skip: already read this turn; HBR-only or single-document asks.
 
         Args:
             theme: ai, datacenter, macroeconomy, physical_ai, appliance, display, automotive, petrochemical
@@ -82,8 +80,7 @@ def _get_consensus(*, theme: str) -> dict[str, Any]:
             "theme": theme,
             "run": None,
             "axes": None,
-            "filled_frame": None,
-            "consensus_frame": None,
+            "frame": None,
             "message": f"no ended consensus run for theme={theme}",
         }
     return _consensus_payload(
@@ -101,12 +98,12 @@ def _consensus_payload(
 ) -> dict[str, Any]:
     criteria = run.get("criteria") if isinstance(run.get("criteria"), dict) else {}
     axes = {k: criteria.get(k) for k in _AXES_KEYS}
+    frame = filled_frame if filled_frame else consensus_frame
     return {
         "ok": True,
         "run": _run_summary(run),
         "axes": axes,
-        "filled_frame": filled_frame,
-        "consensus_frame": consensus_frame,
+        "frame": frame,
         "hint": "Cite individual pieces via lgbr-collect.search_reports → get_report.",
     }
 
@@ -114,15 +111,9 @@ def _consensus_payload(
 def _run_summary(run: dict[str, Any] | None) -> dict[str, Any] | None:
     if not run:
         return None
-    criteria = run.get("criteria") if isinstance(run.get("criteria"), dict) else {}
     return {
         "id": run.get("id"),
         "theme": run.get("theme"),
-        "state": run.get("state"),
-        "label": run.get("label"),
         "question": run.get("question"),
-        "started_at": run.get("started_at"),
         "ended_at": run.get("ended_at"),
-        "until": criteria.get("until"),
-        "thesis": criteria.get("thesis"),
     }

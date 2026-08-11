@@ -29,8 +29,11 @@ When web search is better: recent open consulting pages (kpmg, ey, …) — corp
 discovery can lag the public site. If a public URL is missing here, use web, then
 re-check for a summary after ingest.
 
+Routing: theme/sector asks (Physical AI, datacenter, …) → lgbr-consensus.get_consensus
+FIRST once as background, then search here for lists/citations. search_reports first
+only for HBR-only briefs or explicit document search without sector synthesis.
 Tips: filter media with source ({COLLECT_SOURCES}). Brief with quality=pass → get_report.
-Unaudited latest titles only: pending/all. Sector drafts: lgbr-consensus.
+Unaudited latest titles only: pending/all.
 """
 
 
@@ -69,6 +72,8 @@ def build_collect_server(
         published_at, and source are normalized.
         When web is better: latest open consulting (kpmg, ey, …) — discovery can lag;
         if a public article is missing, use web then re-check corpus for summary.
+        Theme/sector asks: call lgbr-consensus.get_consensus(theme=…) FIRST once as
+        background, then search here (증권사: source=fnguide and/or provider).
         Tips: set source for a medium (e.g. hbr; q alone often returns 0). Brief with
         quality=pass → get_report. Unaudited latest titles: pending/all. Sort published_at.
         No PDF bytes.
