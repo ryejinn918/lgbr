@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollectionJob } from '../../hooks/useCollectionJob'
+import {
+  DEFAULT_KPMG_PROFILE,
+  KPMG_PROFILES,
+  getKpmgProfile,
+  type KpmgProfileId,
+} from '../../lib/kpmgProfiles'
 import { CRAWL_CLASS, formatTime } from '../../lib/format'
 
 const PERIOD_OPTIONS = [3, 6, 12] as const
@@ -8,6 +14,9 @@ const PERIOD_OPTIONS = [3, 6, 12] as const
 function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   if (!progress) return null
   const bits: string[] = []
+  if (progress.profile != null)
+    bits.push(`profile ${String(progress.profile)}`)
+  if (progress.query != null) bits.push(`q=${String(progress.query)}`)
   if (progress.pages_done != null)
     bits.push(`목록 ${String(progress.pages_done)}`)
   if (progress.listed != null) bits.push(`목록항목 ${String(progress.listed)}`)
@@ -24,9 +33,14 @@ function formatSearchProgress(progress: Record<string, unknown> | undefined) {
   return bits.length ? bits.join(' · ') : null
 }
 
-/** KPMG: search list-while-download. */
+/** KPMG: hub/theme Cludo search list-while-download. */
 export function KpmgRunPage() {
-  const [periodMonths, setPeriodMonths] = useState(3)
+  const [profileId, setProfileId] = useState<KpmgProfileId>(
+    DEFAULT_KPMG_PROFILE,
+  )
+  const [periodMonths, setPeriodMonths] = useState<number>(
+    () => getKpmgProfile(DEFAULT_KPMG_PROFILE)?.periodMonths ?? 3,
+  )
   const [maxPages, setMaxPages] = useState(20)
   const [limit, setLimit] = useState('')
   const [itemDelaySeconds, setItemDelaySeconds] = useState(2)
@@ -49,6 +63,7 @@ export function KpmgRunPage() {
       | Record<string, unknown>
       | undefined,
   )
+  const activeProfile = getKpmgProfile(profileId)
   const badgeValue = collection.fetchError
     ? 'API Offline'
     : searchBusy
@@ -57,13 +72,19 @@ export function KpmgRunPage() {
         ? `KPMG · ${job.label}`
         : `KPMG · 유휴`
 
+  function onProfileChange(next: KpmgProfileId) {
+    setProfileId(next)
+    const prof = getKpmgProfile(next)
+    if (prof) setPeriodMonths(prof.periodMonths)
+  }
+
   async function onStartSearch() {
     const pages = Math.min(50, Math.max(1, Number(maxPages) || 20))
     const months = PERIOD_OPTIONS.includes(
       periodMonths as (typeof PERIOD_OPTIONS)[number],
     )
       ? periodMonths
-      : 3
+      : (activeProfile?.periodMonths ?? 3)
     const limRaw = String(limit).trim()
     const lim =
       limRaw === ''
@@ -71,9 +92,10 @@ export function KpmgRunPage() {
         : Math.min(200, Math.max(1, Number(limRaw) || 0)) || undefined
     const limLabel = lim == null ? '제한 없음' : String(lim)
     const delay = Math.min(10, Math.max(0, Number(itemDelaySeconds) || 0))
+    const profileLabel = activeProfile?.label ?? profileId
     if (
       !window.confirm(
-        `KPMG 검색을 시작할까요?\n최근 ${months}개월 · 최대 ${pages}페이지 · 처리 상한 ${limLabel} · 간격 ${delay}초`,
+        `KPMG 검색을 시작할까요?\n${profileLabel} · 최근 ${months}개월 · 최대 ${pages}페이지 · 처리 상한 ${limLabel} · 간격 ${delay}초`,
       )
     ) {
       return
@@ -83,6 +105,7 @@ export function KpmgRunPage() {
         maxPages: pages,
         periodMonths: months,
         catalog: 'us',
+        profile: profileId,
         itemDelaySeconds: delay,
         ...(lim != null ? { limit: lim } : {}),
       })
@@ -104,7 +127,9 @@ export function KpmgRunPage() {
     <section className={`panel badge-panel state-${badgeState}`}>
       <p className="badge-label">검색 · 실행</p>
       <p className="badge-value">{badgeValue}</p>
-      <p className="account-line">인사이트 목록을 수집해 요약을 만듭니다.</p>
+      <p className="account-line">
+        허브(*)와 프로필별 Cludo 검색어로 인사이트를 수집합니다.
+      </p>
 
       {job.job?.started_at && !collection.fetchError ? (
         <p className="account-line">
@@ -122,6 +147,22 @@ export function KpmgRunPage() {
       </p>
 
       <div className="actions">
+        <label className="limit-field">
+          프로필
+          <select
+            value={profileId}
+            onChange={(e) =>
+              onProfileChange(e.target.value as KpmgProfileId)
+            }
+            disabled={searchBusy}
+          >
+            {KPMG_PROFILES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="limit-field">
           기간
           <select

@@ -17,9 +17,10 @@ def test_search_reports_has_practical_tips() -> None:
     desc = _tool_map(build_collect_server())["search_reports"]
     assert "LG MRI" in desc or "paid" in desc.lower()
     assert "Better than web search" in desc or "web search" in desc.lower()
+    assert "When web is better" in desc or "kpmg" in desc.lower()
     assert "source" in desc and "hbr" in desc
     assert "pass" in desc and "get_report" in desc
-    assert len(desc) < 1200
+    assert len(desc) < 1600
 
 
 def test_get_report_notes_pending_gap() -> None:
@@ -27,7 +28,7 @@ def test_get_report_notes_pending_gap() -> None:
     assert "Better than web search" in desc or "web search" in desc.lower()
     assert "quality_json" in desc
     assert "pending" in desc
-    assert len(desc) < 700
+    assert len(desc) < 900
 
 
 def test_get_consensus_points_collect_for_articles() -> None:

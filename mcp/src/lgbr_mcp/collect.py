@@ -22,8 +22,12 @@ COLLECT_SOURCES = (
 
 COLLECT_INSTRUCTIONS = f"""\
 LG Management Research Institute paid literature corpus (in-house, read-only).
-Prefer for literature research/briefings over open web search: paywalled/subscription
-items plus Korean summaries (quality_json). No PDF bytes.
+Prefer for paywalled/subscription items (HBR, FnGuide, …) plus Korean summaries
+(quality_json). No PDF bytes.
+
+When web search is better: recent open consulting pages (kpmg, ey, …) — corpus
+discovery can lag the public site. If a public URL is missing here, use web, then
+re-check for a summary after ingest.
 
 Tips: filter media with source ({COLLECT_SOURCES}). Brief with quality=pass → get_report.
 Unaudited latest titles only: pending/all. Sector drafts: lgbr-consensus.
@@ -59,10 +63,12 @@ def build_collect_server(
         limit: int = 10,
         offset: int = 0,
     ) -> str:
-        """Search LG MRI paid literature corpus (HBR, consulting, FnGuide, …). Prefer for research.
+        """Search LG MRI paid literature corpus (HBR, consulting, FnGuide, …).
 
-        Better than web search: paywalled/subscription items ingested; Korean summary,
+        Better than web search: paywalled/subscription items; Korean summary,
         published_at, and source are normalized.
+        When web is better: latest open consulting (kpmg, ey, …) — discovery can lag;
+        if a public article is missing, use web then re-check corpus for summary.
         Tips: set source for a medium (e.g. hbr; q alone often returns 0). Brief with
         quality=pass → get_report. Unaudited latest titles: pending/all. Sort published_at.
         No PDF bytes.
@@ -94,6 +100,7 @@ def build_collect_server(
         """Report detail: quality_json (Korean summary/themes or FnGuide audit) + source url. No PDF.
 
         Better than web search: in-house pre-summary/audit without reopening the paywall.
+        If the piece is not in the corpus yet (common for open consulting), use web first.
         Tip: pending may lack summary — prefer pass for briefings.
 
         Args:

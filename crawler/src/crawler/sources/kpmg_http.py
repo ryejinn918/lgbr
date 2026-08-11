@@ -30,7 +30,9 @@ from crawler.sources.browser_http import (
 SOURCE = "kpmg"
 BASE = "https://kpmg.com"
 DEFAULT_CATALOG = "us"
-DEFAULT_QUERY = "report"
+DEFAULT_PROFILE = "report"
+# Cludo rejects empty query; "*" is hub-wide Insight browse.
+DEFAULT_QUERY = "*"
 PAGE_SIZE = 12
 CLUDO_PATH = (
     "/kpmg-us/content/kpmg/us/en/insights-and-resources/"
@@ -60,6 +62,74 @@ CATALOGS: dict[str, KpmgCatalog] = {
 }
 
 
+@dataclass(frozen=True)
+class KpmgProfile:
+    id: str
+    label: str
+    queries: tuple[str, ...]
+    period_months: int = 3
+
+
+# Desk-theme ids align with Deloitte; report = hub browse + report keyword.
+PROFILES: dict[str, KpmgProfile] = {
+    "report": KpmgProfile(
+        id="report",
+        label="Report / Hub",
+        queries=("*", "report"),
+    ),
+    "ai": KpmgProfile(
+        id="ai",
+        label="AI",
+        queries=(
+            "AI",
+            "AI semiconductor",
+            "generative AI",
+            "LLM",
+            "talent",
+            "workforce",
+        ),
+    ),
+    "datacenter": KpmgProfile(
+        id="datacenter",
+        label="데이터센터",
+        queries=("data center", "AIDC", "power", "cooling"),
+    ),
+    "physical_ai": KpmgProfile(
+        id="physical_ai",
+        label="피지컬 AI",
+        queries=(
+            "Physical AI",
+            "humanoid",
+            "robotics",
+            "robot",
+            "on-device",
+        ),
+    ),
+    "appliance": KpmgProfile(
+        id="appliance",
+        label="가전",
+        queries=("appliance", "consumer electronics", "HVAC", "TV"),
+    ),
+    "display": KpmgProfile(
+        id="display",
+        label="디스플레이",
+        queries=("display", "OLED", "panel"),
+    ),
+    "automotive": KpmgProfile(
+        id="automotive",
+        label="자동차",
+        queries=("automotive", "EV", "mobility", "battery", "SDV"),
+    ),
+    "petrochemical": KpmgProfile(
+        id="petrochemical",
+        label="석유화학",
+        queries=("chemicals", "petrochemical", "chemical"),
+    ),
+}
+
+PROFILE_IDS = frozenset(PROFILES)
+
+
 def get_catalog(catalog_id: str | None = None) -> KpmgCatalog:
     key = (catalog_id or DEFAULT_CATALOG).strip().lower() or DEFAULT_CATALOG
     cat = CATALOGS.get(key)
@@ -69,6 +139,17 @@ def get_catalog(catalog_id: str | None = None) -> KpmgCatalog:
             f"expected one of: {', '.join(sorted(CATALOGS))}"
         )
     return cat
+
+
+def get_profile(profile_id: str | None = None) -> KpmgProfile:
+    key = (profile_id or DEFAULT_PROFILE).strip().lower() or DEFAULT_PROFILE
+    prof = PROFILES.get(key)
+    if prof is None:
+        raise ValueError(
+            f"unknown KPMG profile {profile_id!r}; "
+            f"expected one of: {', '.join(sorted(PROFILES))}"
+        )
+    return prof
 
 
 def make_session(catalog: str | KpmgCatalog | None = None) -> requests.Session:
@@ -126,6 +207,7 @@ def fetch_list_page(
     page: int = 1,
     *,
     catalog: str | KpmgCatalog | None = None,
+    query: str | None = None,
     session: requests.Session | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[list[KpmgListItem], bool]:
@@ -134,9 +216,10 @@ def fetch_list_page(
         raise ValueError("page must be >= 1")
     cat = catalog if isinstance(catalog, KpmgCatalog) else get_catalog(catalog)
     page_size = cat.page_size
+    q = (query if query is not None else cat.query).strip() or DEFAULT_QUERY
     params = {
         "type": "search",
-        "query": cat.query,
+        "query": q,
         "page": str(int(page)),
         "perPage": str(page_size),
         "contentType": "Insight",

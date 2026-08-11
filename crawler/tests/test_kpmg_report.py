@@ -30,6 +30,7 @@ def test_process_item_uses_detail_date_when_list_date_is_old(tmp_path: Path) -> 
     summary = KpmgJobSummary()
     progress: dict = {}
     already: set[str] = set()
+    seen_keys: set[str] = set()
     dest_dir = tmp_path / "dl"
     dest_dir.mkdir()
 
@@ -47,9 +48,12 @@ def test_process_item_uses_detail_date_when_list_date_is_old(tmp_path: Path) -> 
             item,
             catalog_id=cat.id,
             catalog=cat,
+            profile_id="report",
+            query="*",
             cutoff=date(2026, 5, 1),
             summary=summary,
             already=already,
+            seen_keys=seen_keys,
             download_dir=dest_dir,
             progress=progress,
             job_id=uuid4(),
@@ -62,6 +66,7 @@ def test_process_item_uses_detail_date_when_list_date_is_old(tmp_path: Path) -> 
     assert summary.skipped_old == 0
     store.mark_downloaded.assert_called_once()
     assert item.source_key in already
+    assert item.source_key in seen_keys
 
 
 def test_process_item_skips_old_after_detail_confirms(tmp_path: Path) -> None:
@@ -76,6 +81,7 @@ def test_process_item_skips_old_after_detail_confirms(tmp_path: Path) -> None:
     summary = KpmgJobSummary()
     progress: dict = {}
     already: set[str] = set()
+    seen_keys: set[str] = set()
 
     with (
         patch("crawler.jobs.kpmg_report.reports_store"),
@@ -93,9 +99,12 @@ def test_process_item_skips_old_after_detail_confirms(tmp_path: Path) -> None:
             item,
             catalog_id=cat.id,
             catalog=cat,
+            profile_id="report",
+            query="report",
             cutoff=date(2026, 5, 1),
             summary=summary,
             already=already,
+            seen_keys=seen_keys,
             download_dir=tmp_path,
             progress=progress,
             job_id=uuid4(),

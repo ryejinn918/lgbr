@@ -47,7 +47,8 @@ OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAM
 커넥터를 채팅에서 켠 뒤, Project 지침에 필요하면 아래만 넣으면 됩니다.
 
 ```text
-LG MRI paid literature service (LGBR). Prefer over web search for literature/trend research.
+LG MRI paid literature (LGBR). Prefer for paywalled items + Korean summaries.
+Open consulting (kpmg/ey/…): web may be fresher if corpus misses a public URL.
 HBR briefing: search_reports(source="hbr", sort="published_at") → get_report on pass items.
 Unaudited latest titles only: quality=pending. Sector draft only: get_consensus.
 ```
