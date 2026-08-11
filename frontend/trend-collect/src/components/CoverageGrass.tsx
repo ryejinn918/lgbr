@@ -35,25 +35,27 @@ export function CoverageGrass({
     return <p className="empty">표시할 주가 없습니다.</p>
   }
 
-  const max = Math.max(0, ...sources.flatMap((s) => s.counts))
   const labelEvery = weeks.length > 10 ? 2 : 1
 
-  const cells: ReactNode[] = sources.flatMap((row) => [
-    <div key={`${row.id}-label`} className="coverage-source-label">
-      {row.label}
-    </div>,
-    ...weeks.map((week, i) => {
-      const count = row.counts[i] ?? 0
-      const level = intensity(count, max)
-      return (
-        <div
-          key={`${row.id}-${week}`}
-          className={`coverage-cell level-${level}`}
-          title={`${row.label} · ${week} · ${count}건`}
-        />
-      )
-    }),
-  ])
+  const cells: ReactNode[] = sources.flatMap((row) => {
+    const rowMax = Math.max(0, ...row.counts)
+    return [
+      <div key={`${row.id}-label`} className="coverage-source-label">
+        {row.label}
+      </div>,
+      ...weeks.map((week, i) => {
+        const count = row.counts[i] ?? 0
+        const level = intensity(count, rowMax)
+        return (
+          <div
+            key={`${row.id}-${week}`}
+            className={`coverage-cell level-${level}`}
+            title={`${row.label} · ${week} · ${count}건`}
+          />
+        )
+      }),
+    ]
+  })
 
   return (
     <div className="coverage-grass">
@@ -87,9 +89,6 @@ export function CoverageGrass({
           />
         ))}
         <span className="section-note">많음</span>
-        {max > 0 ? (
-          <span className="section-note">최대 {max}건/주</span>
-        ) : null}
       </div>
     </div>
   )
