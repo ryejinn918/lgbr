@@ -76,6 +76,10 @@ export function ArticlesPage() {
         <p className="section-note">
           메타만 모읍니다. 원문은 남기지 않습니다 ·{' '}
           <Link to="/collect/arg/list/feed">ARG 피드</Link>
+          {' · '}
+          <Link to="/collect/nikkei/list/feed">Nikkei 피드</Link>
+          {' · '}
+          <Link to="/collect/nikkei/body/fetch">Nikkei 본문</Link>
         </p>
       </div>
 

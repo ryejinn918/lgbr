@@ -15,6 +15,7 @@ COVERAGE_WEEKS_DEFAULT = 13
 COVERAGE_SOURCES: tuple[tuple[str, str], ...] = (
     ("fnguide", "FnGuide"),
     ("arg", "ARG"),
+    ("nikkei", "Nikkei"),
     ("pwc", "PwC"),
     ("accenture", "Accenture"),
     ("kpmg", "KPMG"),
@@ -39,6 +40,7 @@ _REPORT_COVERAGE_SOURCES = (
     # "mckinsey",  # broken / disabled
     "bcg",
 )
+_NEWS_COVERAGE_SOURCES = ("arg", "nikkei")
 
 
 def _monday_on_or_before(d: date) -> date:
@@ -94,27 +96,30 @@ def coverage_by_week(weeks: int | None = None) -> dict[str, Any]:
 
             cur.execute(
                 """
-                SELECT date_trunc('week', published_at)::date AS week_start,
+                SELECT source,
+                       date_trunc('week', published_at)::date AS week_start,
                        count(*)::int AS n
                 FROM news_articles
-                WHERE source = 'arg'
+                WHERE source = ANY(%s)
                   AND published_at IS NOT NULL
                   AND published_at >= %s
                   AND published_at < %s
-                GROUP BY 1
+                GROUP BY 1, 2
                 """,
                 (
+                    list(_NEWS_COVERAGE_SOURCES),
                     start_monday,
                     end_monday + timedelta(weeks=1),
                 ),
             )
             for row in cur.fetchall():
+                sid = str(row["source"])
                 wk = row["week_start"]
-                if wk is None:
+                if sid not in tallies or wk is None:
                     continue
                 key = wk.isoformat() if hasattr(wk, "isoformat") else str(wk)
-                if key in tallies["arg"]:
-                    tallies["arg"][key] = int(row["n"])
+                if key in tallies[sid]:
+                    tallies[sid][key] = int(row["n"])
 
     return {
         "ok": True,

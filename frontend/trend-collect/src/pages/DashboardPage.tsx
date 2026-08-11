@@ -5,6 +5,7 @@ import { CoverageGrass } from '../components/CoverageGrass'
 import { useCollectionJob } from '../hooks/useCollectionJob'
 import { useCoverage } from '../hooks/useCoverage'
 import { useFnguideLatestCrawl } from '../hooks/useFnguideLatestCrawl'
+import { useNewsArticles } from '../hooks/useNewsArticles'
 import { useReports } from '../hooks/useReports'
 import { useSessionStatus } from '../hooks/useSessionStatus'
 import {
@@ -55,6 +56,13 @@ const COUNT_KEYS_MEDIA = [
   'failed',
 ] as const
 
+const COUNT_KEYS_NEWS = ['yes', 'no'] as const
+
+const ARTICLE_BODY_LABEL: Record<(typeof COUNT_KEYS_NEWS)[number], string> = {
+  yes: '본문있음',
+  no: '본문없음',
+}
+
 function isBusy(state: string) {
   return state === 'starting' || state === 'active' || state === 'stopping'
 }
@@ -103,6 +111,12 @@ function formatArgProgress(
       .join(' · ')
   }
   return [
+    progress.section_label != null
+      ? String(progress.section_label)
+      : progress.section != null
+        ? String(progress.section)
+        : null,
+    progress.listed != null ? `목록 ${String(progress.listed)}` : null,
     progress.inserted != null ? `신규 ${String(progress.inserted)}` : null,
     progress.page != null ? `page ${String(progress.page)}` : null,
     job?.message,
@@ -151,6 +165,11 @@ export function DashboardPage() {
     source: 'arg',
     capability: 'fetch_body',
   })
+  const nikkeiFeed = useCollectionJob({ source: 'nikkei', capability: 'feed' })
+  const nikkeiBody = useCollectionJob({
+    source: 'nikkei',
+    capability: 'fetch_body',
+  })
   const pwcSearch = useCollectionJob({ source: 'pwc', capability: 'search' })
   const accentureSearch = useCollectionJob({
     source: 'accenture',
@@ -192,6 +211,10 @@ export function DashboardPage() {
   const argView = pickArgView(argFeed.status, argBody.status)
   const argActive = argView.kind === 'fetch_body' ? argBody : argFeed
   const argBusy = isBusy(argView.status.state)
+  const nikkeiView = pickArgView(nikkeiFeed.status, nikkeiBody.status)
+  const nikkeiActive =
+    nikkeiView.kind === 'fetch_body' ? nikkeiBody : nikkeiFeed
+  const nikkeiBusy = isBusy(nikkeiView.status.state)
   const pwcSearchBusy = isBusy(pwcSearch.status.state)
   const accentureSearchBusy = isBusy(accentureSearch.status.state)
   const kpmgSearchBusy = isBusy(kpmgSearch.status.state)
@@ -232,6 +255,9 @@ export function DashboardPage() {
     {}) as Record<string, unknown>
   const argProgress = (argView.status.progress ??
     argView.status.job?.progress ??
+    {}) as Record<string, unknown>
+  const nikkeiProgress = (nikkeiView.status.progress ??
+    nikkeiView.status.job?.progress ??
     {}) as Record<string, unknown>
 
   const coverage = useCoverage(13)
@@ -321,6 +347,8 @@ export function DashboardPage() {
     offset: 0,
     poll: true,
   })
+  const countsArgArticles = useNewsArticles({ source: 'arg', limit: 1 })
+  const countsNikkeiArticles = useNewsArticles({ source: 'nikkei', limit: 1 })
 
   const fnguideBadge = fetchError
     ? 'offline'
@@ -332,6 +360,12 @@ export function DashboardPage() {
     argOffline,
     argBusy,
     argView.status.state,
+  )
+  const nikkeiOffline = !!(nikkeiFeed.fetchError || nikkeiBody.fetchError)
+  const nikkeiBadge = jobBadgeClass(
+    nikkeiOffline,
+    nikkeiBusy,
+    nikkeiView.status.state,
   )
   const pwcBadge = jobBadgeClass(
     !!pwcSearch.fetchError,
@@ -392,6 +426,15 @@ export function DashboardPage() {
     if (!window.confirm('ARG 피드 잡을 중단할까요?')) return
     try {
       await argActive.stopFeed()
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '중단 실패')
+    }
+  }
+
+  async function onStopNikkei() {
+    if (!window.confirm('Nikkei 수집 잡을 중단할까요?')) return
+    try {
+      await nikkeiActive.stopFeed()
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '중단 실패')
     }
@@ -936,6 +979,49 @@ export function DashboardPage() {
                   : null
               }
             />
+            <CollectJobCard
+              title="Nikkei"
+              meta={['계정', '일간지', '피드/본문']}
+              statusLabel={
+                nikkeiOffline
+                  ? 'API Offline'
+                  : nikkeiBusy
+                    ? nikkeiView.status.label
+                    : nikkeiView.status.job
+                      ? nikkeiView.status.label
+                      : '유휴'
+              }
+              stateClass={nikkeiBadge}
+              freshnessKind="daily"
+              lastCollectedAt={jobTimestamp(nikkeiView.status.job)}
+              progressLine={
+                nikkeiBusy || nikkeiView.status.job?.message
+                  ? formatArgProgress(
+                      nikkeiView.kind,
+                      nikkeiView.status.job,
+                      nikkeiProgress,
+                    ) || null
+                  : null
+              }
+              links={
+                <>
+                  <Link to="/collect/nikkei/list/feed">피드</Link>
+                  {' · '}
+                  <Link to="/collect/nikkei/body/fetch">본문</Link>
+                  {' · '}
+                  <Link to="/docs/articles">기사</Link>
+                </>
+              }
+              stop={
+                nikkeiBusy
+                  ? {
+                      label: nikkeiActive.requestingStop ? '요청 중…' : '중단',
+                      disabled: nikkeiActive.requestingStop,
+                      onClick: () => void onStopNikkei(),
+                    }
+                  : null
+              }
+            />
         </div>
       </section>
 
@@ -1118,6 +1204,16 @@ export function DashboardPage() {
             error={countsHk.error}
             total={countsHk.counts.all ?? 0}
           />
+          <ArticleCountRow
+            label="ARG"
+            counts={countsArgArticles.bodyCounts}
+            error={countsArgArticles.fetchError}
+          />
+          <ArticleCountRow
+            label="Nikkei"
+            counts={countsNikkeiArticles.bodyCounts}
+            error={countsNikkeiArticles.fetchError}
+          />
         </div>
       </section>
     </>
@@ -1154,6 +1250,38 @@ function CountRow({
             className={`count-tile status-${key}`}
           >
             <span className="count-label">{STATUS_LABEL[key] || key}</span>
+            <span className="count-value">{counts[key] ?? 0}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ArticleCountRow({
+  label,
+  counts,
+  error,
+}: {
+  label: string
+  counts: { all: number; yes: number; no: number }
+  error: string | null
+}) {
+  return (
+    <div className="dash-count-row">
+      <div className="dash-count-label">
+        <Link to="/docs/articles">{label}</Link>
+        <span className="section-note">전체 {counts.all ?? 0}건</span>
+      </div>
+      {error ? <p className="warn">{error}</p> : null}
+      <div className="count-tiles dash-count-tiles">
+        {COUNT_KEYS_NEWS.map((key) => (
+          <Link
+            key={key}
+            to="/docs/articles"
+            className={`count-tile status-${key === 'yes' ? 'downloaded' : 'listed'}`}
+          >
+            <span className="count-label">{ARTICLE_BODY_LABEL[key]}</span>
             <span className="count-value">{counts[key] ?? 0}</span>
           </Link>
         ))}
