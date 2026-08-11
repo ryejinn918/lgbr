@@ -386,9 +386,6 @@ DEFAULT_DELOITTE_PROFILE = "report"
 # Same desk-theme ids as Deloitte; BCG maps each to allowlisted list URLs.
 BCG_PROFILES = frozenset(DELOITTE_PROFILES)
 DEFAULT_BCG_PROFILE = "report"
-# Same desk-theme ids; KPMG report profile = hub (*) + report keyword.
-KPMG_PROFILES = frozenset(DELOITTE_PROFILES)
-DEFAULT_KPMG_PROFILE = "report"
 SOURCE_DEFAULT_CATALOG = {
     "pwc": DEFAULT_PWC_CATALOG,
     "accenture": DEFAULT_ACCENTURE_CATALOG,
@@ -478,24 +475,6 @@ def start_search(
                 "job": None,
                 "can_start": False,
             }
-    elif source_s == "kpmg":
-        profile_s = (
-            DEFAULT_KPMG_PROFILE
-            if profile is None or str(profile).strip() == ""
-            else str(profile).strip().lower()
-        )
-        if profile_s not in KPMG_PROFILES:
-            return {
-                "ok": False,
-                "status": 400,
-                "label": "오류",
-                "message": (
-                    "profile must be one of: "
-                    + ", ".join(sorted(KPMG_PROFILES))
-                ),
-                "job": None,
-                "can_start": False,
-            }
     elif source_s == "bcg":
         profile_s = (
             DEFAULT_BCG_PROFILE
@@ -519,9 +498,7 @@ def start_search(
             "ok": False,
             "status": 400,
             "label": "오류",
-            "message": (
-                "profile is only supported for source=deloitte|kpmg|bcg"
-            ),
+            "message": "profile is only supported for source=deloitte|bcg",
             "job": None,
             "can_start": False,
         }
@@ -539,14 +516,10 @@ def start_search(
             "can_start": False,
         }
 
-    # Deloitte/KPMG: omit months so the worker applies the profile default.
+    # Deloitte: omit months so the worker applies the profile default.
     months: int | None
     if period_months is None:
-        months = (
-            None
-            if source_s in ("deloitte", "kpmg")
-            else DEFAULT_PERIOD_MONTHS
-        )
+        months = None if source_s == "deloitte" else DEFAULT_PERIOD_MONTHS
     else:
         months = int(period_months)
     if months is not None and (

@@ -1,4 +1,4 @@
-"""KPMG US Insights list-while-download job (Cludo list + detail PDF)."""
+"""KPMG US Insights list-while-download job (Cludo hub browse + detail PDF)."""
 
 from __future__ import annotations
 
@@ -15,17 +15,15 @@ from crawler.jobs.media_pace import (
     clamp_item_delay_seconds,
     pace_after_item,
 )
-from crawler.report_themes import REPORT_THEMES
 from crawler.sources.kpmg_http import (
     DEFAULT_CATALOG,
-    DEFAULT_PROFILE,
+    DEFAULT_QUERY,
     KpmgListItem,
     SOURCE,
     download_pdf,
     fetch_detail_meta,
     fetch_list_page,
     get_catalog,
-    get_profile,
     make_session,
     months_ago_cutoff,
     pdf_page_count,
@@ -52,19 +50,15 @@ class KpmgJobSummary:
     skipped_existing: int = 0
     skipped_no_download: int = 0
     skipped_old: int = 0
-    skipped_dup: int = 0
     failed: int = 0
     pages_done: int = 0
-    queries_done: int = 0
     stopped: bool = False
 
     def as_message(self) -> str:
         return (
             f"downloaded={len(self.downloaded)} listed={self.listed} "
             f"existing={self.skipped_existing} no_dl={self.skipped_no_download} "
-            f"old={self.skipped_old} dup={self.skipped_dup} "
-            f"failed={self.failed} pages={self.pages_done} "
-            f"queries={self.queries_done}"
+            f"old={self.skipped_old} failed={self.failed} pages={self.pages_done}"
         )
 
 
@@ -72,8 +66,7 @@ def run_kpmg_search_job(
     job_id: UUID | str,
     *,
     catalog: str = DEFAULT_CATALOG,
-    profile: str = DEFAULT_PROFILE,
-    period_months: int | None = None,
+    period_months: int = DEFAULT_PERIOD_MONTHS,
     max_pages: int = DEFAULT_MAX_PAGES,
     limit: int | None = None,
     item_delay_seconds: float = DEFAULT_ITEM_DELAY_SECONDS,
@@ -97,7 +90,6 @@ def run_kpmg_search_job(
 
     try:
         cat = get_catalog(catalog)
-        prof = get_profile(profile)
     except ValueError as exc:
         return collection_jobs_store.end_job(
             job_id,
@@ -105,11 +97,7 @@ def run_kpmg_search_job(
             message=str(exc),
         )
 
-    if period_months is None:
-        period_months = int(prof.period_months)
-    period_months = max(
-        MIN_PERIOD_MONTHS, min(int(period_months), MAX_PERIOD_MONTHS)
-    )
+    period_months = max(MIN_PERIOD_MONTHS, min(int(period_months), MAX_PERIOD_MONTHS))
     max_pages = max(1, min(int(max_pages), MAX_MAX_PAGES))
     item_delay_seconds = clamp_item_delay_seconds(item_delay_seconds)
     if limit is not None and limit < 1:
@@ -120,10 +108,11 @@ def run_kpmg_search_job(
     download_dir.mkdir(parents=True, exist_ok=True)
     cutoff = months_ago_cutoff(period_months)
     already = reports_store.downloaded_keys(SOURCE)
-    seen_keys: set[str] = set()
     summary = KpmgJobSummary()
     page_size = cat.page_size
+    consecutive_stale = 0
     session = make_session(cat)
+    hub_query = cat.query or DEFAULT_QUERY
 
     progress: dict[str, Any] = {
         "stage": "list_download",
@@ -131,10 +120,7 @@ def run_kpmg_search_job(
         "capability": "search",
         "catalog": cat.id,
         "catalog_label": cat.label,
-        "profile": prof.id,
-        "profile_label": prof.label,
-        "query": prof.queries[0] if prof.queries else "",
-        "queries_done": 0,
+        "query": hub_query,
         "period_months": period_months,
         "item_delay_seconds": item_delay_seconds,
         "cutoff": cutoff.isoformat(),
@@ -146,16 +132,15 @@ def run_kpmg_search_job(
         "skipped_existing": 0,
         "skipped_no_download": 0,
         "skipped_old": 0,
-        "skipped_dup": 0,
         "failed": 0,
         "pages_done": 0,
     }
     collection_jobs_store.set_progress(job_id, progress)
     collection_jobs_store.set_message(
         job_id,
-        f"kpmg search 시작 ({cat.label}, profile={prof.id}, "
-        f"queries={len(prof.queries)}, 최근 {period_months}개월, "
-        f"max_pages={max_pages}, item_delay={item_delay_seconds}s)",
+        f"kpmg search 시작 ({cat.label}, hub query={hub_query!r}, "
+        f"최근 {period_months}개월, max_pages={max_pages}, "
+        f"item_delay={item_delay_seconds}s)",
     )
 
     def stop() -> bool:
@@ -163,99 +148,74 @@ def run_kpmg_search_job(
 
     capture = LazyCaptureBrowser(SOURCE, downloads_path=download_dir)
     try:
-        for q_idx, query in enumerate(prof.queries):
+        for page_idx in range(max_pages):
             if stop():
                 summary.stopped = True
                 break
             if limit is not None and len(summary.downloaded) >= limit:
-                progress["stop_reason"] = "limit"
                 break
 
-            progress["query"] = query
+            page = page_idx + 1
             progress["stage"] = "list"
+            progress["page"] = page
             collection_jobs_store.set_progress(job_id, progress)
-            consecutive_stale = 0
 
-            for page_idx in range(max_pages):
+            items, has_more = fetch_list_page(
+                page, catalog=cat, query=hub_query, session=session
+            )
+            if not items:
+                progress["stop_reason"] = "empty_page"
+                break
+
+            in_period = 0
+            for item in items:
                 if stop():
                     summary.stopped = True
                     break
                 if limit is not None and len(summary.downloaded) >= limit:
                     break
 
-                page = page_idx + 1
-                progress["stage"] = "list"
-                progress["page"] = page
-                collection_jobs_store.set_progress(job_id, progress)
-
-                items, has_more = fetch_list_page(
-                    page, catalog=cat, query=query, session=session
+                outcome = _process_item(
+                    item,
+                    catalog_id=cat.id,
+                    catalog=cat,
+                    cutoff=cutoff,
+                    summary=summary,
+                    already=already,
+                    download_dir=download_dir,
+                    progress=progress,
+                    job_id=job_id,
+                    session=session,
+                    capture=capture,
                 )
-                if not items:
-                    progress["stop_reason"] = "empty_page"
+                if outcome != "old":
+                    in_period += 1
+                if stop():
+                    summary.stopped = True
                     break
+                pace_after_item(item_delay_seconds)
 
-                in_period = 0
-                for item in items:
-                    if stop():
-                        summary.stopped = True
-                        break
-                    if limit is not None and len(summary.downloaded) >= limit:
-                        break
-
-                    outcome = _process_item(
-                        item,
-                        catalog_id=cat.id,
-                        catalog=cat,
-                        profile_id=prof.id,
-                        query=query,
-                        cutoff=cutoff,
-                        summary=summary,
-                        already=already,
-                        seen_keys=seen_keys,
-                        download_dir=download_dir,
-                        progress=progress,
-                        job_id=job_id,
-                        session=session,
-                        capture=capture,
-                    )
-                    if outcome != "old":
-                        in_period += 1
-                    if stop():
-                        summary.stopped = True
-                        break
-                    pace_after_item(item_delay_seconds)
-
-                summary.pages_done += 1
-                progress["pages_done"] = summary.pages_done
-                progress["listed"] = summary.listed
-                progress["downloaded"] = len(summary.downloaded)
-                collection_jobs_store.set_progress(job_id, progress)
-
-                if summary.stopped:
-                    break
-                if limit is not None and len(summary.downloaded) >= limit:
-                    progress["stop_reason"] = "limit"
-                    break
-
-                if in_period == 0:
-                    consecutive_stale += 1
-                else:
-                    consecutive_stale = 0
-                if consecutive_stale >= STALE_PAGES_TO_STOP:
-                    progress["stop_reason"] = "period_exhausted"
-                    break
-                if not has_more:
-                    progress["stop_reason"] = "end_of_list"
-                    break
-
-            summary.queries_done = q_idx + 1
-            progress["queries_done"] = summary.queries_done
+            summary.pages_done += 1
+            progress["pages_done"] = summary.pages_done
+            progress["listed"] = summary.listed
+            progress["downloaded"] = len(summary.downloaded)
             collection_jobs_store.set_progress(job_id, progress)
 
             if summary.stopped:
                 break
             if limit is not None and len(summary.downloaded) >= limit:
+                progress["stop_reason"] = "limit"
+                break
+
+            if in_period == 0:
+                consecutive_stale += 1
+            else:
+                consecutive_stale = 0
+            if consecutive_stale >= STALE_PAGES_TO_STOP:
+                progress["stop_reason"] = "period_exhausted"
+                break
+            if not has_more:
+                progress["stop_reason"] = "end_of_list"
                 break
 
         if summary.stopped:
@@ -282,12 +242,9 @@ def _process_item(
     *,
     catalog_id: str,
     catalog,
-    profile_id: str,
-    query: str,
     cutoff,
     summary: KpmgJobSummary,
     already: set[str],
-    seen_keys: set[str],
     download_dir: Path,
     progress: dict[str, Any],
     job_id: UUID | str,
@@ -295,22 +252,11 @@ def _process_item(
     capture: LazyCaptureBrowser,
 ) -> str:
     """Return 'ok' | 'old' | 'skip' for paging heuristics."""
-    if item.source_key in seen_keys:
-        summary.skipped_dup += 1
-        progress["skipped_dup"] = summary.skipped_dup
-        return "skip"
-    seen_keys.add(item.source_key)
-
     attrs: dict[str, Any] = {
         "url": item.url,
         "catalog": catalog_id,
-        "profile": profile_id,
-        "query": query,
         "provider": "KPMG",
-        "crawl_profile": profile_id,
     }
-    if profile_id in REPORT_THEMES:
-        attrs["themes"] = [profile_id]
     if item.category:
         attrs["category"] = item.category
     published_at = item.published_at

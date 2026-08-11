@@ -648,23 +648,13 @@ def main() -> None:
                 if source == "hbrkorea" and catalog in ("us", "gx"):
                     catalog = "kr"
                 period_months = args.period_months
-                if source not in ("deloitte", "kpmg") and period_months is None:
+                if source != "deloitte" and period_months is None:
                     period_months = PWC_DEFAULT_PERIOD_MONTHS
                 if source == "deloitte":
                     result = run_deloitte_search_job(
                         args.job_id,
                         catalog=catalog,
                         profile=args.profile,
-                        max_pages=args.max_pages,
-                        period_months=period_months,
-                        limit=args.limit,
-                        item_delay_seconds=args.item_delay_seconds,
-                    )
-                elif source == "kpmg":
-                    result = run_kpmg_search_job(
-                        args.job_id,
-                        catalog=catalog,
-                        profile=args.profile or "report",
                         max_pages=args.max_pages,
                         period_months=period_months,
                         limit=args.limit,
