@@ -347,39 +347,40 @@ def _run_nikkei_feed(
         )
         collection_jobs_store.set_progress(job_id, progress)
 
-    titles_translated = 0
+    title_translate_spawned = False
+    title_translate_skipped_busy = False
+    title_translate_pid: int | None = None
     title_translate_error: str | None = None
     if stop_reason != "stop_requested":
-        progress["stage"] = "title_translate"
-        collection_jobs_store.set_progress(job_id, progress)
-        collection_jobs_store.set_message(
-            job_id, f"Nikkei 제목 번역 · {sec.label}"
-        )
         try:
-            from crawler.article_title_translate import (
-                translate_and_store_missing,
-            )
+            from crawler.article_title_translate import spawn_title_translate
 
-            tr = translate_and_store_missing(nikkei_feed.SOURCE, limit=500)
-            titles_translated = int(tr.get("translated") or 0)
-            progress["titles_translated"] = titles_translated
-            progress["titles_pending"] = tr.get("pending")
-            collection_jobs_store.set_progress(job_id, progress)
+            spawned = spawn_title_translate(nikkei_feed.SOURCE, limit=500)
+            title_translate_spawned = bool(spawned.get("spawned"))
+            title_translate_skipped_busy = bool(spawned.get("skipped_busy"))
+            pid_raw = spawned.get("pid")
+            title_translate_pid = int(pid_raw) if pid_raw is not None else None
         except Exception as exc:  # noqa: BLE001 — feed must not fail on translate
             title_translate_error = str(exc)
-            progress["title_translate_error"] = title_translate_error
-            collection_jobs_store.set_progress(job_id, progress)
 
-    message = {
-        "done": (
+    if stop_reason == "done":
+        if title_translate_spawned:
+            tt_note = "제목번역 백그라운드"
+        elif title_translate_skipped_busy:
+            tt_note = "제목번역 이미 실행 중"
+        elif title_translate_error:
+            tt_note = f"제목번역 spawn 실패: {title_translate_error[:80]}"
+        else:
+            tt_note = "제목번역 없음"
+        message = (
             f"{sec.label} 목록 완료 "
             f"(RSS {packed['rss_count']}, HTML {packed['html_count']}"
-            f", 제목번역 {titles_translated})"
-        ),
-        "stop_requested": "사용자 중단",
-    }.get(stop_reason, stop_reason)
-    if title_translate_error:
-        message = f"{message} · 제목번역 실패: {title_translate_error[:120]}"
+            f", {tt_note})"
+        )
+    else:
+        message = {
+            "stop_requested": "사용자 중단",
+        }.get(stop_reason, stop_reason)
 
     progress.update(
         {
@@ -393,8 +394,12 @@ def _run_nikkei_feed(
             "period_months": period_months,
             "cutoff": cutoff.isoformat(),
             "stop_reason": stop_reason,
-            "titles_translated": titles_translated,
+            "title_translate_spawned": title_translate_spawned,
+            "title_translate_skipped_busy": title_translate_skipped_busy,
+            "title_translate_pid": title_translate_pid,
             "message": message,
         }
     )
+    if title_translate_error:
+        progress["title_translate_error"] = title_translate_error
     return progress

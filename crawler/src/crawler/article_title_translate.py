@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 import httpx
 
+from crawler.paths import crawler_home, repo_root
 from crawler.quality_audit import (
     DEFAULT_MODEL,
     OPENROUTER_URL,
@@ -31,6 +36,8 @@ Rules:
 """
 
 _BATCH_SIZE = 40
+DEFAULT_SPAWN_LIMIT = 500
+TITLE_TRANSLATE_LOG = "title_translate.log"
 
 
 def is_foreign_news_source(source: str) -> bool:
@@ -178,3 +185,158 @@ def ensure_title_ko(
         },
     )
     return title_ko
+
+
+def _lock_path(source: str) -> Path:
+    return crawler_home() / f"title_translate-{source}.lock"
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _read_lock_pid(path: Path) -> int | None:
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+    if not raw.isdigit():
+        return None
+    return int(raw)
+
+
+def _write_lock_pid(path: Path, pid: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{pid}\n", encoding="utf-8")
+
+
+def _clear_lock_if_owner(path: Path, pid: int) -> None:
+    current = _read_lock_pid(path)
+    if current == pid:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def spawn_title_translate(
+    source: str,
+    *,
+    limit: int = DEFAULT_SPAWN_LIMIT,
+) -> dict[str, Any]:
+    """Start a detached title-translate worker (single-flight per source)."""
+    source_s = str(source or "").strip().lower()
+    if not is_foreign_news_source(source_s):
+        return {
+            "spawned": False,
+            "skipped_busy": False,
+            "skipped": True,
+            "source": source_s,
+        }
+
+    lim = max(1, min(int(limit), 1000))
+    lock = _lock_path(source_s)
+    existing = _read_lock_pid(lock)
+    if existing is not None and _pid_alive(existing):
+        return {
+            "spawned": False,
+            "skipped_busy": True,
+            "pid": existing,
+            "source": source_s,
+        }
+
+    home = crawler_home()
+    home.mkdir(parents=True, exist_ok=True)
+    log_path = home / TITLE_TRANSLATE_LOG
+    log_f = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+    try:
+        log_f.write(
+            f"\n--- title-translate spawn {datetime.now(timezone.utc).isoformat()} "
+            f"source={source_s} limit={lim} ---\n"
+        )
+        log_f.flush()
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "crawler",
+                "title-translate",
+                "run",
+                "--source",
+                source_s,
+                "--limit",
+                str(lim),
+            ],
+            stdout=log_f,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            cwd=str(repo_root()),
+        )
+    except Exception:
+        log_f.close()
+        raise
+
+    _write_lock_pid(lock, proc.pid)
+    return {
+        "spawned": True,
+        "skipped_busy": False,
+        "pid": proc.pid,
+        "source": source_s,
+        "limit": lim,
+        "log": str(log_path),
+    }
+
+
+def run_title_translate_worker(
+    source: str,
+    *,
+    limit: int = DEFAULT_SPAWN_LIMIT,
+    model: str = DEFAULT_MODEL,
+) -> dict[str, Any]:
+    """CLI worker entry: claim lock, translate missing titles, release lock."""
+    source_s = str(source or "").strip().lower()
+    if not is_foreign_news_source(source_s):
+        return {"translated": 0, "skipped": True, "source": source_s}
+
+    lim = max(1, min(int(limit), 1000))
+    lock = _lock_path(source_s)
+    pid = os.getpid()
+    existing = _read_lock_pid(lock)
+    if (
+        existing is not None
+        and existing != pid
+        and _pid_alive(existing)
+    ):
+        return {
+            "translated": 0,
+            "skipped_busy": True,
+            "pid": existing,
+            "source": source_s,
+        }
+
+    _write_lock_pid(lock, pid)
+    try:
+        result = translate_and_store_missing(
+            source_s, limit=lim, model=model
+        )
+        result = {
+            **result,
+            "source": source_s,
+            "pid": pid,
+        }
+        print(json.dumps(result, ensure_ascii=False), flush=True)
+        return result
+    finally:
+        _clear_lock_if_owner(lock, pid)

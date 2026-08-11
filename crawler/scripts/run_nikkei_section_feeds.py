@@ -107,7 +107,10 @@ def main() -> int:
             "message": job.get("message"),
             "inserted": progress.get("inserted"),
             "updated": progress.get("updated"),
-            "titles_translated": progress.get("titles_translated"),
+            "title_translate_spawned": progress.get("title_translate_spawned"),
+            "title_translate_skipped_busy": progress.get(
+                "title_translate_skipped_busy"
+            ),
             "listed": progress.get("listed"),
         }
         print(json.dumps(summary, ensure_ascii=False), flush=True)

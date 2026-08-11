@@ -217,6 +217,29 @@ def main() -> None:
     )
     fetch_body_current.add_argument("--source", default=None)
 
+    title_translate_parser = sub.add_parser(
+        "title-translate",
+        help="Background Korean title translate for foreign news",
+    )
+    title_translate_sub = title_translate_parser.add_subparsers(
+        dest="title_translate_command"
+    )
+    title_translate_run = title_translate_sub.add_parser(
+        "run",
+        help="Translate missing attrs.title_ko (detached worker)",
+    )
+    title_translate_run.add_argument(
+        "--source",
+        default="nikkei",
+        help="News source id (default nikkei)",
+    )
+    title_translate_run.add_argument(
+        "--limit",
+        type=int,
+        default=500,
+        help="Max rows missing title_ko to translate (default 500)",
+    )
+
     search_parser = sub.add_parser(
         "search",
         help="List-while-download search worker (PwC; started by API)",
@@ -534,6 +557,31 @@ def main() -> None:
                 raise SystemExit(1)
             return
         parser.error(f"Unknown fetch-body command: {fetch_command}")
+
+    if command == "title-translate":
+        tt_command = args.title_translate_command or "run"
+        if tt_command == "run":
+            from crawler.article_title_translate import (
+                run_title_translate_worker,
+            )
+
+            try:
+                result = run_title_translate_worker(
+                    getattr(args, "source", None) or "nikkei",
+                    limit=int(getattr(args, "limit", 500) or 500),
+                )
+            except Exception as exc:
+                print(
+                    json.dumps(
+                        {"ok": False, "error": str(exc)},
+                        ensure_ascii=False,
+                    )
+                )
+                raise SystemExit(1) from exc
+            if result.get("skipped_busy"):
+                raise SystemExit(0)
+            return
+        parser.error(f"Unknown title-translate command: {tt_command}")
 
     if command == "search":
         search_command = args.search_command or "current"
