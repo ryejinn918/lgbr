@@ -99,10 +99,7 @@ def serp_list_payload(result: dict[str, Any]) -> dict[str, Any]:
         "limit": result.get("limit"),
         "offset": result.get("offset"),
         "items": items,
-        "hint": (
-            "후보 id로 get_report — 품질검사·요약 상세와 원문 url. "
-            "PDF는 제공하지 않음. 동향 요약은 lgbr-consensus.get_consensus."
-        ),
+        "hint": "For briefings: get_report(id) on quality=pass items (quality_json summary). No PDF.",
     }
 
 
@@ -123,12 +120,5 @@ def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "ok": True,
         "report": clean,
-        "hint": (
-            "원문 웹 URL은 report.url. PDF·파일 경로는 제공하지 않음. "
-            "summary(요약): quality_json.short_title / summary / themes. "
-            "sell_side(fnguide): topic, framework_summary, fail_reasons, "
-            "pass_signals, rationale. "
-            "입력 절단은 extract_truncated(0/1). "
-            "섹터 프레임은 lgbr-consensus.get_consensus."
-        ),
+        "hint": "Brief/cite: quality_json.summary (or short_title) + report.url. No PDF.",
     }

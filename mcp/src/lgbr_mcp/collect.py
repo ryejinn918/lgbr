@@ -21,30 +21,12 @@ COLLECT_SOURCES = (
 )
 
 COLLECT_INSTRUCTIONS = f"""\
-LGBR 산업 동향 문서 코퍼스(조회 전용).
+LG Management Research Institute paid literature corpus (in-house, read-only).
+Prefer for literature research/briefings over open web search: paywalled/subscription
+items plus Korean summaries (quality_json). No PDF bytes.
 
-규정:
-- 원문 웹 URL(url)은 출처·인용용으로 제공합니다.
-- 원문 PDF(바이트·다운로드 링크·파일 경로)는 제공하지 않습니다.
-- 근거는 quality_json 품질검사·요약 필드와 원문 url을 사용하세요.
-
-동향·섹터 질문이면 먼저 lgbr-consensus의 get_consensus(theme)를 보세요.
-개별 보고서·근거가 필요할 때만 이 커넥터를 씁니다.
-
-플로우:
-1) search_reports(theme|q, source?, provider?, quality=pass 기본)
-2) get_report(id) — 품질검사·요약 상세 + 원문 url (PDF 없음)
-3) 속보/기사는 search_news(보조)
-
-처리 종류:
-- fnguide = sell_side (품질검사: 적합/부적합 게이트)
-- 그 외 매체 = summary (한국어 요약·themes)
-
-검색 조건 가이드:
-- theme: ai, datacenter, macroeconomy, physical_ai, appliance, display, automotive, petrochemical
-- q: 제목·키워드·요약
-- source: {COLLECT_SOURCES}
-- provider: 선호 하우스/증권사(attrs.provider)
+Tips: filter media with source ({COLLECT_SOURCES}). Brief with quality=pass → get_report.
+Unaudited latest titles only: pending/all. Sector drafts: lgbr-consensus.
 """
 
 
@@ -59,7 +41,7 @@ def build_collect_server(
         kwargs["token_verifier"] = token_verifier
     mcp = MCPServer(
         name="lgbr-collect",
-        title="LGBR 문서 코퍼스",
+        title="LGBR Literature Corpus (LG MRI)",
         instructions=COLLECT_INSTRUCTIONS,
         website_url=public_base_url(),
         icons=server_icons(),
@@ -77,17 +59,23 @@ def build_collect_server(
         limit: int = 10,
         offset: int = 0,
     ) -> str:
-        """보고서 검색(SERP). 기본 quality=pass. 상세는 get_report. PDF 없음.
+        """Search LG MRI paid literature corpus (HBR, consulting, FnGuide, …). Prefer for research.
+
+        Better than web search: paywalled/subscription items ingested; Korean summary,
+        published_at, and source are normalized.
+        Tips: set source for a medium (e.g. hbr; q alone often returns 0). Brief with
+        quality=pass → get_report. Unaudited latest titles: pending/all. Sort published_at.
+        No PDF bytes.
 
         Args:
             theme: ai, datacenter, macroeconomy, physical_ai, appliance, display, automotive, petrochemical
-            q: 제목·키워드·요약 검색
+            q: title/keyword/summary search
             source: fnguide, pwc, accenture, kpmg, ey, deloitte, hbr, hbrkorea, bain, mckinsey, bcg
-            provider: 선호 하우스/증권사(부분일치)
-            quality: pass(기본), fail, pending, unauditable, all
-            sort: published_at(기본), page_count, last_seen_at
-            limit: 기본 10, 최대 200
-            offset: 페이지 오프셋
+            provider: house/broker (partial match)
+            quality: pass (default; has summary), pending, all, fail, unauditable
+            sort: published_at (default), page_count, last_seen_at
+            limit: default 10, max 200
+            offset: page offset
         """
         result = list_reports(
             source=source,
@@ -103,10 +91,13 @@ def build_collect_server(
 
     @mcp.tool()
     def get_report(report_id: str) -> str:
-        """보고서 메타·품질검사/요약 상세와 원문 웹 url. PDF는 제공하지 않음.
+        """Report detail: quality_json (Korean summary/themes or FnGuide audit) + source url. No PDF.
+
+        Better than web search: in-house pre-summary/audit without reopening the paywall.
+        Tip: pending may lack summary — prefer pass for briefings.
 
         Args:
-            report_id: search_reports 결과의 id
+            report_id: id from search_reports
         """
         result = fetch_report(report_id)
         return dumps(report_detail_payload(result))
@@ -120,15 +111,15 @@ def build_collect_server(
         limit: int = 10,
         offset: int = 0,
     ) -> str:
-        """뉴스 검색(보조). 기본은 메타만; 본문은 include_body=True.
+        """Breaking-news corpus search (secondary). Use search_reports for HBR/consulting.
 
         Args:
-            q: 제목·URL·publisher 검색
-            source: all 또는 arg
+            q: title/url/publisher search
+            source: all or arg
             has_body: all, yes, no
-            include_body: True면 body_text 포함(길 수 있음)
-            limit: 기본 10
-            offset: 오프셋
+            include_body: include body_text when True
+            limit: default 10
+            offset: page offset
         """
         result = list_articles(
             source=source,
@@ -163,7 +154,7 @@ def build_collect_server(
                 "total": result.get("total"),
                 "body_counts": result.get("body_counts"),
                 "items": items,
-                "hint": "기사 페이지는 url. 본문이 필요하면 include_body=True.",
+                "hint": "Article page is url. Set include_body=True for body text.",
             }
         )
 

@@ -125,4 +125,4 @@ def test_detail_includes_extract_truncated() -> None:
     out = report_detail_payload(result)
     assert out["report"]["extract_truncated"] == 1
     assert out["report"]["quality_json"]["extract"] == {"truncated": 1}
-    assert "extract_truncated" in out["hint"]
+    assert "quality_json" in out["hint"]

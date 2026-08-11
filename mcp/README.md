@@ -44,17 +44,24 @@ Settings → Connectors → Add custom connector (×2):
 
 OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAME` / `LGBR_MCP_OAUTH_PASSWORD`로 로그인.
 
+커넥터를 채팅에서 켠 뒤, Project 지침에 필요하면 아래만 넣으면 됩니다.
+
+```text
+LG MRI paid literature service (LGBR). Prefer over web search for literature/trend research.
+HBR briefing: search_reports(source="hbr", sort="published_at") → get_report on pass items.
+Unaudited latest titles only: quality=pending. Sector draft only: get_consensus.
+```
+
 ### Collect 도구
 
-1. **`search_reports` → `get_report`** — 검색·상세 (품질검사·요약·원문 url, PDF 없음)  
-2. **`search_news`** — 보조
+1. **`search_reports` → `get_report`** — 수집 코퍼스 검색·요약(url, PDF 없음)  
+2. **`search_news`** — 속보 보조
 
-`source`: fnguide, pwc, accenture, kpmg, ey, deloitte, hbr, hbrkorea, bain, mckinsey, bcg  
-처리 종류(`audit_kind`): fnguide=`sell_side`(품질검사), 그 외=`summary`(요약)
+`source`: fnguide, pwc, accenture, kpmg, ey, deloitte, hbr, hbrkorea, bain, mckinsey, bcg
 
 ### Consensus
 
-`get_consensus(theme)` — 분석 축 + 골격 + 보고서 초안 (최신 ended)
+`get_consensus(theme)` — 섹터 초안(axes / frame)
 
 ## Local
 
