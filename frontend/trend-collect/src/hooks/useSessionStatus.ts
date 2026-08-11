@@ -64,7 +64,8 @@ function applyCrawl(data: CrawlResponse): CrawlResponse {
   }
 }
 
-export function useSessionStatus(): SessionView {
+export function useSessionStatus(opts?: { source?: string }): SessionView {
+  const source = (opts?.source || 'fnguide').trim() || 'fnguide'
   const [crawl, setCrawl] = useState<CrawlResponse>(EMPTY_CRAWL)
   const [status, setStatus] = useState<SessionResponse>(EMPTY_SESSION)
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -77,7 +78,8 @@ export function useSessionStatus(): SessionView {
 
     async function poll() {
       try {
-        const crawlRes = await fetch('/api/crawl')
+        const qs = new URLSearchParams({ source })
+        const crawlRes = await fetch(`/api/crawl?${qs.toString()}`)
         if (!crawlRes.ok) throw new Error(`HTTP ${crawlRes.status}`)
         const crawlData = (await crawlRes.json()) as CrawlResponse
         if (cancelled) return
@@ -101,7 +103,7 @@ export function useSessionStatus(): SessionView {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [])
+  }, [source])
 
   async function startCrawl(
     mode: CrawlMode = 'ai',
@@ -140,7 +142,11 @@ export function useSessionStatus(): SessionView {
   async function requestLogout() {
     setRequestingStop(true)
     try {
-      const res = await fetch('/api/crawl/stop', { method: 'POST' })
+      const res = await fetch('/api/crawl/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source }),
+      })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as CrawlResponse
       setCrawl(applyCrawl(data))

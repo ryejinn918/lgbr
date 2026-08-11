@@ -144,7 +144,7 @@ function jobBadgeClass(
 
 export function DashboardPage() {
   const { crawl, status, stale, fetchError, requestingStop, requestLogout } =
-    useSessionStatus()
+    useSessionStatus({ source: 'fnguide' })
   const fgLatest = useFnguideLatestCrawl()
   const argFeed = useCollectionJob({ source: 'arg', capability: 'feed' })
   const argBody = useCollectionJob({

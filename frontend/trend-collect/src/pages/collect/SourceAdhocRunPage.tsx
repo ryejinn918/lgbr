@@ -13,7 +13,7 @@ type Ctx = {
 export function SourceAdhocRunPage() {
   const { source } = useOutletContext<Ctx>()
   const meta = getMediaSource(source)
-  const session = useSessionStatus()
+  const session = useSessionStatus({ source })
   const crawl = session.crawl
   const crawlBusy =
     crawl.state === 'starting' ||

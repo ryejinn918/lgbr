@@ -177,8 +177,39 @@ def list_crawl_events(
     return {"crawl_id": str(crawl_id), "items": items}
 
 
-def get_current_crawl(*, event_limit: int = DEFAULT_EVENT_LIMIT) -> dict[str, Any]:
+def _session_source_for_status(source: str | None) -> str:
+    """Map API/UI source to fnguide_sessions.source (default fnguide)."""
+    key = (source or "").strip().lower() or "fnguide"
+    if key == "fnguide" or key in FNGUIDE_MODES:
+        return "fnguide"
+    if source_requires_login(key) or key in valid_crawl_modes():
+        # Login media and no-login adhoc ids both use their own source key when present.
+        return key
+    return "fnguide"
+
+
+def _status_session(source: str | None = None) -> dict[str, Any]:
+    return get_current_session(source=_session_source_for_status(source))
+
+
+def _status_session_for_mode(mode: str | None) -> dict[str, Any]:
+    account_source = _account_source_for_mode(mode)
+    if account_source is None:
+        return {"state": "ended", "label": "로그아웃됨", "session": None}
+    return get_current_session(source=account_source)
+
+
+def get_current_crawl(
+    *,
+    source: str | None = None,
+    event_limit: int = DEFAULT_EVENT_LIMIT,
+) -> dict[str, Any]:
     reconcile_stale_crawls()
+    account = _status_session(source)
+    error_mode = _session_source_for_status(source)
+    # FnGuide family uses any FNGUIDE_MODES token for error scoping.
+    if error_mode == "fnguide":
+        error_mode = "ai"
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -200,7 +231,7 @@ def get_current_crawl(*, event_limit: int = DEFAULT_EVENT_LIMIT) -> dict[str, An
                     "crawl": crawl,
                     "progress": crawl.get("progress") or {},
                     "events": events,
-                    "session": get_current_session(),
+                    "session": account,
                     "can_start": False,
                 }
             cur.execute(
@@ -212,7 +243,20 @@ def get_current_crawl(*, event_limit: int = DEFAULT_EVENT_LIMIT) -> dict[str, An
                 """
             )
             last = cur.fetchone()
-    account = get_current_session()
+    blocking = _get_latest_error(mode=error_mode)
+    if blocking:
+        crawl = _serialize(blocking)
+        events = list_crawl_events(crawl["id"], limit=event_limit)["items"]
+        return {
+            "state": "error",
+            "label": "오류",
+            "crawl": crawl,
+            "progress": crawl.get("progress") or {},
+            "events": events,
+            "session": account,
+            "can_start": False,
+            **_unblock_directions(crawl["id"]),
+        }
     if not last:
         return {
             "state": "ended",
@@ -225,18 +269,6 @@ def get_current_crawl(*, event_limit: int = DEFAULT_EVENT_LIMIT) -> dict[str, An
         }
     crawl = _serialize(dict(last))
     events = list_crawl_events(crawl["id"], limit=event_limit)["items"]
-    # Latest error blocks casual restart until fnguide_crawls.state is cleared.
-    if crawl.get("state") == "error":
-        return {
-            "state": "error",
-            "label": "오류",
-            "crawl": crawl,
-            "progress": crawl.get("progress") or {},
-            "events": events,
-            "session": account,
-            "can_start": False,
-            **_unblock_directions(crawl["id"]),
-        }
     return {
         "state": "ended",
         "label": "종료",
@@ -313,7 +345,7 @@ def _account_source_for_mode(mode: str | None) -> str | None:
     return None
 
 
-def request_stop() -> dict[str, Any]:
+def request_stop(*, source: str | None = None) -> dict[str, Any]:
     """Ask crawl to stop and request account logout (subtask)."""
     reconcile_stale_crawls()
     now = _now()
@@ -336,11 +368,19 @@ def request_stop() -> dict[str, Any]:
             crawl_row = cur.fetchone()
         conn.commit()
 
-    logout_source: str | None = None
     if crawl_row:
-        logout_source = _account_source_for_mode(str(dict(crawl_row).get("mode") or ""))
+        logout_source = _account_source_for_mode(
+            str(dict(crawl_row).get("mode") or "")
+        )
+    else:
+        # No open crawl: only log out the caller's source (never another medium).
+        logout_source = _session_source_for_status(source)
     logout = request_logout(source=logout_source)
-    account = get_current_session(source=logout_source)
+    account = (
+        get_current_session(source=logout_source)
+        if logout_source
+        else _status_session(source)
+    )
     if not crawl_row:
         return {
             "ok": bool(logout.get("ok")),
@@ -423,7 +463,7 @@ def start_crawl(
                 + ", ".join(sorted(VALID_MODES))
             ),
             "crawl": None,
-            "session": get_current_session(),
+            "session": _status_session_for_mode(mode),
             "can_start": False,
         }
 
@@ -453,11 +493,11 @@ def start_crawl(
             "label": crawl["label"],
             "message": "이미 크롤이 실행 중입니다.",
             "crawl": crawl,
-            "session": get_current_session(),
+            "session": _status_session_for_mode(mode),
             "can_start": False,
         }
 
-    blocking = _get_latest_error()
+    blocking = _get_latest_error(mode=mode)
     if blocking:
         crawl = _serialize(blocking)
         directions = _unblock_directions(crawl["id"])
@@ -470,7 +510,7 @@ def start_crawl(
                 "점검 후 DB에 접속해 fnguide_crawls.state 를 ended 로 바꾸세요."
             ),
             "crawl": crawl,
-            "session": get_current_session(),
+            "session": _status_session_for_mode(mode),
             "can_start": False,
             **directions,
         }
@@ -502,7 +542,7 @@ def start_crawl(
                 "label": "오류",
                 "message": "catalog must be kr or gx for mode=pwc",
                 "crawl": None,
-                "session": get_current_session(),
+                "session": _status_session_for_mode(mode),
                 "can_start": False,
             }
 
@@ -517,7 +557,7 @@ def start_crawl(
             "label": "오류",
             "message": f"크롤 행 생성 실패: {exc}",
             "crawl": None,
-            "session": get_current_session(),
+            "session": _status_session_for_mode(mode),
             "can_start": False,
         }
 
@@ -561,7 +601,7 @@ def start_crawl(
                 "label": "오류",
                 "message": f"크롤 시작 실패: {exc}; DB error mark failed: {db_exc}",
                 "crawl": crawl,
-                "session": get_current_session(),
+                "session": _status_session_for_mode(mode),
                 "can_start": False,
             }
         return {
@@ -570,7 +610,7 @@ def start_crawl(
             "label": "오류",
             "message": f"크롤 시작 실패: {exc}",
             "crawl": None,
-            "session": get_current_session(),
+            "session": _status_session_for_mode(mode),
             "can_start": False,
         }
 
@@ -580,7 +620,7 @@ def start_crawl(
         "label": crawl["label"],
         "message": "크롤을 시작했습니다.",
         "crawl": crawl,
-        "session": get_current_session(),
+        "session": _status_session_for_mode(mode),
         "can_start": False,
     }
 
@@ -645,18 +685,45 @@ def _get_open_row() -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def _get_latest_error() -> dict[str, Any] | None:
-    """If the newest crawl row is error, restart is blocked until SQL clears it."""
+def _get_latest_error(*, mode: str | None = None) -> dict[str, Any] | None:
+    """Newest crawl in the mode family is error → block restart until cleared.
+
+    FnGuide modes share one family. Media modes are scoped to that mode only.
+    """
+    key = (mode or "").strip().lower() or None
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT *
-                FROM fnguide_crawls
-                ORDER BY started_at DESC
-                LIMIT 1
-                """
-            )
+            if key and key in FNGUIDE_MODES:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_crawls
+                    WHERE mode = ANY(%s)
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (list(FNGUIDE_MODES),),
+                )
+            elif key:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_crawls
+                    WHERE mode = %s
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (key,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_crawls
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """
+                )
             row = cur.fetchone()
     if not row or row.get("state") != "error":
         return None

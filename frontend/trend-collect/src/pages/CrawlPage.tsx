@@ -26,7 +26,7 @@ export function CrawlPage() {
     requestingStop,
     startCrawl,
     requestLogout,
-  } = useSessionStatus()
+  } = useSessionStatus({ source: 'fnguide' })
   const profiles = useCrawlProfiles()
 
   const crawlMode = crawl.crawl?.mode ?? null
@@ -169,7 +169,9 @@ export function CrawlPage() {
           </div>
         ) : null}
         {!canStart && !crawlBusy && !blockedByError && !fetchError ? (
-          <p className="warn">열린 세션이 남아 있어 실행할 수 없습니다.</p>
+          <p className="warn">
+            FnGuide 계정 세션이 남아 있어 실행할 수 없습니다.
+          </p>
         ) : null}
         {fnguideBusy && stale && !fetchError ? (
           <p className="warn">최근 활동 갱신이 없습니다.</p>

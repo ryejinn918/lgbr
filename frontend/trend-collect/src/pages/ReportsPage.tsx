@@ -82,7 +82,7 @@ export function ReportsPage({
   const [detail, setDetail] = useState<ReportRecord | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
-  const { crawl } = useSessionStatus()
+  const { crawl } = useSessionStatus({ source: 'fnguide' })
   const audit = useAudit()
   const crawlBusy =
     crawl.state === 'starting' ||

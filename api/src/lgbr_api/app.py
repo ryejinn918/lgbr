@@ -93,9 +93,16 @@ async def session(request: Request) -> JSONResponse:
     return JSONResponse(get_current_session(source=source))
 
 
-async def session_logout(_: Request) -> JSONResponse:
+async def session_logout(request: Request) -> JSONResponse:
     # Logout ends the crawl parent as well (session is a subtask).
-    return JSONResponse(request_stop())
+    source: str | None = request.query_params.get("source")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if isinstance(body, dict) and body.get("source") is not None:
+        source = str(body.get("source") or "").strip() or source
+    return JSONResponse(request_stop(source=source))
 
 
 async def session_history(request: Request) -> JSONResponse:
@@ -144,7 +151,10 @@ async def crawl(request: Request) -> JSONResponse:
         event_limit = int(request.query_params.get("events", "50"))
     except ValueError:
         event_limit = 50
-    return JSONResponse(get_current_crawl(event_limit=event_limit))
+    source = request.query_params.get("source")
+    return JSONResponse(
+        get_current_crawl(source=source, event_limit=event_limit)
+    )
 
 
 async def crawl_history_latest(request: Request) -> JSONResponse:
@@ -198,8 +208,15 @@ async def crawl_start(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=status)
 
 
-async def crawl_stop(_: Request) -> JSONResponse:
-    return JSONResponse(request_stop())
+async def crawl_stop(request: Request) -> JSONResponse:
+    source: str | None = request.query_params.get("source")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if isinstance(body, dict) and body.get("source") is not None:
+        source = str(body.get("source") or "").strip() or source
+    return JSONResponse(request_stop(source=source))
 
 
 async def cdp_status(_: Request) -> JSONResponse:
