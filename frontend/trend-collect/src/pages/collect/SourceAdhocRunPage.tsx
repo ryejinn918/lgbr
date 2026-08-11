@@ -21,6 +21,8 @@ export function SourceAdhocRunPage() {
     crawl.state === 'stopping'
   const canStart = crawl.can_start === true && !crawlBusy
   const isThisSource = crawl.crawl?.mode === source
+  const blockedByError =
+    crawl.state === 'error' && isThisSource && !crawlBusy
   const badgeState = session.fetchError
     ? 'offline'
     : CRAWL_CLASS[crawl.state] ?? 'ended'
@@ -58,6 +60,21 @@ export function SourceAdhocRunPage() {
       await session.requestLogout()
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '종료 요청 실패')
+    }
+  }
+
+  async function onClearError() {
+    if (
+      !window.confirm(
+        `${label} 오류 상태를 해제하고 다시 시작할 수 있게 할까요?`,
+      )
+    ) {
+      return
+    }
+    try {
+      await session.clearError()
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '오류 해제 실패')
     }
   }
 
@@ -126,6 +143,14 @@ export function SourceAdhocRunPage() {
         <p className="account-line">{formatProgress(progress)}</p>
       ) : null}
 
+      {blockedByError && !session.fetchError ? (
+        <p className="warn">
+          오류로 멈췄습니다
+          {crawl.crawl?.message ? `: ${crawl.crawl.message}` : '.'} 「오류
+          해제」 후 다시 시작할 수 있습니다.
+        </p>
+      ) : null}
+
       <p className="account-line">
         다른 매체:{' '}
         <Link to={defaultCollectPath('fnguide')}>FnGuide</Link>
@@ -152,6 +177,15 @@ export function SourceAdhocRunPage() {
         >
           {session.requestingStop ? '종료 중…' : '애드혹 종료'}
         </button>
+        {blockedByError ? (
+          <button
+            type="button"
+            disabled={session.requestingClearError || !!session.fetchError}
+            onClick={() => void onClearError()}
+          >
+            {session.requestingClearError ? '해제 중…' : '오류 해제'}
+          </button>
+        ) : null}
       </div>
     </section>
   )

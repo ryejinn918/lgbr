@@ -24,8 +24,10 @@ export function CrawlPage() {
     fetchError,
     requestingStart,
     requestingStop,
+    requestingClearError,
     startCrawl,
     requestLogout,
+    clearError,
   } = useSessionStatus({ source: 'fnguide' })
   const profiles = useCrawlProfiles()
 
@@ -38,9 +40,9 @@ export function CrawlPage() {
   const fnguideBusy = crawlBusy && isMine
   const otherBusy = crawlBusy && !isMine
   const sessionOpen = status.session != null
-  const blockedByError = isMine && crawl.state === 'error'
+  const blockedByError = crawl.state === 'error' && !crawlBusy
   // Own last-run stays visible when idle (same as media search job history).
-  const showRunMeta = isMine
+  const showRunMeta = isMine || blockedByError
   const canStart = crawl.can_start === true && !crawlBusy
   const canStop = crawlBusy || sessionOpen
   const resultLine = showRunMeta
@@ -110,6 +112,21 @@ export function CrawlPage() {
     }
   }
 
+  async function onClearError() {
+    if (
+      !window.confirm(
+        '오류 상태를 해제하고 다시 시작할 수 있게 할까요?\n원인 확인 후 재실행하세요.',
+      )
+    ) {
+      return
+    }
+    try {
+      await clearError()
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '오류 해제 실패')
+    }
+  }
+
   return (
     <>
       <section className={`panel badge-panel state-${badgeState}`}>
@@ -159,13 +176,9 @@ export function CrawlPage() {
           <div className="warn">
             <p>
               오류로 멈췄습니다
-              {resultLine ? `: ${resultLine}` : '.'} 원인을 점검한 뒤, 아래 DB에
-              접속해 <code>fnguide_crawls.state</code>를{' '}
-              <code>error</code> → <code>ended</code>로 바꾸세요.
+              {resultLine ? `: ${resultLine}` : '.'} 원인을 확인한 뒤 「오류
+              해제」를 누르면 다시 시작할 수 있습니다.
             </p>
-            {crawl.unblock_text ? (
-              <pre className="unblock-sql">{crawl.unblock_text}</pre>
-            ) : null}
           </div>
         ) : null}
         {!canStart && !crawlBusy && !blockedByError && !fetchError ? (
@@ -216,6 +229,16 @@ export function CrawlPage() {
           >
             {requestingStop ? '요청 중…' : '검색 중단'}
           </button>
+          {blockedByError ? (
+            <button
+              type="button"
+              className="logout-btn"
+              disabled={requestingClearError || !!fetchError}
+              onClick={() => void onClearError()}
+            >
+              {requestingClearError ? '해제 중…' : '오류 해제'}
+            </button>
+          ) : null}
         </div>
       </section>
 

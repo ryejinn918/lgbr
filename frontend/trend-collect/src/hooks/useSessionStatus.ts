@@ -28,11 +28,13 @@ export type SessionView = {
   fetchError: string | null
   requestingStart: boolean
   requestingStop: boolean
+  requestingClearError: boolean
   startCrawl: (
     mode?: CrawlMode,
     opts?: { debug?: boolean; catalog?: string },
   ) => Promise<void>
   requestLogout: () => Promise<void>
+  clearError: () => Promise<void>
 }
 
 function isStale(status: SessionResponse, now: number): boolean {
@@ -72,6 +74,7 @@ export function useSessionStatus(opts?: { source?: string }): SessionView {
   const [now, setNow] = useState(() => Date.now())
   const [requestingStart, setRequestingStart] = useState(false)
   const [requestingStop, setRequestingStop] = useState(false)
+  const [requestingClearError, setRequestingClearError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -156,6 +159,28 @@ export function useSessionStatus(opts?: { source?: string }): SessionView {
     }
   }
 
+  async function clearError() {
+    setRequestingClearError(true)
+    try {
+      const res = await fetch('/api/crawl/clear-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source }),
+      })
+      const data = (await res.json()) as CrawlResponse & {
+        ok?: boolean
+        message?: string
+      }
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`)
+      }
+      setCrawl(applyCrawl(data))
+      if (data.session) setStatus(data.session)
+    } finally {
+      setRequestingClearError(false)
+    }
+  }
+
   return {
     crawl,
     status,
@@ -163,7 +188,9 @@ export function useSessionStatus(opts?: { source?: string }): SessionView {
     fetchError,
     requestingStart,
     requestingStop,
+    requestingClearError,
     startCrawl,
     requestLogout,
+    clearError,
   }
 }

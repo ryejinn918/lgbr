@@ -43,6 +43,7 @@ from lgbr_api.consensus_eval import iter_eval_sse
 from lgbr_api.consensus_eval import mark_all_open_evals_interrupted
 from lgbr_api.consensus_eval import start_eval as consensus_start_eval
 from lgbr_api.crawls import (
+    clear_crawl_error,
     get_cdp_status,
     get_current_crawl,
     get_history_latest,
@@ -217,6 +218,19 @@ async def crawl_stop(request: Request) -> JSONResponse:
     if isinstance(body, dict) and body.get("source") is not None:
         source = str(body.get("source") or "").strip() or source
     return JSONResponse(request_stop(source=source))
+
+
+async def crawl_clear_error(request: Request) -> JSONResponse:
+    source: str | None = request.query_params.get("source")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if isinstance(body, dict) and body.get("source") is not None:
+        source = str(body.get("source") or "").strip() or source
+    result = clear_crawl_error(source=source)
+    status = int(result.pop("status", 200 if result.get("ok") else 400))
+    return JSONResponse(result, status_code=status)
 
 
 async def cdp_status(_: Request) -> JSONResponse:
@@ -754,6 +768,7 @@ def create_app() -> Starlette:
             Route("/api/crawl/events", crawl_events),
             Route("/api/crawl/start", crawl_start, methods=["POST"]),
             Route("/api/crawl/stop", crawl_stop, methods=["POST"]),
+            Route("/api/crawl/clear-error", crawl_clear_error, methods=["POST"]),
             Route("/api/crawl/profiles", crawl_profiles),
             Route(
                 "/api/crawl/profiles/{mode}",

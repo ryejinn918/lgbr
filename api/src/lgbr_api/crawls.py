@@ -401,6 +401,89 @@ def request_stop(*, source: str | None = None) -> dict[str, Any]:
     }
 
 
+def _error_mode_for_source(source: str | None) -> str:
+    session_source = _session_source_for_status(source)
+    # FnGuide family shares one error latch; media modes are per-id.
+    if session_source == "fnguide":
+        return "ai"
+    return session_source
+
+
+def _force_end_open_session(source: str) -> None:
+    """Close leftover open session rows so can_start can flip without a worker."""
+    now = _now()
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE fnguide_sessions
+                SET ended_at = COALESCE(ended_at, %s),
+                    state = 'ended',
+                    end_reason = COALESCE(end_reason, 'manual'),
+                    message = COALESCE(message, 'cleared for restart')
+                WHERE ended_at IS NULL
+                  AND source = %s
+                """,
+                (now, source),
+            )
+        conn.commit()
+
+
+def clear_crawl_error(*, source: str | None = None) -> dict[str, Any]:
+    """User-acknowledged unlock: error → ended so a new crawl can start."""
+    reconcile_stale_crawls()
+    status_source = (source or "").strip().lower() or "fnguide"
+    error_mode = _error_mode_for_source(status_source)
+    session_source = _session_source_for_status(status_source)
+
+    blocking = _get_latest_error(mode=error_mode)
+    if not blocking:
+        out = get_current_crawl(source=status_source)
+        out["ok"] = False
+        out["status"] = 409
+        out["message"] = "해제할 오류 상태 크롤이 없습니다."
+        return out
+
+    crawl_id = str(blocking["id"])
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE fnguide_crawls
+                SET state = 'ended',
+                    message = CASE
+                        WHEN message IS NULL OR BTRIM(message) = ''
+                            THEN 'error cleared for restart'
+                        WHEN message LIKE '%%[cleared for restart]%%'
+                            THEN message
+                        ELSE message || ' [cleared for restart]'
+                    END
+                WHERE id = %s AND state = 'error'
+                RETURNING *
+                """,
+                (crawl_id,),
+            )
+            updated = cur.fetchone()
+        conn.commit()
+
+    if not updated:
+        out = get_current_crawl(source=status_source)
+        out["ok"] = False
+        out["status"] = 409
+        out["message"] = "해제할 오류 상태 크롤이 없습니다."
+        return out
+
+    # Best-effort: ask logout, then force-close so restart is not session-blocked.
+    request_logout(source=session_source)
+    _force_end_open_session(session_source)
+
+    out = get_current_crawl(source=status_source)
+    out["ok"] = True
+    out["status"] = 200
+    out["message"] = "오류를 해제했습니다. 다시 시작할 수 있습니다."
+    return out
+
+
 def shutdown_open_crawl(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
     """Request stop on any open crawl and wait until it ends (API process exit)."""
     open_before = _get_open_row()
