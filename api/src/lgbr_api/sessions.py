@@ -1,4 +1,4 @@
-"""Read/update Fnguide sessions for the monitor API."""
+"""Read/update account sessions for the monitor API."""
 
 from __future__ import annotations
 
@@ -13,18 +13,31 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def get_current_session() -> dict[str, Any]:
+def get_current_session(source: str | None = None) -> dict[str, Any]:
+    source_s = (source or "").strip().lower() or None
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT *
-                FROM fnguide_sessions
-                WHERE ended_at IS NULL
-                ORDER BY started_at DESC
-                LIMIT 1
-                """
-            )
+            if source_s:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_sessions
+                    WHERE ended_at IS NULL AND source = %s
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (source_s,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_sessions
+                    WHERE ended_at IS NULL
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """
+                )
             row = cur.fetchone()
     if not row:
         return {
@@ -40,18 +53,30 @@ def get_current_session() -> dict[str, Any]:
     }
 
 
-def request_logout() -> dict[str, Any]:
+def request_logout(source: str | None = None) -> dict[str, Any]:
     now = _now()
+    source_s = (source or "").strip().lower() or None
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT * FROM fnguide_sessions
-                WHERE ended_at IS NULL
-                ORDER BY started_at DESC
-                LIMIT 1
-                """
-            )
+            if source_s:
+                cur.execute(
+                    """
+                    SELECT * FROM fnguide_sessions
+                    WHERE ended_at IS NULL AND source = %s
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (source_s,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT * FROM fnguide_sessions
+                    WHERE ended_at IS NULL
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """
+                )
             existing = cur.fetchone()
             if not existing:
                 conn.commit()

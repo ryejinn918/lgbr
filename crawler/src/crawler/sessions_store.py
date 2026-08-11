@@ -15,21 +15,27 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def create_session(*, fnguide_user_id: str, ttl_seconds: int) -> dict[str, Any]:
+def create_session(
+    *,
+    source: str,
+    fnguide_user_id: str,
+    ttl_seconds: int,
+) -> dict[str, Any]:
     now = _now()
     lease_until = now + timedelta(seconds=ttl_seconds)
+    source_s = (source or "").strip().lower() or "fnguide"
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO fnguide_sessions (
-                    fnguide_user_id, started_at, last_used_at, lease_until,
+                    source, fnguide_user_id, started_at, last_used_at, lease_until,
                     pid, state
                 )
-                VALUES (%s, %s, %s, %s, %s, 'logging_in')
+                VALUES (%s, %s, %s, %s, %s, %s, 'logging_in')
                 RETURNING *
                 """,
-                (fnguide_user_id, now, now, lease_until, os.getpid()),
+                (source_s, fnguide_user_id, now, now, lease_until, os.getpid()),
             )
             row = dict(cur.fetchone())
             _add_event(cur, row["id"], "login_start", {"pid": os.getpid()})
@@ -189,18 +195,31 @@ def end_session(
     return _serialize(row)
 
 
-def get_open_session() -> dict[str, Any] | None:
+def get_open_session(source: str | None = None) -> dict[str, Any] | None:
+    source_s = (source or "").strip().lower() or None
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT *
-                FROM fnguide_sessions
-                WHERE ended_at IS NULL
-                ORDER BY started_at DESC
-                LIMIT 1
-                """
-            )
+            if source_s:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_sessions
+                    WHERE ended_at IS NULL AND source = %s
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (source_s,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM fnguide_sessions
+                    WHERE ended_at IS NULL
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """
+                )
             row = cur.fetchone()
     return _serialize(dict(row)) if row else None
 
@@ -216,35 +235,64 @@ def get_session(session_id: UUID | str) -> dict[str, Any] | None:
     return _serialize(dict(row)) if row else None
 
 
-def request_logout() -> dict[str, Any] | None:
+def request_logout(source: str | None = None) -> dict[str, Any] | None:
     now = _now()
+    source_s = (source or "").strip().lower() or None
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE fnguide_sessions
-                SET logout_requested_at = %s
-                WHERE id = (
-                    SELECT id FROM fnguide_sessions
-                    WHERE ended_at IS NULL
-                    ORDER BY started_at DESC
-                    LIMIT 1
-                )
-                AND logout_requested_at IS NULL
-                RETURNING *
-                """,
-                (now,),
-            )
-            row = cur.fetchone()
-            if not row:
+            if source_s:
                 cur.execute(
                     """
-                    SELECT * FROM fnguide_sessions
-                    WHERE ended_at IS NULL
-                    ORDER BY started_at DESC
-                    LIMIT 1
-                    """
+                    UPDATE fnguide_sessions
+                    SET logout_requested_at = %s
+                    WHERE id = (
+                        SELECT id FROM fnguide_sessions
+                        WHERE ended_at IS NULL AND source = %s
+                        ORDER BY started_at DESC
+                        LIMIT 1
+                    )
+                    AND logout_requested_at IS NULL
+                    RETURNING *
+                    """,
+                    (now, source_s),
                 )
+            else:
+                cur.execute(
+                    """
+                    UPDATE fnguide_sessions
+                    SET logout_requested_at = %s
+                    WHERE id = (
+                        SELECT id FROM fnguide_sessions
+                        WHERE ended_at IS NULL
+                        ORDER BY started_at DESC
+                        LIMIT 1
+                    )
+                    AND logout_requested_at IS NULL
+                    RETURNING *
+                    """,
+                    (now,),
+                )
+            row = cur.fetchone()
+            if not row:
+                if source_s:
+                    cur.execute(
+                        """
+                        SELECT * FROM fnguide_sessions
+                        WHERE ended_at IS NULL AND source = %s
+                        ORDER BY started_at DESC
+                        LIMIT 1
+                        """,
+                        (source_s,),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT * FROM fnguide_sessions
+                        WHERE ended_at IS NULL
+                        ORDER BY started_at DESC
+                        LIMIT 1
+                        """
+                    )
                 existing = cur.fetchone()
                 conn.commit()
                 return _serialize(dict(existing)) if existing else None

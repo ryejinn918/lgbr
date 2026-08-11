@@ -12,6 +12,7 @@ export type CrawlState = 'starting' | 'active' | 'stopping' | 'ended' | 'error'
 
 export type SessionRecord = {
   id: string
+  source?: string
   fnguide_user_id: string
   started_at: string | null
   ended_at: string | null

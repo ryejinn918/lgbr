@@ -1,9 +1,9 @@
 """Crawl status and manual start for the monitor API.
 
 Fail-closed rules:
-- At most one open crawl / open session.
+- At most one open crawl; at most one open session per source.
 - Dead worker pid → open crawl forced to error.
-- Start rejected if open crawl or orphan open session remains.
+- Start rejected if open crawl or same-source open session remains.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from lgbr_api.source_registry import (
     FNGUIDE_MODES,
     cdp_modes,
     no_account_modes,
+    source_requires_login,
     valid_crawl_modes,
 )
 
@@ -96,7 +97,7 @@ def reconcile_stale_crawls() -> list[dict[str, Any]]:
                 updated = cur.fetchone()
                 if updated:
                     fixed.append(_serialize(dict(updated)))
-            # Orphan open sessions with no open crawl → error-close them.
+            # Orphan open sessions with no open crawl / collection job → close.
             cur.execute(
                 """
                 SELECT s.*
@@ -111,8 +112,21 @@ def reconcile_stale_crawls() -> list[dict[str, Any]]:
             orphans = [dict(r) for r in cur.fetchall()]
             for sess in orphans:
                 spid = sess.get("pid")
-                # Live worker without crawl row: leave open so start stays blocked.
+                # Live worker (crawl attach missing, or collection_jobs search): keep open.
                 if spid is not None and _pid_alive(int(spid)):
+                    continue
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM collection_jobs
+                    WHERE ended_at IS NULL
+                      AND pid IS NOT NULL
+                      AND pid = %s
+                    LIMIT 1
+                    """,
+                    (spid,),
+                )
+                if cur.fetchone():
                     continue
                 cur.execute(
                     """
@@ -287,6 +301,18 @@ def get_history_latest(*, family: str = "fnguide") -> dict[str, Any]:
     }
 
 
+def _account_source_for_mode(mode: str | None) -> str | None:
+    """Map crawl mode to fnguide_sessions.source, or None if no account session."""
+    key = (mode or "").strip().lower()
+    if not key or key in NO_ACCOUNT_MODES:
+        return None
+    if source_requires_login(key):
+        return key
+    if key in FNGUIDE_MODES:
+        return "fnguide"
+    return None
+
+
 def request_stop() -> dict[str, Any]:
     """Ask crawl to stop and request account logout (subtask)."""
     reconcile_stale_crawls()
@@ -310,8 +336,11 @@ def request_stop() -> dict[str, Any]:
             crawl_row = cur.fetchone()
         conn.commit()
 
-    logout = request_logout()
-    account = get_current_session()
+    logout_source: str | None = None
+    if crawl_row:
+        logout_source = _account_source_for_mode(str(dict(crawl_row).get("mode") or ""))
+    logout = request_logout(source=logout_source)
+    account = get_current_session(source=logout_source)
     if not crawl_row:
         return {
             "ok": bool(logout.get("ok")),
@@ -447,14 +476,17 @@ def start_crawl(
         }
 
     # PwC / Accenture adhoc do not use fnguide_sessions.
-    if mode not in NO_ACCOUNT_MODES:
-        account = get_current_session()
+    account_source = _account_source_for_mode(mode)
+    if account_source is not None:
+        account = get_current_session(source=account_source)
         if account.get("session") is not None:
             return {
                 "ok": False,
                 "status": 409,
                 "label": "오류",
-                "message": "열린 계정 세션이 남아 있어 시작할 수 없습니다.",
+                "message": (
+                    f"열린 {account_source} 계정 세션이 남아 있어 시작할 수 없습니다."
+                ),
                 "crawl": None,
                 "session": account,
                 "can_start": False,

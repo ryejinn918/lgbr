@@ -100,6 +100,7 @@ class NikkeixtechSession:
             return sessions_store.get_session(self.session_id) or {}
 
         row = sessions_store.create_session(
+            source="nikkeixtech",
             fnguide_user_id=self.user_id,
             ttl_seconds=self.ttl_seconds,
         )

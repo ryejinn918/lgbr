@@ -88,8 +88,9 @@ async def health(_: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-async def session(_: Request) -> JSONResponse:
-    return JSONResponse(get_current_session())
+async def session(request: Request) -> JSONResponse:
+    source = request.query_params.get("source")
+    return JSONResponse(get_current_session(source=source))
 
 
 async def session_logout(_: Request) -> JSONResponse:
