@@ -14,18 +14,18 @@ from lgbr_api.db import connect
 COVERAGE_WEEKS_DEFAULT = 13
 COVERAGE_SOURCES: tuple[tuple[str, str], ...] = (
     ("fnguide", "FnGuide"),
-    ("arg", "ARG"),
-    ("nikkei", "Nikkei"),
     ("pwc", "PwC"),
     ("accenture", "Accenture"),
     ("kpmg", "KPMG"),
     ("ey", "EY"),
     ("deloitte", "Deloitte"),
-    ("hbrkorea", "HBR Korea"),
     ("bain", "Bain"),
-    ("hbr", "HBR"),
     # ("mckinsey", "McKinsey"),  # broken / disabled
     ("bcg", "BCG"),
+    ("hbr", "HBR"),
+    ("hbrkorea", "HBR Korea"),
+    ("arg", "ARG"),
+    ("nikkei", "Nikkei"),
 )
 _REPORT_COVERAGE_SOURCES = (
     "fnguide",
@@ -34,11 +34,11 @@ _REPORT_COVERAGE_SOURCES = (
     "kpmg",
     "ey",
     "deloitte",
-    "hbrkorea",
     "bain",
-    "hbr",
     # "mckinsey",  # broken / disabled
     "bcg",
+    "hbr",
+    "hbrkorea",
 )
 _NEWS_COVERAGE_SOURCES = ("arg", "nikkei")
 

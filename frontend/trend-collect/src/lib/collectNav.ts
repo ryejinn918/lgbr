@@ -29,10 +29,20 @@ export type CollectJob = {
   settingsLabel: string | null
 }
 
+const REPORT_MEDIA_SOURCES = MEDIA_SOURCES.filter((s) => s.id !== 'nikkei')
+const NIKKEI_MEDIA = MEDIA_SOURCES.find((s) => s.id === 'nikkei')
+
+/** Display order: FnGuide → reports → news (ARG, Nikkei). */
 export const SOURCES: { id: CollectSource; label: string }[] = [
   { id: 'fnguide', label: 'FnGuide' },
+  ...REPORT_MEDIA_SOURCES.map((s) => ({
+    id: s.id as CollectSource,
+    label: s.label,
+  })),
   { id: 'arg', label: 'ARG' },
-  ...MEDIA_SOURCES.map((s) => ({ id: s.id as CollectSource, label: s.label })),
+  ...(NIKKEI_MEDIA
+    ? [{ id: 'nikkei' as CollectSource, label: NIKKEI_MEDIA.label }]
+    : []),
 ]
 
 export const SOURCE_LABEL: Record<string, string> = {
