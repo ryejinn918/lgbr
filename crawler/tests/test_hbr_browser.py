@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from crawler.sources.hbr_browser import (
+    build_list_item,
     is_weak_link_title,
     looks_paywalled,
     parse_article_url,
@@ -37,14 +38,38 @@ def test_looks_paywalled_ignores_executive_agenda() -> None:
     assert not looks_paywalled("member benefits for HBR readers")
 
 
-def test_parse_article_url_uses_month_day_one() -> None:
+def test_parse_article_url_exposes_url_ym_month_start() -> None:
     parsed = parse_article_url(
         "https://hbr.org/2026/07/ai-and-it-teams-often-clash-but-they-dont-have-to"
     )
     assert parsed is not None
-    slug, pub = parsed
+    slug, url_ym = parsed
     assert slug == "ai-and-it-teams-often-clash-but-they-dont-have-to"
-    assert pub == date(2026, 7, 1)
+    assert url_ym == date(2026, 7, 1)
+
+
+def test_build_list_item_without_card_date_leaves_published_at_none() -> None:
+    item = build_list_item(
+        url="https://hbr.org/2026/07/ai-and-it-teams-often-clash-but-they-dont-have-to",
+        title="AI and IT Teams Often Clash",
+        date_raw="",
+    )
+    assert item is not None
+    assert item.published_at is None
+    assert item.publish_date_raw == ""
+    assert item.url_ym == date(2026, 7, 1)
+
+
+def test_build_list_item_uses_card_date() -> None:
+    item = build_list_item(
+        url="https://hbr.org/2026/07/ai-and-it-teams-often-clash-but-they-dont-have-to",
+        title="AI and IT Teams Often Clash",
+        date_raw="July 31, 2026",
+    )
+    assert item is not None
+    assert item.published_at == date(2026, 7, 31)
+    assert item.publish_date_raw == "July 31, 2026"
+    assert item.url_ym == date(2026, 7, 1)
 
 
 def test_parse_publish_date_long_form() -> None:

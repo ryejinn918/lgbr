@@ -71,6 +71,8 @@ class HbrListItem:
     title: str
     published_at: date | None
     publish_date_raw: str
+    # URL /YYYY/MM/ month start — cutoff only; never treat as real publish day.
+    url_ym: date | None = None
 
 
 _WEAK_LINK_TITLE_RE = re.compile(
@@ -103,15 +105,19 @@ def months_ago_cutoff(months: int, *, now: datetime | None = None) -> date:
 
 
 def parse_article_url(url: str) -> tuple[str, date | None] | None:
+    """Return ``(slug, url_ym)`` where ``url_ym`` is month start from the path.
+
+    ``url_ym`` is for period cutoff only — not a real publish day.
+    """
     m = ARTICLE_RE.match((url or "").strip())
     if not m:
         return None
     y, mo, slug = int(m.group(1)), int(m.group(2)), m.group(3)
     try:
-        pub = date(y, mo, 1)
+        url_ym = date(y, mo, 1)
     except ValueError:
-        pub = None
-    return slug, pub
+        url_ym = None
+    return slug, url_ym
 
 
 def source_key_from_url(url: str) -> str:
@@ -119,6 +125,28 @@ def source_key_from_url(url: str) -> str:
     if parsed:
         return parsed[0]
     return (url or "")[-240:]
+
+
+def build_list_item(*, url: str, title: str, date_raw: str) -> HbrListItem | None:
+    """Map a scraped list row to ``HbrListItem`` (no URL day-1 as published_at)."""
+    parsed = parse_article_url(url)
+    if not parsed:
+        return None
+    slug, url_ym = parsed
+    raw_date = (date_raw or "").strip()
+    published = parse_publish_date(raw_date)
+    raw_title = (title or "").strip()
+    if is_weak_link_title(raw_title):
+        raw_title = title_from_slug(slug)
+    href = url if url.startswith("http") else f"{BASE}{url}"
+    return HbrListItem(
+        source_key=slug,
+        url=href,
+        title=raw_title or title_from_slug(slug),
+        published_at=published,
+        publish_date_raw=raw_date,
+        url_ym=url_ym,
+    )
 
 
 def open_latest(page: Page) -> None:
@@ -184,25 +212,13 @@ def collect_list_items(page: Page) -> list[HbrListItem]:
     )
     items: list[HbrListItem] = []
     for row in raw or []:
-        url = str(row.get("href") or "")
-        parsed = parse_article_url(url)
-        if not parsed:
-            continue
-        slug, ym = parsed
-        date_raw = str(row.get("date_raw") or "")
-        published = parse_publish_date(date_raw) or ym
-        raw_title = str(row.get("title") or "").strip()
-        if is_weak_link_title(raw_title):
-            raw_title = title_from_slug(slug)
-        items.append(
-            HbrListItem(
-                source_key=slug,
-                url=url if url.startswith("http") else f"{BASE}{url}",
-                title=raw_title or title_from_slug(slug),
-                published_at=published,
-                publish_date_raw=date_raw or (ym.isoformat() if ym else ""),
-            )
+        item = build_list_item(
+            url=str(row.get("href") or ""),
+            title=str(row.get("title") or ""),
+            date_raw=str(row.get("date_raw") or ""),
         )
+        if item:
+            items.append(item)
     return items
 
 
@@ -330,12 +346,13 @@ def capture_article_pdf(
           const DATE_RE = /\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},\\s+\\d{4}\\b/;
           const timeEl = document.querySelector('time');
           const metaPub = document.querySelector(
-            'meta[property="article:published_time"], meta[name="article:published_time"], meta[property="og:updated_time"]'
+            'meta[property="article:published_time"], meta[name="article:published_time"]'
           );
           const ld = [...document.querySelectorAll('script[type="application/ld+json"]')]
             .map((el) => el.textContent || '').join('\\n');
           const ldMatch = ld.match(/"datePublished"\\s*:\\s*"([^"]+)"/);
           const byline = (main.slice(0, 800).match(DATE_RE) || [])[0] || '';
+          // Prefer real publish signals; do not use og:updated_time.
           const dateRaw = (
             (timeEl && (timeEl.getAttribute('datetime') || timeEl.innerText))
             || (metaPub && metaPub.getAttribute('content'))

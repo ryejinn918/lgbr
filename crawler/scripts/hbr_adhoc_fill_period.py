@@ -31,6 +31,8 @@ from crawler.sources.hbr_browser import (  # noqa: E402
     capture_article_pdf,
     click_load_more,
     collect_list_items,
+    parse_article_url,
+    parse_publish_date,
     pdf_page_count,
     source_key_from_url,
 )
@@ -230,18 +232,18 @@ def probe_and_collect(
             url = str(row.get("url") or row).strip()
             if not url or url in by_url:
                 continue
-            from crawler.sources.hbr_browser import parse_article_url
-
             parsed = parse_article_url(url)
             if not parsed:
                 continue
-            slug, pub = parsed
+            slug, url_ym = parsed
+            pub_raw = str(row.get("pub") or "")
             by_url[url] = HbrListItem(
                 source_key=slug,
                 url=url,
                 title=str(row.get("title") or slug),
-                published_at=pub,
-                publish_date_raw=str(row.get("pub") or ""),
+                published_at=parse_publish_date(pub_raw),
+                publish_date_raw=pub_raw,
+                url_ym=url_ym,
             )
 
     months: dict[str, int] = {}

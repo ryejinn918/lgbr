@@ -192,28 +192,34 @@ def run_hbr_search_job(
             older_than_cutoff = 0
             dated_on_batch = 0
             for item in new_items:
-                if item.published_at and item.published_at < cutoff:
+                # Card date preferred; URL month start only for cutoff heuristics.
+                effective = item.published_at or item.url_ym
+                if effective and effective < cutoff:
                     summary.skipped_old += 1
                     older_than_cutoff += 1
                     dated_on_batch += 1
                     progress["skipped_old"] = summary.skipped_old
+                    # Do not persist URL day-1 as published_at.
+                    attrs_old: dict[str, Any] = {
+                        "url": item.url,
+                        "catalog": catalog_id,
+                        "publish_date_raw": item.publish_date_raw,
+                        "provider": "HBR",
+                        "skipped": "period_cutoff",
+                    }
+                    if item.url_ym is not None:
+                        attrs_old["url_ym"] = item.url_ym.isoformat()
                     reports_store.upsert_listed(
                         source=SOURCE,
                         source_key=item.source_key,
                         title=item.title,
                         published_at=item.published_at,
-                        attrs={
-                            "url": item.url,
-                            "catalog": catalog_id,
-                            "publish_date_raw": item.publish_date_raw,
-                            "provider": "HBR",
-                            "skipped": "period_cutoff",
-                        },
+                        attrs=attrs_old,
                     )
                     summary.listed += 1
                     progress["listed"] = summary.listed
                     continue
-                if item.published_at:
+                if effective:
                     dated_on_batch += 1
                 pending.append(item)
 
@@ -309,12 +315,25 @@ def _process_item(
     progress: dict[str, Any],
     job_id: UUID | str,
 ) -> None:
+    progress["current_title"] = item.title
+    progress["current_url"] = item.url
+
+    # Skip before upsert: stale list dates (or missing card dates) would
+    # regress published_at via COALESCE over a good detail date.
+    if item.source_key in already:
+        summary.skipped_existing += 1
+        progress["skipped_existing"] = summary.skipped_existing
+        collection_jobs_store.set_progress(job_id, progress)
+        return
+
     attrs: dict[str, Any] = {
         "url": item.url,
         "catalog": catalog_id,
         "publish_date_raw": item.publish_date_raw,
         "provider": "HBR",
     }
+    if item.url_ym is not None:
+        attrs["url_ym"] = item.url_ym.isoformat()
     published = item.published_at
     reports_store.upsert_listed(
         source=SOURCE,
@@ -325,14 +344,7 @@ def _process_item(
     )
     summary.listed += 1
     progress["listed"] = summary.listed
-    progress["current_title"] = item.title
-    progress["current_url"] = item.url
     collection_jobs_store.set_progress(job_id, progress)
-
-    if item.source_key in already:
-        summary.skipped_existing += 1
-        progress["skipped_existing"] = summary.skipped_existing
-        return
 
     safe = _safe_filename(item.source_key)
     dest = download_dir / f"{safe}.pdf"
@@ -341,7 +353,7 @@ def _process_item(
         title = str(meta.get("title") or "").strip() or item.title
         detail_pub = meta.get("published_at")
         detail_raw = str(meta.get("date_raw") or "").strip()
-        # Detail page date beats URL year/month day-1 fallback from the list.
+        # Detail page date beats sparse/missing list dates.
         if detail_pub is not None:
             published = detail_pub
             if detail_raw:
