@@ -93,7 +93,7 @@ export function NikkeiFetchBodyRunPage() {
         <Link to="/collect/nikkei/list/feed">피드 실행</Link>
         {' · '}
         결과:{' '}
-        <Link to="/docs/articles">기사 통합</Link>
+        <Link to="/docs/articles?source=nikkei">기사 통합</Link>
       </p>
 
       <div className="actions">

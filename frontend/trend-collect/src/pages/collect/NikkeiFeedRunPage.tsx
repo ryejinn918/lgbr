@@ -108,7 +108,7 @@ export function NikkeiFeedRunPage() {
         <Link to="/collect/nikkei/list/feed/types">설정</Link>
         {' · '}
         결과 문서:{' '}
-        <Link to="/docs/articles">기사 통합</Link>
+        <Link to="/docs/articles?source=nikkei">기사 통합</Link>
       </p>
 
       <div className="actions">

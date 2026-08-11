@@ -1,5 +1,5 @@
 import { useMemo, useState, type MouseEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useNewsArticles } from '../../hooks/useNewsArticles'
 import type {
   NewsArticleBodyFilter,
@@ -22,10 +22,16 @@ const SOURCE_LABEL: Record<string, string> = {
 /** Chip order for media filter (must match API OTHER_MEDIA_SOURCES). */
 const SOURCE_FILTERS = ['all', 'arg', 'google_news', 'nikkei'] as const
 
+function parseSourceParam(raw: string | null): string {
+  if (raw && (SOURCE_FILTERS as readonly string[]).includes(raw)) return raw
+  return 'all'
+}
+
 export function ArticlesPage() {
+  const [params, setParams] = useSearchParams()
   const [qDraft, setQDraft] = useState('')
   const [q, setQ] = useState('')
-  const [source, setSource] = useState<string>('all')
+  const source = parseSourceParam(params.get('source'))
   const [offset, setOffset] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const limit = 30
@@ -46,13 +52,18 @@ export function ArticlesPage() {
   const dirty = source !== 'all' || q !== '' || qDraft !== ''
 
   function commitSource(next: string) {
-    setSource(next)
+    const nextParams = new URLSearchParams(params)
+    if (next === 'all') nextParams.delete('source')
+    else nextParams.set('source', next)
+    setParams(nextParams)
     setOffset(0)
     setSelectedId(null)
   }
 
   function resetFilters() {
-    setSource('all')
+    const nextParams = new URLSearchParams(params)
+    nextParams.delete('source')
+    setParams(nextParams)
     setQ('')
     setQDraft('')
     setOffset(0)

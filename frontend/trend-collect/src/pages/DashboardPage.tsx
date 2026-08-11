@@ -966,7 +966,7 @@ export function DashboardPage() {
                 <>
                   <Link to="/collect/arg/list/feed">피드</Link>
                   {' · '}
-                  <Link to="/docs/articles">기사</Link>
+                  <Link to="/docs/articles?source=arg">기사</Link>
                 </>
               }
               stop={
@@ -1009,7 +1009,7 @@ export function DashboardPage() {
                   {' · '}
                   <Link to="/collect/nikkei/body/fetch">본문</Link>
                   {' · '}
-                  <Link to="/docs/articles">기사</Link>
+                  <Link to="/docs/articles?source=nikkei">기사</Link>
                 </>
               }
               stop={
@@ -1206,11 +1206,13 @@ export function DashboardPage() {
           />
           <ArticleCountRow
             label="ARG"
+            source="arg"
             counts={countsArgArticles.bodyCounts}
             error={countsArgArticles.fetchError}
           />
           <ArticleCountRow
             label="Nikkei"
+            source="nikkei"
             counts={countsNikkeiArticles.bodyCounts}
             error={countsNikkeiArticles.fetchError}
           />
@@ -1260,17 +1262,20 @@ function CountRow({
 
 function ArticleCountRow({
   label,
+  source,
   counts,
   error,
 }: {
   label: string
+  source: string
   counts: { all: number; yes: number; no: number }
   error: string | null
 }) {
+  const articlesTo = `/docs/articles?source=${source}`
   return (
     <div className="dash-count-row">
       <div className="dash-count-label">
-        <Link to="/docs/articles">{label}</Link>
+        <Link to={articlesTo}>{label}</Link>
         <span className="section-note">전체 {counts.all ?? 0}건</span>
       </div>
       {error ? <p className="warn">{error}</p> : null}
@@ -1278,7 +1283,7 @@ function ArticleCountRow({
         {COUNT_KEYS_NEWS.map((key) => (
           <Link
             key={key}
-            to="/docs/articles"
+            to={articlesTo}
             className={`count-tile status-${key === 'yes' ? 'downloaded' : 'listed'}`}
           >
             <span className="count-label">{ARTICLE_BODY_LABEL[key]}</span>
