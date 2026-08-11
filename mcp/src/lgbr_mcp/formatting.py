@@ -7,29 +7,23 @@ from typing import Any
 
 _SUMMARY_CLIP = 400
 
-_SERP_KEYS = (
+_STRIP_FILE_KEYS = ("file_path", "file_name", "pdf_url")
+
+_DETAIL_META_KEYS = (
     "id",
     "title",
     "source",
-    "source_key",
     "provider",
     "published_at",
     "page_count",
     "themes",
-    "theme",
-    "quality",
-    "quality_pass",
-    "quality_scope",
-    "status",
-    "has_file",
     "url",
+    "quality",
 )
-
-_STRIP_FILE_KEYS = ("file_path", "file_name", "pdf_url")
 
 
 def dumps(data: Any) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=str)
 
 
 def audit_kind_for_source(source: Any) -> str:
@@ -62,45 +56,84 @@ def sanitize_report(report: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _themes(report: dict[str, Any], qj: dict[str, Any] | None = None) -> list[Any] | None:
+    themes = report.get("themes")
+    if isinstance(themes, list) and themes:
+        return themes
+    if qj and isinstance(qj.get("themes"), list) and qj["themes"]:
+        return qj["themes"]
+    theme = report.get("theme")
+    if theme:
+        return [theme]
+    return None
+
+
 def serp_item(report: dict[str, Any]) -> dict[str, Any]:
     clean = sanitize_report(report)
-    item = {k: clean.get(k) for k in _SERP_KEYS}
-    item["audit_kind"] = audit_kind_for_source(clean.get("source"))
-    qj = report.get("quality_json")
-    if not isinstance(qj, dict):
-        return item
+    qj = report.get("quality_json") if isinstance(report.get("quality_json"), dict) else {}
+    item: dict[str, Any] = {
+        "id": clean.get("id"),
+        "title": clean.get("title"),
+        "source": clean.get("source"),
+        "provider": clean.get("provider"),
+        "published_at": clean.get("published_at"),
+        "page_count": clean.get("page_count"),
+        "themes": _themes(clean, qj),
+        "url": clean.get("url"),
+        "quality": clean.get("quality"),
+    }
     short = qj.get("short_title")
     if short:
         item["short_title"] = short
-    kind = item["audit_kind"]
+    kind = audit_kind_for_source(clean.get("source"))
     if kind == "sell_side":
-        topic = qj.get("topic")
-        if topic:
-            item["topic"] = topic
-        fw = _clip(qj.get("framework_summary"))
-        if fw:
-            item["framework_summary"] = fw
+        summary = _clip(qj.get("framework_summary") or qj.get("summary"))
     else:
         summary = _clip(qj.get("summary") or qj.get("framework_summary"))
-        if summary:
-            item["summary"] = summary
-    flag = extract_truncated_flag(qj.get("extract"))
-    if flag is not None:
-        item["extract_truncated"] = flag
-    return item
+    if summary:
+        item["summary"] = summary
+    return {k: v for k, v in item.items() if v is not None}
 
 
 def serp_list_payload(result: dict[str, Any]) -> dict[str, Any]:
     items = [serp_item(r) for r in (result.get("items") or []) if isinstance(r, dict)]
-    return {
+    out: dict[str, Any] = {
         "ok": result.get("ok", True),
-        "message": result.get("message"),
         "total": result.get("total"),
         "limit": result.get("limit"),
         "offset": result.get("offset"),
         "items": items,
         "hint": "For briefings: get_report(id) on quality=pass items (quality_json summary). No PDF.",
     }
+    message = result.get("message")
+    if message:
+        out["message"] = message
+    return out
+
+
+def _slim_quality_json(qj: dict[str, Any], *, kind: str) -> dict[str, Any]:
+    slim: dict[str, Any] = {}
+    short = qj.get("short_title")
+    if short:
+        slim["short_title"] = short
+    themes = qj.get("themes")
+    if isinstance(themes, list) and themes:
+        slim["themes"] = themes
+    if kind == "sell_side":
+        for key in ("topic", "framework_summary", "rationale"):
+            val = qj.get(key)
+            if val not in (None, "", [], {}):
+                slim[key] = val
+        return slim
+    summary = qj.get("summary")
+    framework = qj.get("framework_summary")
+    if summary:
+        slim["summary"] = summary
+        if framework and framework != summary:
+            slim["framework_summary"] = framework
+    elif framework:
+        slim["summary"] = framework
+    return slim
 
 
 def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
@@ -111,14 +144,21 @@ def report_detail_payload(result: dict[str, Any]) -> dict[str, Any]:
         return result
     clean = sanitize_report(report)
     kind = audit_kind_for_source(clean.get("source"))
-    clean["audit_kind"] = kind
-    qj = clean.get("quality_json")
-    if isinstance(qj, dict):
-        flag = extract_truncated_flag(qj.get("extract"))
-        if flag is not None:
-            clean["extract_truncated"] = flag
+    qj_raw = clean.get("quality_json") if isinstance(clean.get("quality_json"), dict) else {}
+    slim: dict[str, Any] = {k: clean.get(k) for k in _DETAIL_META_KEYS}
+    themes = _themes(clean, qj_raw)
+    if themes is not None:
+        slim["themes"] = themes
+    else:
+        slim.pop("themes", None)
+    if qj_raw:
+        slim["quality_json"] = _slim_quality_json(qj_raw, kind=kind)
+    flag = extract_truncated_flag(qj_raw.get("extract")) if qj_raw else None
+    if flag is not None:
+        slim["extract_truncated"] = flag
+    slim = {k: v for k, v in slim.items() if v is not None}
     return {
         "ok": True,
-        "report": clean,
+        "report": slim,
         "hint": "Brief/cite: quality_json.summary (or short_title) + report.url. No PDF.",
     }
