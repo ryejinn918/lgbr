@@ -80,8 +80,7 @@ export default defineConfig(({ mode }) => {
       port: 8001,
       strictPort: true,
       allowedHosts: [
-        'lgbrwsl.tail700203.ts.net',
-        'chamber1.magpielabs.co.kr',
+        'shape.lgbr-ai.com',
       ],
       proxy: apiProxy,
     },
@@ -90,8 +89,7 @@ export default defineConfig(({ mode }) => {
       port: 8001,
       strictPort: true,
       allowedHosts: [
-        'lgbrwsl.tail700203.ts.net',
-        'chamber1.magpielabs.co.kr',
+        'shape.lgbr-ai.com',
       ],
       proxy: apiProxy,
     },

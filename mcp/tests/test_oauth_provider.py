@@ -17,7 +17,7 @@ def _provider() -> SimpleOAuthProvider:
     return SimpleOAuthProvider(
         username="lgbr",
         password="secret",
-        login_url="https://lgbrmcp.magpielabs.co.kr/login",
+        login_url="https://mcp.lgbr-ai.com/login",
     )
 
 
@@ -92,7 +92,7 @@ def test_login_issues_access_token() -> None:
                 code_challenge="challenge",
                 redirect_uri=AnyUrl(redirect),
                 redirect_uri_provided_explicitly=True,
-                resource="https://lgbrmcp.magpielabs.co.kr/mcp/collect",
+                resource="https://mcp.lgbr-ai.com/mcp/collect",
             ),
         )
         state = url.split("state=")[1]
@@ -124,7 +124,7 @@ def test_chatgpt_redirect_login_completes() -> None:
                 code_challenge="challenge",
                 redirect_uri=AnyUrl(redirect),
                 redirect_uri_provided_explicitly=True,
-                resource="https://lgbrmcp.magpielabs.co.kr/mcp/consensus",
+                resource="https://mcp.lgbr-ai.com/mcp/consensus",
             ),
         )
         state = url.split("state=")[1]
@@ -150,7 +150,7 @@ def test_completed_state_replay_returns_done_page() -> None:
                 code_challenge="challenge",
                 redirect_uri=AnyUrl(redirect),
                 redirect_uri_provided_explicitly=True,
-                resource="https://lgbrmcp.magpielabs.co.kr/mcp/collect",
+                resource="https://mcp.lgbr-ai.com/mcp/collect",
             ),
         )
         state = url.split("state=")[1]

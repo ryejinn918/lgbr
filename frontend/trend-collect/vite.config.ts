@@ -81,8 +81,7 @@ export default defineConfig(({ mode }) => {
       port: 8000,
       strictPort: true,
       allowedHosts: [
-        'lgbrwsl.tail700203.ts.net',
-        'nest1.magpielabs.co.kr',
+        'universe.lgbr-ai.com',
       ],
       proxy: apiProxy,
     },
@@ -91,8 +90,7 @@ export default defineConfig(({ mode }) => {
       port: 8000,
       strictPort: true,
       allowedHosts: [
-        'lgbrwsl.tail700203.ts.net',
-        'nest1.magpielabs.co.kr',
+        'universe.lgbr-ai.com',
       ],
       proxy: apiProxy,
     },

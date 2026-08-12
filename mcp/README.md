@@ -5,7 +5,7 @@ Claude용 조회 전용 MCP (본 API `lgbr-api`와 별도 프로세스). 인증�
 ## Public URL
 
 ```
-https://lgbrmcp.magpielabs.co.kr
+https://mcp.lgbr-ai.com
 ```
 
 | Path | 용도 |
@@ -27,8 +27,8 @@ https://lgbrmcp.magpielabs.co.kr
 
 | 변수 | 설명 |
 |------|------|
-| `LGBR_MCP_PUBLIC_BASE_URL` | `https://lgbrmcp.magpielabs.co.kr` |
-| `LGBR_MCP_ALLOWED_HOSTS` | `lgbrmcp.magpielabs.co.kr` |
+| `LGBR_MCP_PUBLIC_BASE_URL` | `https://mcp.lgbr-ai.com` |
+| `LGBR_MCP_ALLOWED_HOSTS` | `mcp.lgbr-ai.com` |
 | `LGBR_MCP_ENV` | `production` |
 | `LGBR_MCP_OAUTH_USERNAME` | Connect 로그인 계정 |
 | `LGBR_MCP_OAUTH_PASSWORD` | Connect 로그인 비밀번호 |
@@ -39,8 +39,8 @@ https://lgbrmcp.magpielabs.co.kr
 
 Settings → Connectors → Add custom connector (×2):
 
-1. `https://lgbrmcp.magpielabs.co.kr/mcp/collect`
-2. `https://lgbrmcp.magpielabs.co.kr/mcp/consensus`
+1. `https://mcp.lgbr-ai.com/mcp/collect`
+2. `https://mcp.lgbr-ai.com/mcp/consensus`
 
 OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAME` / `LGBR_MCP_OAUTH_PASSWORD`로 로그인.
 

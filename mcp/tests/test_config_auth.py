@@ -33,14 +33,14 @@ def _set_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_requires_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LGBR_MCP_PUBLIC_BASE_URL", "https://lgbrmcp.magpielabs.co.kr")
+    monkeypatch.setenv("LGBR_MCP_PUBLIC_BASE_URL", "https://mcp.lgbr-ai.com")
     with pytest.raises(SystemExit) as ei:
         config.validate_startup()
     assert ei.value.code == 2
 
 
 def test_ok_with_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LGBR_MCP_PUBLIC_BASE_URL", "https://lgbrmcp.magpielabs.co.kr")
+    monkeypatch.setenv("LGBR_MCP_PUBLIC_BASE_URL", "https://mcp.lgbr-ai.com")
     _set_secrets(monkeypatch)
     config.validate_startup()
 

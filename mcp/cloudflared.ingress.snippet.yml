@@ -1,9 +1,25 @@
-# Merge into ~/.cloudflared/config.yml ingress (before the catch-all 404):
-#   - hostname: lgbrmcp.magpielabs.co.kr
-#     service: http://127.0.0.1:8788
+# Two tunnels (zones are on different Cloudflare accounts):
 #
-# Then DNS: cloudflared tunnel route dns <tunnel-id> lgbrmcp.magpielabs.co.kr
-# (or Cloudflare dashboard CNAME → tunnel, same as nest1/chamber1)
+# 1) magpielabs (~/.cloudflared/config.yml) — legacy frontends → local 301
+#    tunnel: lgbr (aef3e5c9-…)
+# 2) lgbr-ai.com (~/.cloudflared/config-lgbr-ai.yml) — canonical apps
+#    tunnel: lgbr-ai (71ec1071-…)
+#    DNS: cloudflared tunnel route dns 71ec1071-7bce-4e3c-b43f-53fafc55bb3e <host>
+#    or: python scripts/provision_lgbr_ai_dns.py
+#
+# pm2: cloudflared + cloudflared-lgbr-ai
+# Legacy redirect origin: scripts/legacy_domain_redirect.py (:8790)
 
-- hostname: lgbrmcp.magpielabs.co.kr
+# --- config-lgbr-ai.yml ---
+- hostname: universe.lgbr-ai.com
+  service: http://127.0.0.1:8000
+- hostname: shape.lgbr-ai.com
+  service: http://127.0.0.1:8001
+- hostname: mcp.lgbr-ai.com
   service: http://127.0.0.1:8788
+
+# --- config.yml (magpielabs) ---
+- hostname: nest1.magpielabs.co.kr
+  service: http://127.0.0.1:8790
+- hostname: chamber1.magpielabs.co.kr
+  service: http://127.0.0.1:8790

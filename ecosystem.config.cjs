@@ -57,5 +57,17 @@ module.exports = {
       max_restarts: 10,
       min_uptime: '5s',
     },
+    {
+      name: 'legacy-domain-redirect',
+      cwd: root,
+      script: python,
+      args: 'scripts/legacy_domain_redirect.py --host 127.0.0.1 --port 8790',
+      interpreter: 'none',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '5s',
+    },
   ],
 }
