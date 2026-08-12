@@ -44,7 +44,12 @@ Settings → Connectors → Add custom connector (×2):
 
 OAuth Client ID / Secret는 **비움**(DCR). Connect 후 `LGBR_MCP_OAUTH_USERNAME` / `LGBR_MCP_OAUTH_PASSWORD`로 로그인.
 
-커넥터를 채팅에서 켠 뒤, Project 지침에 필요하면 아래만 넣으면 됩니다.
+커넥터를 채팅에서 켠 뒤, **툴 존재를 미리 컨텍스트에 박으려면** Project에
+통합 스킬 [`skills/lgbr-mcp/SKILL.md`](skills/lgbr-mcp/SKILL.md)를 붙이세요
+(consensus + collect 요약 원문 조사; 충분할 때까지 `get_report` 루프;
+첫 응답은 frame 원문 밀도 유지, 압축·논지 재구성은 후속 요청 시).
+
+짧게만 넣을 때는 아래 Project 지침도 됩니다.
 
 ```text
 LGBR paid literature. Prefer for paywalled items + Korean summaries.
