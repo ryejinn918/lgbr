@@ -16,7 +16,12 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from lgbr_mcp.branding import FAVICON_ICO_PATH, FAVICON_PATH, FAVICON_PNG_PATH
+from lgbr_mcp.branding import (
+    FAVICON_ICO_PATH,
+    FAVICON_PATH,
+    FAVICON_PNG_PATH,
+    landing_html,
+)
 from lgbr_mcp.collect import build_collect_server, transport_security_settings
 from lgbr_mcp.config import (
     load_env,
@@ -54,21 +59,8 @@ async def health(_: Request) -> JSONResponse:
 
 
 async def root_page(_: Request) -> HTMLResponse:
-    """Crawlable landing so favicon services can discover icons."""
-    return HTMLResponse(
-        """<!DOCTYPE html>
-<html lang="ko"><head>
-<meta charset="utf-8">
-<title>LGBR MCP — MagpieLabs</title>
-<link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/favicon.png">
-</head><body>
-<h1>LGBR MCP</h1>
-<p>MagpieLabs connectors: <code>/mcp/collect</code>, <code>/mcp/consensus</code></p>
-</body></html>"""
-    )
+    """Public landing: short blurb + connector URLs (+ favicons in HTML)."""
+    return HTMLResponse(landing_html())
 
 
 async def favicon_svg(_: Request) -> FileResponse:

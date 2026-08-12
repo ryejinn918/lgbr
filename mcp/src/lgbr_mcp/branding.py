@@ -17,6 +17,12 @@ FAVICON_ICO_PATH = _STATIC / "favicon.ico"
 FAVICON_PATH = FAVICON_SVG_PATH
 
 
+def landing_html() -> str:
+    from lgbr_mcp.catalog import render_landing_html
+
+    return render_landing_html()
+
+
 @lru_cache(maxsize=1)
 def favicon_bytes() -> bytes:
     return FAVICON_SVG_PATH.read_bytes()
