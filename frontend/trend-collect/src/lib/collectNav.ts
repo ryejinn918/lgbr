@@ -10,7 +10,12 @@ import {
 export function isFnguideCrawlMode(mode: string | null | undefined): boolean {
   if (!mode) return false
   if (isMediaAdhocMode(mode)) return false
-  return mode === 'auto' || mode === 'adhoc' || isSearchProfileMode(mode)
+  return (
+    mode === 'auto' ||
+    mode === 'adhoc' ||
+    mode === 'all_profiles' ||
+    isSearchProfileMode(mode)
+  )
 }
 
 export type CollectSource = 'fnguide' | 'arg' | (typeof MEDIA_SOURCES)[number]['id']
@@ -254,6 +259,7 @@ export function crawlModeTypeLabel(mode: string | null | undefined): string {
   if (!mode) return '—'
   if (mode === 'adhoc') return '애드혹'
   if (mode === 'auto') return '자동'
+  if (mode === 'all_profiles') return '프로필 전체'
   const media = getMediaSource(mode)
   if (media) return `${media.label} 애드혹`
   return PROFILE_MODE_LABEL[mode as keyof typeof PROFILE_MODE_LABEL] ?? mode

@@ -29,6 +29,7 @@ FNGUIDE_MODES = frozenset(
         "display",
         "automotive",
         "petrochemical",
+        "all_profiles",
     }
 )
 LIMITED_MODES = frozenset(

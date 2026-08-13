@@ -24,6 +24,7 @@ def _mode_abbrev() -> dict[str, str]:
         "display": "dp",
         "automotive": "am",
         "petrochemical": "pc",
+        "all_profiles": "all",
         "adhoc": "ad",
         "auto": "au",
     }

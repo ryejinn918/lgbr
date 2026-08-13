@@ -87,13 +87,15 @@ export function CrawlPage() {
 
   async function onStart(mode: CrawlMode = 'ai') {
     const searchLabel = crawlModeTypeLabel(mode)
-    const periodMonths =
-      profiles.items.find((p) => p.mode === mode)?.period_months ?? 3
-    if (
-      !window.confirm(
-        `FnGuide 검색을 시작할까요?\n${searchLabel} · 최근 ${periodMonths}개월`,
-      )
-    ) {
+    const confirmBody =
+      mode === 'all_profiles'
+        ? `${searchLabel}\n${SEARCH_PROFILE_MODES.map(
+            (m) => PROFILE_MODE_LABEL[m],
+          ).join(' → ')}\n각 프로필 설정대로 순차 실행`
+        : `${searchLabel} · 최근 ${
+            profiles.items.find((p) => p.mode === mode)?.period_months ?? 3
+          }개월`
+    if (!window.confirm(`FnGuide 검색을 시작할까요?\n${confirmBody}`)) {
       return
     }
     try {
@@ -221,6 +223,14 @@ export function CrawlPage() {
               {requestingStart ? '시작 중…' : PROFILE_MODE_LABEL[mode]}
             </button>
           ))}
+          <button
+            type="button"
+            className="run-btn"
+            disabled={!canStart || requestingStart || !!fetchError}
+            onClick={() => void onStart('all_profiles')}
+          >
+            {requestingStart ? '시작 중…' : '프로필 전체'}
+          </button>
           <button
             type="button"
             className="logout-btn"

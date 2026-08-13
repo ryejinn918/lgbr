@@ -540,6 +540,9 @@ def start_crawl(
             "can_start": False,
         }
 
+    # Single-profile LIMITED_MODES store period_months on the crawl row.
+    # all_profiles (and other non-limited modes) leave it null; each profile
+    # applies its own period_months during the worker loop.
     period_months: int | None = None
     use_debug = bool(debug) and mode in LIMITED_MODES
     if mode in LIMITED_MODES:

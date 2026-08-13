@@ -142,6 +142,9 @@ PROFILES: dict[str, SearchProfile] = {
 }
 
 SEARCH_MODES = frozenset(PROFILES)
+# Stable run order for mode=all_profiles (matches frontend SEARCH_PROFILE_MODES).
+SEARCH_PROFILE_ORDER = tuple(PROFILES)
+ALL_PROFILES_MODE = "all_profiles"
 
 
 @dataclass

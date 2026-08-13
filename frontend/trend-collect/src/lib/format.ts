@@ -4,6 +4,7 @@ import type {
   QualityExtractMeta,
   SessionState,
 } from '../types'
+import { PROFILE_MODE_LABEL, isSearchProfileMode } from './themes'
 
 export const CRAWL_CLASS: Record<CrawlState, string> = {
   starting: 'starting',
@@ -176,9 +177,25 @@ export function formatProgress(
   const limit = progress.limit
   const periodMonths = progress.period_months
   const skippedBlind = progress.skipped_blind
+  const profileIndex = progress.profile_index
+  const profileTotal = progress.profile_total
+  const profileMode =
+    progress.mode != null && progress.mode !== 'all_profiles'
+      ? String(progress.mode)
+      : null
   const rpt =
     progress.current_rpt_id != null ? String(progress.current_rpt_id) : null
   const bits: string[] = []
+  if (profileIndex != null && profileTotal != null) {
+    const modeLabel =
+      profileMode && isSearchProfileMode(profileMode)
+        ? PROFILE_MODE_LABEL[profileMode]
+        : profileMode
+    const label = modeLabel
+      ? `${profileIndex}/${profileTotal} · ${modeLabel}`
+      : `${profileIndex}/${profileTotal}`
+    bits.push(label)
+  }
   if (stage) bits.push(`stage=${stage}`)
   if (periodMonths != null) bits.push(`period=${periodMonths}m`)
   if (downloaded != null) {

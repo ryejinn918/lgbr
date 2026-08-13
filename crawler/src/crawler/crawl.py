@@ -27,7 +27,14 @@ from crawler.fnguide_session import (
 from crawler.adhoc_session import AdhocBrowserSession
 from crawler.hbr_session import HbrSession
 from crawler.hbrkorea_session import HbrKoreaSession
-from crawler.jobs.search_report import SEARCH_MODES, get_profile, run_search_report_job
+from crawler.jobs.search_report import (
+    ALL_PROFILES_MODE,
+    SEARCH_MODES,
+    SEARCH_PROFILE_ORDER,
+    SearchJobSummary,
+    get_profile,
+    run_search_report_job,
+)
 from crawler.nikkei_session import NikkeiSession
 from crawler.nikkeixtech_session import NikkeixtechSession
 from crawler.session import LoginPageError
@@ -127,11 +134,14 @@ def run_crawl(
     )
     log.set_progress(stage="login", mode=mode, asset_id=asset_id, debug=debug)
 
+    is_search = mode in SEARCH_MODES or mode == ALL_PROFILES_MODE
     want_cdp = mode in ADHOC_HOLD_MODES or (mode in SEARCH_MODES and debug)
     cdp_port = allocate_cdp_port() if want_cdp else None
     touch_step = "adhoc" if mode == "adhoc" else "crawl"
     if mode in SEARCH_MODES:
         touch_step = mode
+    elif mode == ALL_PROFILES_MODE:
+        touch_step = ALL_PROFILES_MODE
     download_dir = downloads_dir(asset_id)
     download_dir.mkdir(parents=True, exist_ok=True)
 
@@ -193,15 +203,22 @@ def run_crawl(
         )
         log.set_progress(stage="active", mode=mode, asset_id=asset_id, debug=debug)
 
-        if mode in SEARCH_MODES:
-            summary = _run_search_job(crawl_id, crawl, sess, download_dir, log)
+        if is_search:
+            if mode == ALL_PROFILES_MODE:
+                summary = _run_all_profiles_job(
+                    crawl_id, crawl, sess, download_dir, log
+                )
+            else:
+                summary = _run_search_job(
+                    crawl_id, crawl, sess, download_dir, log
+                )
             message = summary.as_message()
             if _signal_requested() or summary.stopped:
                 message = f"{message}; shutdown signal"
                 return _graceful_end(
                     crawl_id, sess, log, reason="shutdown", message=message
                 )
-            if debug:
+            if debug and mode in SEARCH_MODES:
                 return _handoff_to_adhoc(
                     crawl_id,
                     sess,
@@ -541,14 +558,28 @@ def _run_source_adhoc(
         return _fail_closed(crawl_id, sess, log, message=str(exc))
 
 
+def _crawl_should_stop(crawl_id: str) -> bool:
+    if _signal_requested():
+        return True
+    row = crawls_store.get_crawl(crawl_id)
+    if row is None:
+        return True
+    if row.get("ended_at") or row.get("state") in ("ended", "error"):
+        return True
+    return bool(row.get("stop_requested_at"))
+
+
 def _run_search_job(
     crawl_id: str,
     crawl: dict[str, Any],
     sess: FnguideSession,
     download_dir: Path | None,
     log: CrawlLogger,
-) -> Any:
-    mode = str(crawl.get("mode") or "")
+    *,
+    profile_mode: str | None = None,
+) -> SearchJobSummary:
+    crawl_mode = str(crawl.get("mode") or "")
+    mode = profile_mode or crawl_mode
     if sess.page is None:
         raise CrawlStateError(f"{mode} crawl has no browser page")
     if download_dir is None:
@@ -566,27 +597,95 @@ def _run_search_job(
 
     profile = get_profile(mode)
 
-    def should_stop() -> bool:
-        if _signal_requested():
-            return True
-        row = crawls_store.get_crawl(crawl_id)
-        if row is None:
-            return True
-        if row.get("ended_at") or row.get("state") in ("ended", "error"):
-            return True
-        return bool(row.get("stop_requested_at"))
-
     return run_search_report_job(
         sess.page,
         profile=profile,
         limit=limit,
         download_dir=download_dir,
-        should_stop=should_stop,
+        should_stop=lambda: _crawl_should_stop(crawl_id),
         touch=lambda: sess.touch(step=mode),
         logger=log,
         crawl_id=crawl_id,
         asset_id=str(crawl.get("asset_id") or "") or None,
     )
+
+
+def _run_all_profiles_job(
+    crawl_id: str,
+    crawl: dict[str, Any],
+    sess: FnguideSession,
+    download_dir: Path | None,
+    log: CrawlLogger,
+) -> SearchJobSummary:
+    modes = SEARCH_PROFILE_ORDER
+    total = len(modes)
+    aggregate = SearchJobSummary()
+    asset_id = str(crawl.get("asset_id") or "")
+
+    for index, profile_mode in enumerate(modes, start=1):
+        if _crawl_should_stop(crawl_id):
+            aggregate.stopped = True
+            break
+
+        log.emit(
+            level="info",
+            stage="download",
+            event="profile_start",
+            mode=profile_mode,
+            profile_index=index,
+            profile_total=total,
+            asset_id=asset_id or None,
+        )
+        log.set_progress(
+            stage="active",
+            mode=profile_mode,
+            profile_index=index,
+            profile_total=total,
+            asset_id=asset_id or None,
+        )
+
+        summary = _run_search_job(
+            crawl_id,
+            crawl,
+            sess,
+            download_dir,
+            log,
+            profile_mode=profile_mode,
+        )
+        aggregate.downloaded.extend(summary.downloaded)
+        aggregate.listed += summary.listed
+        aggregate.skipped_blind += summary.skipped_blind
+        aggregate.skipped_existing += summary.skipped_existing
+        aggregate.skipped_no_download += summary.skipped_no_download
+        aggregate.failed += summary.failed
+
+        log.emit(
+            level="info",
+            stage="download",
+            event="profile_end",
+            mode=profile_mode,
+            profile_index=index,
+            profile_total=total,
+            **summary.as_detail(),
+        )
+
+        if summary.stopped or _crawl_should_stop(crawl_id):
+            aggregate.stopped = True
+            break
+
+    log.set_progress(
+        stage="active",
+        mode=ALL_PROFILES_MODE,
+        profile_total=total,
+        downloaded=len(aggregate.downloaded),
+        listed=aggregate.listed,
+        skipped_blind=aggregate.skipped_blind,
+        skipped_existing=aggregate.skipped_existing,
+        skipped_no_download=aggregate.skipped_no_download,
+        failed=aggregate.failed,
+        stopped=aggregate.stopped,
+    )
+    return aggregate
 
 
 def _handoff_to_adhoc(

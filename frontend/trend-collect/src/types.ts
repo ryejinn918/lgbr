@@ -29,7 +29,12 @@ export type SessionRecord = {
   end_reason_label: string | null
 }
 
-export type CrawlMode = 'auto' | 'adhoc' | MediaSourceId | SearchProfileMode
+export type CrawlMode =
+  | 'auto'
+  | 'adhoc'
+  | 'all_profiles'
+  | MediaSourceId
+  | SearchProfileMode
 
 export type CrawlProfileMode = SearchProfileMode
 
