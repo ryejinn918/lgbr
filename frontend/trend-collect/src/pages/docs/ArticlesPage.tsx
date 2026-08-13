@@ -198,11 +198,11 @@ export function ArticlesPage() {
             <table className="report-table">
               <thead>
                 <tr>
-                  <th className="col-source">매체</th>
-                  <th className="col-published">발행</th>
-                  <th className="col-provider">섹션</th>
-                  <th className="col-title">제목</th>
                   <th className="col-quality">요약</th>
+                  <th className="col-title">제목</th>
+                  <th className="col-provider">섹션</th>
+                  <th className="col-published">발행</th>
+                  <th className="col-source">매체</th>
                   <th className="col-seen">최근</th>
                 </tr>
               </thead>
@@ -232,14 +232,13 @@ export function ArticlesPage() {
                         onClick={() => onRowClick(item.id)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <td className="col-source">
-                          {SOURCE_LABEL[item.source] || item.source}
-                        </td>
-                        <td className="col-published mono">
-                          {formatPublishedAt(item.published_at)}
-                        </td>
-                        <td className="col-provider">
-                          {item.section || item.publisher || '—'}
+                        <td className="col-quality">
+                          <span
+                            className={`status-pill quality-${status.qualityClass}`}
+                            title={item.body_fetch_error || undefined}
+                          >
+                            {status.label}
+                          </span>
                         </td>
                         <td className="col-title report-title">
                           <div className="report-title-inner">
@@ -267,13 +266,14 @@ export function ArticlesPage() {
                             ) : null}
                           </div>
                         </td>
-                        <td className="col-quality">
-                          <span
-                            className={`status-pill quality-${status.qualityClass}`}
-                            title={item.body_fetch_error || undefined}
-                          >
-                            {status.label}
-                          </span>
+                        <td className="col-provider">
+                          {item.section || item.publisher || '—'}
+                        </td>
+                        <td className="col-published mono">
+                          {formatPublishedAt(item.published_at)}
+                        </td>
+                        <td className="col-source">
+                          {SOURCE_LABEL[item.source] || item.source}
                         </td>
                         <td
                           className="col-seen"
