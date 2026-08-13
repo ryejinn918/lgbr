@@ -39,7 +39,7 @@ function App() {
           <NavLink to="/" end>
             대시보드
           </NavLink>
-          <NavLink to="/collect">수집</NavLink>
+          <NavLink to="/collect">설정</NavLink>
           <NavLink to="/docs">문서</NavLink>
         </nav>
       </header>

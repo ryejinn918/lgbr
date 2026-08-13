@@ -124,7 +124,7 @@
 
 .collect-job-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 0.75rem 1rem;
   align-items: center;
   padding: 0.7rem 0.85rem;
@@ -135,12 +135,6 @@
 
 .collect-job-row:last-child {
   border-bottom: none;
-}
-
-.collect-job-check {
-  display: flex;
-  align-items: center;
-  margin: 0;
 }
 
 .collect-job-main {
@@ -225,11 +219,10 @@
 
 @media (max-width: 720px) {
   .collect-job-row {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: 1fr;
   }
 
   .collect-job-actions {
-    grid-column: 1 / -1;
     justify-content: flex-start;
   }
 }

@@ -13,7 +13,6 @@ import {
   unauditedPreset,
 } from '../lib/reportFilters'
 import {
-  runDashboardStartQueue,
   startDashboardJob,
   stopDashboardJob,
 } from '../lib/dashboardCollectActions'
@@ -311,29 +310,9 @@ export function DashboardPage() {
     }
   })
 
-  const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [requestingKeys, setRequestingKeys] = useState<Set<string>>(
     () => new Set(),
   )
-  const [queueHints, setQueueHints] = useState<Record<string, string>>({})
-  const [queueRunning, setQueueRunning] = useState(false)
-
-  function toggleSelected(key: string, checked: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (checked) next.add(key)
-      else next.delete(key)
-      return next
-    })
-  }
-
-  function selectAll() {
-    setSelected(new Set(DASHBOARD_COLLECT_JOBS.map((j) => j.key)))
-  }
-
-  function clearSelected() {
-    setSelected(new Set())
-  }
 
   function markRequesting(key: string, on: boolean) {
     setRequestingKeys((prev) => {
@@ -347,13 +326,12 @@ export function DashboardPage() {
   async function onStartOne(def: DashboardCollectJobDef) {
     if (
       !window.confirm(
-        `수집을 시작할까요?\n${startConfirmLabel(def)}\n(수집 화면 기본값)`,
+        `수집을 시작할까요?\n${startConfirmLabel(def)}\n(설정 화면 기본값)`,
       )
     ) {
       return
     }
     markRequesting(def.key, true)
-    setQueueHints((h) => ({ ...h, [def.key]: '' }))
     try {
       await startDashboardJob(def.key)
     } catch (err) {
@@ -377,67 +355,6 @@ export function DashboardPage() {
     }
   }
 
-  async function onStartSelected() {
-    const keys = DASHBOARD_COLLECT_JOBS.map((j) => j.key).filter((k) =>
-      selected.has(k),
-    )
-    if (keys.length === 0) {
-      window.alert('시작할 작업을 선택하세요.')
-      return
-    }
-    const labels = keys
-      .map((k) => {
-        const def = DASHBOARD_COLLECT_JOBS.find((j) => j.key === k)!
-        return startConfirmLabel(def)
-      })
-      .join('\n')
-    if (
-      !window.confirm(
-        `선택한 ${keys.length}개 작업을 순차 시작할까요?\n(앞 작업이 끝난 뒤 다음)\n끝나면 요약 ${pendingCount}건 실행도 이어서 합니다.\n\n${labels}`,
-      )
-    ) {
-      return
-    }
-    setQueueRunning(true)
-    setQueueHints({})
-    try {
-      const result = await runDashboardStartQueue(keys, {
-        onProgress: (key, phase) => {
-          const label =
-            phase === 'start'
-              ? '큐: 시작'
-              : phase === 'wait'
-                ? '큐: 대기 중'
-                : phase === 'skip'
-                  ? '큐: 건너뜀'
-                  : '큐: 실패'
-          setQueueHints((h) => ({ ...h, [key]: label }))
-        },
-      })
-      const bits: string[] = []
-      if (result.started.length)
-        bits.push(`시작 ${result.started.length}건`)
-      if (result.skipped.length)
-        bits.push(
-          `건너뜀 ${result.skipped.map((s) => `${s.key}(${s.reason})`).join(', ')}`,
-        )
-      if (result.failed.length)
-        bits.push(
-          `실패 ${result.failed.map((s) => `${s.key}(${s.reason})`).join(', ')}`,
-        )
-
-      if (result.started.length > 0) {
-        const ok = await audit.startPending()
-        bits.push(ok ? '요약 실행 시작' : '요약 실행 못 함')
-        if (ok) void recent.refresh()
-      }
-
-      if (bits.length) window.alert(bits.join('\n'))
-    } finally {
-      setQueueRunning(false)
-    }
-  }
-
   async function onStartPendingAudit() {
     if (
       !window.confirm(
@@ -454,42 +371,12 @@ export function DashboardPage() {
     void recent.refresh()
   }
 
-  async function onStopSelected() {
-    const keys = DASHBOARD_COLLECT_JOBS.map((j) => j.key).filter((k) =>
-      selected.has(k),
-    )
-    const busyKeys = keys.filter((k) => rows.find((r) => r.def.key === k)?.busy)
-    if (busyKeys.length === 0) {
-      window.alert('선택한 항목 중 실행 중인 작업이 없습니다.')
-      return
-    }
-    if (
-      !window.confirm(
-        `실행 중인 ${busyKeys.length}개 작업을 중단할까요?`,
-      )
-    ) {
-      return
-    }
-    for (const key of busyKeys) {
-      markRequesting(key, true)
-      try {
-        await stopDashboardJob(key)
-      } catch (err) {
-        window.alert(
-          `${key}: ${err instanceof Error ? err.message : '중단 실패'}`,
-        )
-      } finally {
-        markRequesting(key, false)
-      }
-    }
-  }
-
   return (
     <>
       <header className="monitor-header">
         <h1>운영 대시보드</h1>
         <p className="lede">
-          목록에서 시작·중단할 수 있습니다. 상세 설정은 수집 화면에서 합니다.
+          목록에서 시작·중단할 수 있습니다. 상세 파라미터는 설정 화면에서 합니다.
         </p>
       </header>
 
@@ -502,40 +389,6 @@ export function DashboardPage() {
         </div>
 
         <div className="collect-job-toolbar">
-          <button
-            type="button"
-            className="run-btn"
-            disabled={queueRunning || selected.size === 0}
-            onClick={() => void onStartSelected()}
-          >
-            {queueRunning ? '순차 실행 중…' : '선택 시작'}
-          </button>
-          <button
-            type="button"
-            className="logout-btn"
-            disabled={queueRunning || selected.size === 0}
-            onClick={() => void onStopSelected()}
-          >
-            선택 중단
-          </button>
-          <button
-            type="button"
-            className="run-btn"
-            disabled={queueRunning}
-            onClick={selectAll}
-          >
-            전체 선택
-          </button>
-          <button
-            type="button"
-            className="run-btn"
-            disabled={queueRunning || selected.size === 0}
-            onClick={clearSelected}
-          >
-            선택 해제
-          </button>
-          <span className="section-note">{selected.size}개 선택</span>
-          <span className="collect-job-toolbar-sep" aria-hidden="true" />
           <span className="section-note">
             요약 대기 {pendingCount}건
             {audit.busy
@@ -545,7 +398,7 @@ export function DashboardPage() {
           <button
             type="button"
             className="run-btn"
-            disabled={queueRunning || audit.busy || !audit.canStart}
+            disabled={audit.busy || !audit.canStart}
             onClick={() => void onStartPendingAudit()}
             title="요약·품질검사 대기 건을 일괄 실행"
           >
@@ -568,17 +421,9 @@ export function DashboardPage() {
               lastDocAt={row.lastDocAt}
               progressLine={row.progressLine}
               settingsPath={row.def.settingsPath}
-              checked={selected.has(row.def.key)}
-              onCheckedChange={(checked) =>
-                toggleSelected(row.def.key, checked)
-              }
-              canStart={row.canStart && !queueRunning}
+              canStart={row.canStart}
               canStop={row.busy}
-              requesting={
-                requestingKeys.has(row.def.key) ||
-                (queueRunning && queueHints[row.def.key]?.startsWith('큐:') === true)
-              }
-              queueHint={queueHints[row.def.key] || null}
+              requesting={requestingKeys.has(row.def.key)}
               onStart={() => void onStartOne(row.def)}
               onStop={() => void onStopOne(row.def)}
             />

@@ -302,7 +302,7 @@ export function ReportsPage({
           <h2>{sourceTitle}</h2>
           <span className="section-note">
             목록·요약 · 원문은 남기지 않음 ·{' '}
-            <Link to={collectHref}>{isAll ? '수집' : '검색 실행'}</Link>
+            <Link to={collectHref}>{isAll ? '설정' : '검색 실행'}</Link>
           </span>
         </div>
       ) : (

@@ -16,12 +16,9 @@ export type CollectJobRowProps = {
   lastDocAt?: string | null
   progressLine?: string | null
   settingsPath: string
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
   canStart: boolean
   canStop: boolean
   requesting?: boolean
-  queueHint?: string | null
   onStart: () => void
   onStop: () => void
 }
@@ -38,12 +35,9 @@ export function CollectJobRow({
   lastDocAt = null,
   progressLine = null,
   settingsPath,
-  checked,
-  onCheckedChange,
   canStart,
   canStop,
   requesting = false,
-  queueHint = null,
   onStart,
   onStop,
 }: CollectJobRowProps) {
@@ -55,16 +49,6 @@ export function CollectJobRow({
     <div
       className={`collect-job-row state-${stateClass} ${freshCls}`.trim()}
     >
-      <label className="collect-job-check">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onCheckedChange(e.target.checked)}
-        />
-        <span className="sr-only">
-          {title} {jobLabel} 선택
-        </span>
-      </label>
       <div className="collect-job-main">
         <div className="collect-job-title-line">
           <span className="collect-job-title">{title}</span>
@@ -72,9 +56,11 @@ export function CollectJobRow({
           <span className="collect-job-status">{statusLabel}</span>
         </div>
         <div className="collect-job-meta">
-          <span>마지막 수집 {lastCollectedAt ? formatRelative(lastCollectedAt) : '—'}</span>
+          <span>
+            마지막 수집{' '}
+            {lastCollectedAt ? formatRelative(lastCollectedAt) : '—'}
+          </span>
           {progressLine ? <span>{progressLine}</span> : null}
-          {queueHint ? <span className="collect-job-queue">{queueHint}</span> : null}
         </div>
       </div>
       <div className="collect-job-actions">

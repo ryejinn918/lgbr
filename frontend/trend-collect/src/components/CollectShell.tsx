@@ -69,8 +69,11 @@ export function CollectShell() {
   return (
     <div className="collect-shell">
       <header className="monitor-header">
-        <h1>수집</h1>
-        <p className="lede">매체를 고르고 검색을 실행합니다. 원문은 요약에만 쓰고 남기지 않습니다.</p>
+        <h1>설정</h1>
+        <p className="lede">
+          매체별 수집 파라미터와 프로필을 조정합니다. 원문은 요약에만 쓰고 남기지
+          않습니다.
+        </p>
       </header>
 
       <nav className="subnav" aria-label="수집 매체">
