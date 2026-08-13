@@ -76,9 +76,9 @@ export function useReports(query: ReportsQuery): ReportsView {
   const q = query.q?.trim() || ''
   const crawlId = query.crawlId || ''
   const sort: ReportSort =
-    query.sort === 'published_at' || query.sort === 'page_count'
+    query.sort === 'page_count' || query.sort === 'last_seen_at'
       ? query.sort
-      : 'last_seen_at'
+      : 'published_at'
   const limit = query.limit ?? 30
   const offset = query.offset ?? 0
   const poll = query.poll !== false
@@ -102,7 +102,7 @@ export function useReports(query: ReportsQuery): ReportsView {
     if (theme) params.set('theme', theme)
     if (q) params.set('q', q)
     if (crawlId) params.set('crawl_id', crawlId)
-    if (sort !== 'last_seen_at') params.set('sort', sort)
+    if (sort !== 'published_at') params.set('sort', sort)
     try {
       const res = await fetch(`/api/reports?${params}`)
       const data = (await res.json()) as ReportsResponse

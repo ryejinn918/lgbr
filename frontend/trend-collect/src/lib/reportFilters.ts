@@ -45,9 +45,9 @@ export const DEFAULT_REPORT_FILTERS: ReportFilters = {
   offset: 0,
 }
 
-/** API/목록 조회에 쓰는 실제 정렬 (미선택이면 최근순) */
+/** API/목록 조회에 쓰는 실제 정렬 (미선택이면 발행일순) */
 export function resolveReportSort(sort: ReportSortChoice): ReportSort {
-  return sort ?? 'last_seen_at'
+  return sort ?? 'published_at'
 }
 
 function isStatusFilter(value: string): value is StatusFilter {

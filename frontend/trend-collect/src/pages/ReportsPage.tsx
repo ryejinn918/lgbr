@@ -110,6 +110,7 @@ export function ReportsPage({
     [filters, source],
   )
   const reports = useReports(query)
+  const activeSort = resolveReportSort(filters.sort)
 
   useEffect(() => {
     if (!selectedId) {
@@ -482,23 +483,23 @@ export function ReportsPage({
                     <th className="col-published">
                       <button
                         type="button"
-                        className={`sort-th${filters.sort === 'published_at' ? ' active' : ''}`}
+                        className={`sort-th${activeSort === 'published_at' ? ' active' : ''}`}
                         onClick={() =>
                           commit(withSort(filters, 'published_at'))
                         }
                         title="발행일 내림차순 (다시 누르면 해제)"
                       >
-                        발행일{filters.sort === 'published_at' ? ' ↓' : ''}
+                        발행일{activeSort === 'published_at' ? ' ↓' : ''}
                       </button>
                     </th>
                     <th className="col-pages">
                       <button
                         type="button"
-                        className={`sort-th${filters.sort === 'page_count' ? ' active' : ''}`}
+                        className={`sort-th${activeSort === 'page_count' ? ' active' : ''}`}
                         onClick={() => commit(withSort(filters, 'page_count'))}
                         title="페이지수 내림차순 (다시 누르면 해제)"
                       >
-                        페이지{filters.sort === 'page_count' ? ' ↓' : ''}
+                        페이지{activeSort === 'page_count' ? ' ↓' : ''}
                       </button>
                     </th>
                     {isAll ? <th className="col-source">매체</th> : null}
@@ -506,13 +507,13 @@ export function ReportsPage({
                     <th className="col-seen">
                       <button
                         type="button"
-                        className={`sort-th${filters.sort === 'last_seen_at' ? ' active' : ''}`}
+                        className={`sort-th${activeSort === 'last_seen_at' ? ' active' : ''}`}
                         onClick={() =>
                           commit(withSort(filters, 'last_seen_at'))
                         }
                         title="수집일 내림차순 (다시 누르면 해제)"
                       >
-                        수집일{filters.sort === 'last_seen_at' ? ' ↓' : ''}
+                        수집일{activeSort === 'last_seen_at' ? ' ↓' : ''}
                       </button>
                     </th>
                   </tr>

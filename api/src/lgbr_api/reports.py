@@ -538,7 +538,7 @@ def list_reports(
             "sort": sort_key,
         }
 
-    sort_key = (sort or "last_seen_at").strip() or "last_seen_at"
+    sort_key = (sort or "published_at").strip() or "published_at"
     if sort_key not in VALID_SORTS:
         return _error(f"invalid sort: {sort_key}", sort_key=sort_key)
     order_sql = SORT_SQL[sort_key]
