@@ -586,6 +586,10 @@
   max-width: 42rem;
 }
 
+.report-workspace .audit-rationale {
+  max-width: none;
+}
+
 .report-table {
   width: 100%;
   min-width: 0;

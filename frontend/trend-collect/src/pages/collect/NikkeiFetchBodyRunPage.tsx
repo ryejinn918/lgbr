@@ -12,6 +12,8 @@ function formatBodyProgress(progress: Record<string, unknown> | undefined) {
     bits.push(`${String(progress.done)}/${String(progress.total)}`)
   }
   if (progress.fetched != null) bits.push(`성공 ${String(progress.fetched)}`)
+  if (progress.summarized != null)
+    bits.push(`요약 ${String(progress.summarized)}`)
   if (progress.failed != null) bits.push(`실패 ${String(progress.failed)}`)
   if (progress.current_key != null)
     bits.push(String(progress.current_key).slice(0, 28))
@@ -47,7 +49,7 @@ export function NikkeiFetchBodyRunPage() {
     const delay = Math.min(5, Math.max(0.5, Number(delaySeconds) || 1.5))
     if (
       !window.confirm(
-        `Nikkei 본문 없는 기사 최대 ${lim}건을 로그인 브라우저로 채울까요? (간격 ${delay}초)`,
+        `Nikkei 본문 없는 기사 최대 ${lim}건을 추출한 뒤 한국어 요약으로 저장할까요? (간격 ${delay}초)`,
       )
     ) {
       return
@@ -70,11 +72,11 @@ export function NikkeiFetchBodyRunPage() {
 
   return (
     <section className={`panel badge-panel state-${badgeState}`}>
-      <p className="badge-label">본문 채우기 · 본문읽기 · 실행</p>
+      <p className="badge-label">본문 채우기 · 추출 후 한국어 요약 · 실행</p>
       <p className="badge-value">
         {collection.fetchError
           ? 'API Offline'
-          : `Nikkei · 본문읽기 · ${job.label}`}
+          : `Nikkei · 본문·요약 · ${job.label}`}
       </p>
       {job.job?.started_at && !collection.fetchError ? (
         <p className="account-line">
@@ -88,6 +90,9 @@ export function NikkeiFetchBodyRunPage() {
       {job.job?.message && !collection.fetchError ? (
         <p className="account-line">{job.job.message}</p>
       ) : null}
+      <p className="account-line">
+        본문을 추출한 뒤 한국어 요약만 저장합니다. 원문은 남기지 않습니다.
+      </p>
       <p className="account-line">
         목록:{' '}
         <Link to="/collect/nikkei/list/feed">피드 실행</Link>
@@ -125,7 +130,7 @@ export function NikkeiFetchBodyRunPage() {
           disabled={!canStart || collection.requestingStart}
           onClick={() => void onStart()}
         >
-          {collection.requestingStart ? '시작 중…' : '본문 채우기'}
+          {collection.requestingStart ? '시작 중…' : '본문·요약 채우기'}
         </button>
         <button
           type="button"
