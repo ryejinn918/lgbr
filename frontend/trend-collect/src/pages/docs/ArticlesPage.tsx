@@ -34,7 +34,7 @@ function isSummaryBody(item: NewsArticleRecord): boolean {
   return typeof summarized === 'string' && summarized.trim() !== ''
 }
 
-function bodyFieldLabel(item: NewsArticleRecord): string {
+function contentFieldLabel(item: NewsArticleRecord): string {
   return isSummaryBody(item) ? '요약' : '본문'
 }
 
@@ -44,27 +44,18 @@ function articleBodyText(item: NewsArticleRecord): string {
 
 type BodyStatus = {
   label: string
-  qualityClass: 'pass' | 'pending' | 'fail' | 'unauditable'
+  statusClass: 'downloaded' | 'listed' | 'failed'
 }
 
 function bodyStatus(item: NewsArticleRecord): BodyStatus {
-  const body = articleBodyText(item)
-  const err = item.body_fetch_error?.trim() || ''
-  const summaryLane = isSummaryBody(item)
-
-  if (body) {
-    return {
-      label: summaryLane ? '요약됨' : '본문',
-      qualityClass: 'pass',
-    }
+  const hasBody = Boolean(item.has_body) || Boolean(articleBodyText(item))
+  if (hasBody) {
+    return { label: '수집됨', statusClass: 'downloaded' }
   }
-  if (err) {
-    return { label: '실패', qualityClass: 'fail' }
+  if (item.body_fetch_error?.trim()) {
+    return { label: '본문실패', statusClass: 'failed' }
   }
-  if (summaryLane) {
-    return { label: '미요약', qualityClass: 'pending' }
-  }
-  return { label: '—', qualityClass: 'unauditable' }
+  return { label: '본문없음', statusClass: 'listed' }
 }
 
 export function ArticlesPage() {
@@ -89,23 +80,11 @@ export function ArticlesPage() {
     return articles.items.find((item) => item.id === selectedId) ?? null
   }, [articles.items, selectedId])
 
-  const dirty = source !== 'all' || q !== '' || qDraft !== ''
-
   function commitSource(next: string) {
     const nextParams = new URLSearchParams(params)
     if (next === 'all') nextParams.delete('source')
     else nextParams.set('source', next)
     setParams(nextParams)
-    setOffset(0)
-    setSelectedId(null)
-  }
-
-  function resetFilters() {
-    const nextParams = new URLSearchParams(params)
-    nextParams.delete('source')
-    setParams(nextParams)
-    setQ('')
-    setQDraft('')
     setOffset(0)
     setSelectedId(null)
   }
@@ -179,18 +158,6 @@ export function ArticlesPage() {
           ))}
         </div>
 
-        <div className="filter-row" aria-label="필터 초기화">
-          <button
-            type="button"
-            className="filter-chip filter-reset"
-            disabled={!dirty}
-            onClick={resetFilters}
-            title="매체 필터·검색·페이지 초기화"
-          >
-            초기화
-          </button>
-        </div>
-
         <div
           className={`report-workspace${selectedId ? ' has-detail' : ''}`}
         >
@@ -198,7 +165,7 @@ export function ArticlesPage() {
             <table className="report-table">
               <thead>
                 <tr>
-                  <th className="col-quality">요약</th>
+                  <th className="col-status">본문</th>
                   <th className="col-title">제목</th>
                   <th className="col-provider">섹션</th>
                   <th className="col-published">발행</th>
@@ -232,9 +199,9 @@ export function ArticlesPage() {
                         onClick={() => onRowClick(item.id)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <td className="col-quality">
+                        <td className="col-status">
                           <span
-                            className={`status-pill quality-${status.qualityClass}`}
+                            className={`status-pill status-${status.statusClass}`}
                             title={item.body_fetch_error || undefined}
                           >
                             {status.label}
@@ -392,7 +359,7 @@ export function ArticlesPage() {
                       <dd className="mono">{selected.source_key}</dd>
                     </div>
                     <div className="details-span">
-                      <dt>{bodyFieldLabel(selected)}</dt>
+                      <dt>{contentFieldLabel(selected)}</dt>
                       <dd className="audit-rationale">
                         {selectedBody ? (
                           selectedBody
@@ -400,7 +367,7 @@ export function ArticlesPage() {
                           <span className="warn">{selectedBodyError}</span>
                         ) : (
                           <>
-                            아직 {bodyFieldLabel(selected)}이 없습니다.
+                            아직 {contentFieldLabel(selected)}이 없습니다.
                             {selected.source === 'nikkei' ? (
                               <>
                                 {' '}
