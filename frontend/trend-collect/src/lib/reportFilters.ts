@@ -24,8 +24,9 @@ export type StatusFilter = (typeof STATUS_FILTERS)[number]
 export type QualityFilter = (typeof QUALITY_FILTERS)[number]
 export type ThemeFilter = (typeof THEME_FILTERS)[number]
 
-/** null = 기본 정렬(최근)이지만 UI상 선택 없음 */
+/** null = 기본 정렬(발행일 내림)이지만 UI상 화살표 없음 */
 export type ReportSortChoice = ReportSort | null
+export type ReportSortDir = 'asc' | 'desc'
 
 export type ReportFilters = {
   status: StatusFilter
@@ -33,6 +34,7 @@ export type ReportFilters = {
   theme: ThemeFilter
   q: string
   sort: ReportSortChoice
+  sortDir: ReportSortDir
   offset: number
 }
 
@@ -42,12 +44,17 @@ export const DEFAULT_REPORT_FILTERS: ReportFilters = {
   theme: 'all',
   q: '',
   sort: null,
+  sortDir: 'desc',
   offset: 0,
 }
 
 /** API/목록 조회에 쓰는 실제 정렬 (미선택이면 발행일순) */
 export function resolveReportSort(sort: ReportSortChoice): ReportSort {
   return sort ?? 'published_at'
+}
+
+export function resolveReportSortDir(filters: ReportFilters): ReportSortDir {
+  return filters.sortDir === 'asc' ? 'asc' : 'desc'
 }
 
 function isStatusFilter(value: string): value is StatusFilter {
@@ -70,19 +77,28 @@ function isReportSort(value: string): value is ReportSort {
   )
 }
 
+function isReportSortDir(value: string): value is ReportSortDir {
+  return value === 'asc' || value === 'desc'
+}
+
 /** URLSearchParams → 필터 상태 */
 export function parseReportFilters(params: URLSearchParams): ReportFilters {
   const rawStatus = params.get('status') || 'all'
   const rawQuality = params.get('quality') || 'all'
   const rawTheme = params.get('theme') || 'all'
   const rawSort = params.get('sort')
+  const rawDir = params.get('dir')
   const rawOffset = Number(params.get('offset') || '0')
+  const sort = rawSort && isReportSort(rawSort) ? rawSort : null
+  const sortDir =
+    sort && rawDir && isReportSortDir(rawDir) ? rawDir : 'desc'
   return {
     status: isStatusFilter(rawStatus) ? rawStatus : 'all',
     quality: isQualityFilter(rawQuality) ? rawQuality : 'all',
     theme: isThemeFilter(rawTheme) ? rawTheme : 'all',
     q: params.get('q') || '',
-    sort: rawSort && isReportSort(rawSort) ? rawSort : null,
+    sort,
+    sortDir,
     offset: Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0,
   }
 }
@@ -95,7 +111,10 @@ export function serializeReportFilters(filters: ReportFilters): URLSearchParams 
   if (filters.theme !== 'all') params.set('theme', filters.theme)
   const q = filters.q.trim()
   if (q) params.set('q', q)
-  if (filters.sort) params.set('sort', filters.sort)
+  if (filters.sort) {
+    params.set('sort', filters.sort)
+    if (filters.sortDir === 'asc') params.set('dir', 'asc')
+  }
   if (filters.offset > 0) params.set('offset', String(filters.offset))
   return params
 }
@@ -109,6 +128,7 @@ export function isReportFiltersDirty(
   if (filters.theme !== DEFAULT_REPORT_FILTERS.theme) return true
   if (filters.q.trim() !== DEFAULT_REPORT_FILTERS.q) return true
   if (filters.sort !== DEFAULT_REPORT_FILTERS.sort) return true
+  if (filters.sortDir !== DEFAULT_REPORT_FILTERS.sortDir) return true
   if (filters.offset !== DEFAULT_REPORT_FILTERS.offset) return true
   if (draftQ !== undefined && draftQ.trim() !== filters.q.trim()) return true
   return false
@@ -141,13 +161,23 @@ export function withTheme(
   return { ...filters, theme: next, offset: 0 }
 }
 
-/** 같은 정렬을 다시 누르면 선택 해제(기본 정렬로, 다른 열은 켜지지 않음) */
+/**
+ * 다른 열 → 그 열 내림차순(명시).
+ * 같은 열 → 오름/내림 토글. 발행일+내림이면 기본(null)으로 정규화.
+ */
 export function withSort(
   filters: ReportFilters,
   sort: ReportSort,
 ): ReportFilters {
-  const next: ReportSortChoice = filters.sort === sort ? null : sort
-  return { ...filters, sort: next, offset: 0 }
+  if (filters.sort === sort) {
+    const nextDir: ReportSortDir =
+      filters.sortDir === 'asc' ? 'desc' : 'asc'
+    if (sort === 'published_at' && nextDir === 'desc') {
+      return { ...filters, sort: null, sortDir: 'desc', offset: 0 }
+    }
+    return { ...filters, sort, sortDir: nextDir, offset: 0 }
+  }
+  return { ...filters, sort, sortDir: 'desc', offset: 0 }
 }
 
 export function withQuery(filters: ReportFilters, q: string): ReportFilters {

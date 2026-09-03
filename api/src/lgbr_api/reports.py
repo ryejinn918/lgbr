@@ -160,11 +160,17 @@ VALID_THEMES = frozenset(
 )
 THEME_OTHER = "other"
 VALID_SORTS = frozenset({"published_at", "page_count", "last_seen_at"})
-SORT_SQL = {
-    "published_at": "published_at DESC NULLS LAST, id DESC",
-    "page_count": "page_count DESC NULLS LAST, published_at DESC NULLS LAST, id DESC",
-    "last_seen_at": "last_seen_at DESC NULLS LAST, id DESC",
-}
+VALID_SORT_DIRS = frozenset({"asc", "desc"})
+
+
+def _sort_order_sql(sort_key: str, direction: str) -> str:
+    dir_sql = "ASC" if direction == "asc" else "DESC"
+    if sort_key == "page_count":
+        return (
+            f"page_count {dir_sql} NULLS LAST, "
+            f"published_at {dir_sql} NULLS LAST, id {dir_sql}"
+        )
+    return f"{sort_key} {dir_sql} NULLS LAST, id {dir_sql}"
 
 # api/src/lgbr_api/reports.py → repo root
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -515,6 +521,7 @@ def list_reports(
     provider: str | None = None,
     crawl_id: str | None = None,
     sort: str | None = None,
+    sort_dir: str | None = None,
     published_from: str | None = None,
     published_to: str | None = None,
     limit: int = 30,
@@ -523,7 +530,7 @@ def list_reports(
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
 
-    def _error(message: str, *, sort_key: str) -> dict[str, Any]:
+    def _error(message: str, *, sort_key: str, dir_key: str) -> dict[str, Any]:
         return {
             "ok": False,
             "message": message,
@@ -536,42 +543,64 @@ def list_reports(
             "limit": limit,
             "offset": offset,
             "sort": sort_key,
+            "dir": dir_key,
         }
 
     sort_key = (sort or "published_at").strip() or "published_at"
+    dir_key = (sort_dir or "desc").strip().lower() or "desc"
     if sort_key not in VALID_SORTS:
-        return _error(f"invalid sort: {sort_key}", sort_key=sort_key)
-    order_sql = SORT_SQL[sort_key]
+        return _error(
+            f"invalid sort: {sort_key}", sort_key=sort_key, dir_key=dir_key
+        )
+    if dir_key not in VALID_SORT_DIRS:
+        return _error(
+            f"invalid dir: {dir_key}", sort_key=sort_key, dir_key=dir_key
+        )
+    order_sql = _sort_order_sql(sort_key, dir_key)
 
     pub_from = _parse_published_bound(published_from)
     if pub_from == "invalid":
         return _error(
             "published_from must be an ISO date or datetime",
             sort_key=sort_key,
+            dir_key=dir_key,
         )
     pub_to = _parse_published_bound(published_to)
     if pub_to == "invalid":
         return _error(
             "published_to must be an ISO date or datetime",
             sort_key=sort_key,
+            dir_key=dir_key,
         )
 
     status_filter: str | None = None
     if status and status != "all":
         if status not in VALID_STATUSES:
-            return _error(f"invalid status: {status}", sort_key=sort_key)
+            return _error(
+                f"invalid status: {status}",
+                sort_key=sort_key,
+                dir_key=dir_key,
+            )
         status_filter = status
 
     quality_filter: str | None = None
     if quality and quality != "all":
         if quality not in VALID_QUALITIES:
-            return _error(f"invalid quality: {quality}", sort_key=sort_key)
+            return _error(
+                f"invalid quality: {quality}",
+                sort_key=sort_key,
+                dir_key=dir_key,
+            )
         quality_filter = quality
 
     theme_filter: str | None = None
     if theme and theme != "all":
         if theme != THEME_OTHER and theme not in VALID_THEMES:
-            return _error(f"invalid theme: {theme}", sort_key=sort_key)
+            return _error(
+                f"invalid theme: {theme}",
+                sort_key=sort_key,
+                dir_key=dir_key,
+            )
         theme_filter = theme
 
     crawl_uuid: str | None = None
@@ -579,7 +608,9 @@ def list_reports(
         try:
             crawl_uuid = str(UUID(crawl_id))
         except (TypeError, ValueError):
-            return _error("invalid crawl_id", sort_key=sort_key)
+            return _error(
+                "invalid crawl_id", sort_key=sort_key, dir_key=dir_key
+            )
 
     q_pat = f"%{q.strip()}%" if q and q.strip() else None
     provider_pat = (
@@ -683,6 +714,7 @@ def list_reports(
         "limit": limit,
         "offset": offset,
         "sort": sort_key,
+        "dir": dir_key,
         "published_from": (
             pub_from.isoformat() if isinstance(pub_from, datetime) else None
         ),

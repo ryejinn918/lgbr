@@ -481,6 +481,7 @@ async def reports(request: Request) -> JSONResponse:
         provider=request.query_params.get("provider"),
         crawl_id=request.query_params.get("crawl_id"),
         sort=request.query_params.get("sort"),
+        sort_dir=request.query_params.get("dir"),
         published_from=request.query_params.get("published_from"),
         published_to=request.query_params.get("published_to"),
         limit=limit,

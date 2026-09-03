@@ -39,6 +39,7 @@ const EMPTY_THEME: ThemeCounts = {
 }
 
 export type ReportSort = 'published_at' | 'page_count' | 'last_seen_at'
+export type ReportSortDir = 'asc' | 'desc'
 
 export type ReportsQuery = {
   source?: string
@@ -48,6 +49,7 @@ export type ReportsQuery = {
   q?: string
   crawlId?: string | null
   sort?: ReportSort
+  sortDir?: ReportSortDir
   limit?: number
   offset?: number
   poll?: boolean
@@ -79,6 +81,7 @@ export function useReports(query: ReportsQuery): ReportsView {
     query.sort === 'page_count' || query.sort === 'last_seen_at'
       ? query.sort
       : 'published_at'
+  const sortDir: ReportSortDir = query.sortDir === 'asc' ? 'asc' : 'desc'
   const limit = query.limit ?? 30
   const offset = query.offset ?? 0
   const poll = query.poll !== false
@@ -102,7 +105,9 @@ export function useReports(query: ReportsQuery): ReportsView {
     if (theme) params.set('theme', theme)
     if (q) params.set('q', q)
     if (crawlId) params.set('crawl_id', crawlId)
-    if (sort !== 'published_at') params.set('sort', sort)
+    // Always send sort/dir so UI and API agree even before API restart.
+    params.set('sort', sort)
+    params.set('dir', sortDir)
     try {
       const res = await fetch(`/api/reports?${params}`)
       const data = (await res.json()) as ReportsResponse
@@ -120,7 +125,18 @@ export function useReports(query: ReportsQuery): ReportsView {
     } finally {
       setLoading(false)
     }
-  }, [source, status, quality, theme, q, crawlId, sort, limit, offset])
+  }, [
+    source,
+    status,
+    quality,
+    theme,
+    q,
+    crawlId,
+    sort,
+    sortDir,
+    limit,
+    offset,
+  ])
 
   useEffect(() => {
     let cancelled = false
