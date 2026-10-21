@@ -14,3 +14,7 @@ wheels/
 .consensus/
 .env
 .env.*
+crawler.env
+*.dump
+documents/*.xlsx
+documents/*.xls

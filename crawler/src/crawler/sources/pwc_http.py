@@ -1,9 +1,8 @@
 """PwC Insights HTTP helpers (catalogs: Korea / Global).
 
-List JSON (no login)::
-  ``{collection_path}.filter-dynamic.html?currentPagePath=...&list={}&page={offset}&…``
-``page`` is an offset (multiples of catalog page_size); response has
-``numberHits`` + ``elements``. Detail PDF: ``a[href*=".pdf"]``.
+List data is returned either by the legacy JSON endpoint or embedded in the
+current ``collection_v2.dynamic.html`` component. Detail PDF:
+``a[href*=".pdf"]``.
 """
 
 from __future__ import annotations
@@ -47,6 +46,11 @@ class PwcCatalog:
     def collection_url(self) -> str:
         return f"{BASE}{self.collection_path}.filter-dynamic.html"
 
+    @property
+    def dynamic_url(self) -> str:
+        path = self.collection_path.replace("/jcr:content/", "/_jcr_content/")
+        return f"{BASE}{path}.dynamic.html"
+
 
 CATALOGS: dict[str, PwcCatalog] = {
     "kr": PwcCatalog(
@@ -55,9 +59,9 @@ CATALOGS: dict[str, PwcCatalog] = {
         hub_url="https://www.pwc.com/kr/ko/insights.html",
         collection_path=(
             "/content/pwc/kr/ko/insights/jcr:content/root/container/"
-            "dynamic-content/collection_v2_copy"
+            "content-free-container-1/section_916288947_co/collection_v2"
         ),
-        page_size=16,
+        page_size=4,
     ),
     "gx": PwcCatalog(
         id="gx",
@@ -188,15 +192,29 @@ def fetch_list_page(
     )
     url = f"{cat.collection_url}?{qs}"
     sess = session or make_session(cat)
-    payload = get_json(
-        sess,
-        url,
-        headers={
-            "Accept": "application/json,*/*",
-            "Referer": cat.hub_url,
-        },
-        timeout=timeout,
-    )
+    try:
+        payload = get_json(
+            sess,
+            url,
+            headers={
+                "Accept": "application/json,*/*",
+                "Referer": cat.hub_url,
+            },
+            timeout=timeout,
+        )
+    except (json.JSONDecodeError, ValueError):
+        component_html = get_text(
+            sess,
+            cat.dynamic_url,
+            headers={
+                "Accept": "text/html,application/xhtml+xml",
+                "Referer": cat.hub_url,
+            },
+            timeout=timeout,
+        )
+        payload = _parse_dynamic_payload(component_html)
+        if page_offset > 0:
+            payload["elements"] = []
     if not isinstance(payload, dict):
         raise RuntimeError(f"expected JSON object from {url}")
     number_hits = int(payload.get("numberHits") or 0)
@@ -227,6 +245,30 @@ def fetch_list_page(
             )
         )
     return items, number_hits
+
+
+_LOAD_FACETED_PAYLOAD_RE = re.compile(
+    r'angular\.loadFacetedNavigation\(\s*'
+    r'(?:"(?:\\.|[^"\\])*"\s*,\s*){5}'
+    r'"((?:\\.|[^"\\])*)"',
+    re.S,
+)
+
+
+def _parse_dynamic_payload(html: str) -> dict[str, Any]:
+    match = _LOAD_FACETED_PAYLOAD_RE.search(html)
+    if match is None:
+        raise RuntimeError("PwC dynamic collection payload not found")
+    raw = re.sub(
+        r"\\x([0-9a-fA-F]{2})",
+        lambda found: rf"\u00{found.group(1)}",
+        match.group(1),
+    )
+    payload_text = json.loads(f'"{raw}"')
+    payload = json.loads(payload_text)
+    if not isinstance(payload, dict):
+        raise RuntimeError("PwC dynamic collection payload is not an object")
+    return payload
 
 
 def is_pdf_url(url: str) -> bool:

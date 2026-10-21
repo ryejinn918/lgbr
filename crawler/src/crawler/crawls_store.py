@@ -24,6 +24,7 @@ FNGUIDE_MODES = frozenset(
         "adhoc",
         "ai",
         "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",
@@ -36,6 +37,7 @@ LIMITED_MODES = frozenset(
     {
         "ai",
         "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",

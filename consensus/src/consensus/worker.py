@@ -23,6 +23,7 @@ from consensus.corpus import (
     write_corpus_artifacts,
 )
 from consensus.fill import fill_frame
+from consensus.external_evidence import format_external_evidence, load_external_evidence
 from consensus.frame import build_consensus
 from consensus.llm import DEFAULT_MODEL, log
 from consensus.paths import doc_cache_dir, make_asset_id, run_dir
@@ -513,6 +514,8 @@ async def run_pipeline(run_id: str) -> None:
         if not frame_cards:
             frame_cards = cards
 
+        external_evidence = format_external_evidence(load_external_evidence(run_id))
+
         with log_c.stage("consensus", reports=len(frame_cards)):
             frame = await build_consensus(
                 frame_cards,
@@ -522,6 +525,7 @@ async def run_pipeline(run_id: str) -> None:
                 thesis=str(criteria.get("thesis") or "") or None,
                 cut_logic=str(criteria.get("cut_logic") or "") or None,
                 pillar_sketch=list(criteria.get("pillar_sketch") or []),
+                external_evidence=external_evidence,
             )
             runs_store.save_output(run_id, kind="consensus_frame", body_md=frame)
             log_c.emit(stage="consensus", event="frame_validated", chars=len(frame))
@@ -535,6 +539,7 @@ async def run_pipeline(run_id: str) -> None:
                 out_dir=consensus_dir,
                 model=model,
                 compress_cards=cards,
+                external_evidence=external_evidence,
             )
             runs_store.save_output(
                 run_id, kind="fill_plan", body_json=plan_meta, body_md=None

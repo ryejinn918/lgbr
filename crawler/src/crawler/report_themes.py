@@ -16,11 +16,12 @@ REPORT_THEMES = frozenset(
     }
 )
 
-# FnGuide / Deloitte search-profile modes (attrs.crawl_profile). No macroeconomy crawl.
+# FnGuide / Deloitte search-profile modes (attrs.crawl_profile).
 CRAWL_PROFILE_MODES = frozenset(
     {
         "ai",
         "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",

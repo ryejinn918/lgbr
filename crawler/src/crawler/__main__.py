@@ -61,12 +61,15 @@ from crawler.status import DEFAULT_STATUS_PATH, clear_status, get_status, set_st
 
 
 def _load_env() -> None:
-    """Load crawler/.env and repo .env without overriding exports."""
+    """Load crawler credentials and repo settings without overriding exports."""
+    root = Path(__file__).resolve().parents[3]
     candidates = [
         Path(__file__).resolve().parents[2] / ".env",
-        Path(__file__).resolve().parents[3] / ".env",
+        root / ".env",
         Path.cwd() / "crawler" / ".env",
         Path.cwd() / ".env",
+        root / "crawler.env",
+        Path.cwd() / "crawler.env",
     ]
     for path in candidates:
         if path.is_file():

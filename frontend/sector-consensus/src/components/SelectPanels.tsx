@@ -10,6 +10,8 @@ import {
 import { isLiveState, openRunForTheme } from '../lib/runState'
 import { formatPubDate } from '../lib/format'
 import { parseTheme } from '../lib/theme'
+import { ExternalLinksSummary } from './ExternalLinksSummary'
+import { ExternalReviewLauncher } from './ExternalReviewLauncher'
 import type { InputReport, RunDoc, SelectCriteria } from '../types'
 
 function asCriteria(raw: unknown): SelectCriteria | null {
@@ -225,6 +227,22 @@ export function SelectPanels() {
             이유가 채워집니다.
           </p>
         )}
+        {packRun &&
+          packCriteria?.pillar_sketch &&
+          packCriteria.pillar_sketch.length > 0 && (
+            <>
+              <ExternalReviewLauncher
+                runId={packRun.id}
+                axes={packCriteria.pillar_sketch}
+                onComplete={() => window.location.reload()}
+              />
+
+              <ExternalLinksSummary
+                runId={packRun.id}
+                axes={packCriteria.pillar_sketch}
+              />
+            </>
+          )}
         {packDocs.length > 0 && (
           <table className="data-table">
             <thead>

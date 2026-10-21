@@ -296,6 +296,8 @@ export function DashboardPage() {
         progressLine =
           formatSearchProgress(progress) || hook.status.job?.message || '—'
       }
+    } else if (hook.status.state === 'error') {
+      progressLine = hook.status.job?.message || '수집 작업 실패'
     }
     return {
       def,

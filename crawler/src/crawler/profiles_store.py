@@ -10,6 +10,7 @@ PROFILE_MODES = frozenset(
     {
         "ai",
         "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",

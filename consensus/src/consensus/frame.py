@@ -19,6 +19,7 @@ async def build_consensus(
     thesis: str | None = None,
     cut_logic: str | None = None,
     pillar_sketch: list[str] | None = None,
+    external_evidence: str | None = None,
 ) -> str:
     out_dir.mkdir(parents=True, exist_ok=True)
     joined = "\n\n========\n\n".join(
@@ -56,6 +57,9 @@ Pack facts (use these numbers; do not invent coverage %%):
 - reports={n_reports}
 - distinct_providers={n_providers}
 {locked_block}
+External evidence (FnGuide remains the primary view; use these only as corroboration, dissent, or supplement):
+{external_evidence or '(none)'}
+
 In scope / out of scope:
 - In scope: Executive Summary + 2–4 topics (주제) where views converge.
   Fine numbers need not be filled yet — leave under 추후 보강.
@@ -78,6 +82,8 @@ Rules:
 - Do not put items listed under 범위 밖 주제 back into that topic's
   현황/Evidence
 - Do not invent facts absent from the compress views
+- Do not treat external evidence as a replacement for FnGuide. Clearly separate the FnGuide view from external corroboration, dissent, and supplement.
+- When external evidence disagrees with FnGuide, preserve the disagreement and explain the difference only when the supplied summaries support it.
 - Keep number units and foreign-term spelling consistent within the document
 - Do not write period-over-period change unless compress views explicitly compare
   periods; otherwise omit or put under 추후 보강 as defer

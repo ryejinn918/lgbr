@@ -65,18 +65,25 @@ def existing_keys(source: str = SOURCE_FNGUIDE) -> set[str]:
 
 
 def downloaded_keys(source: str = SOURCE_FNGUIDE) -> set[str]:
-    """Keys that already have a PDF on record — safe to skip re-download."""
+    """Keys whose recorded PDF still exists on this machine.
+
+    A restored database can contain absolute paths from another workstation.
+    Those rows must not suppress a repair download on the current machine.
+    """
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT source_key FROM reports
+                SELECT source_key, file_path FROM reports
                 WHERE source = %s AND file_path IS NOT NULL
                 """,
                 (source,),
             )
-            return {str(r["source_key"]) for r in cur.fetchall()}
-
+            return {
+                str(r["source_key"])
+                for r in cur.fetchall()
+                if Path(str(r.get("file_path") or "")).is_file()
+            }
 
 def _download_roots(root: Path | None = None) -> list[Path]:
     if root is not None:

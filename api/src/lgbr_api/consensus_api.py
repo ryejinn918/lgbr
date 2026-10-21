@@ -14,6 +14,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from lgbr_api.db import connect, load_database_env
+from lgbr_api.processes import durable_workers_enabled, pid_is_alive
 
 ROOT = Path(__file__).resolve().parents[3]
 CONSENSUS_LOG = ROOT / ".consensus" / "consensus.log"
@@ -70,21 +71,15 @@ def _now() -> datetime:
 
 
 def _pid_alive(pid: int | None) -> bool:
-    if pid is None or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+    return pid_is_alive(pid)
 
 
 def _consensus_worker_alive(pid: int, run_id: str) -> bool:
     """Reject a reused PID that no longer belongs to this consensus run."""
     if not _pid_alive(pid):
         return False
+    if os.name == "nt":
+        return True
     try:
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ")
     except FileNotFoundError:
@@ -448,6 +443,7 @@ def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
     pub = r.get("published_at")
     themes = _themes_for_input(r)
     qj = _quality_json_dict(r)
+    file_available = Path(str(r.get("file_path") or "")).is_file()
     return {
         "id": str(r["id"]),
         "source_key": r.get("source_key"),
@@ -464,6 +460,7 @@ def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "topic": _qj_str(qj, "topic"),
         "framework_summary": _qj_str(qj, "framework_summary"),
         "rationale": _qj_str(qj, "rationale"),
+        "file_available": file_available,
         "will_select": False,
         "will_fill_extra": False,
         "select_role": None,
@@ -492,6 +489,12 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
     pool = list_pool_reports(themes=pool_themes)
     items = [_input_row(r) for r in pool]
     qp_count = sum(1 for r in pool if r.get("quality_pass") is True)
+    usable_count = sum(
+        1
+        for r in pool
+        if r.get("quality_pass") is True
+        and Path(str(r.get("file_path") or "")).is_file()
+    )
     return {
         "ok": True,
         "theme": theme,
@@ -506,6 +509,8 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
             "quality_pass": True,
             "pool_count": len(items),
             "quality_pass_count": qp_count,
+            "usable_file_count": usable_count,
+            "missing_quality_file_count": max(0, qp_count - usable_count),
             "select": "on_run_start",
         },
     }
@@ -668,14 +673,74 @@ def _spawn_worker(run_id: str) -> None:
     log_f = open(CONSENSUS_LOG, "a", encoding="utf-8")  # noqa: SIM115
     log_f.write(f"\n--- consensus worker {_now().isoformat()} id={run_id} ---\n")
     log_f.flush()
+    env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
+    kwargs: dict[str, Any] = {
+        "cwd": str(ROOT),
+        "stdin": subprocess.DEVNULL,
+        "stdout": log_f,
+        "stderr": subprocess.STDOUT,
+        "env": env,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+    else:
+        kwargs["start_new_session"] = True
     subprocess.Popen(
         [str(python), "-m", "consensus", "run", "--run-id", run_id],
-        cwd=str(ROOT),
-        stdout=log_f,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
+        **kwargs,
     )
 
+
+def _theme_start_preflight(theme: str) -> dict[str, Any] | None:
+    """Reject runs that cannot reach the document pipeline on this machine."""
+    inputs = list_inputs(theme=theme)
+    if not inputs.get("ok"):
+        return {
+            "ok": False,
+            "status": int(inputs.get("status") or 500),
+            "message": str(inputs.get("message") or "input preflight failed"),
+            "can_start": False,
+            "run": None,
+        }
+    criteria = inputs.get("criteria") or {}
+    quality_count = int(criteria.get("quality_pass_count") or 0)
+    usable_count = int(criteria.get("usable_file_count") or 0)
+    if quality_count < 1:
+        return {
+            "ok": False,
+            "status": 422,
+            "message": (
+                f"최근 {criteria.get('period_months', 3)}개월 {theme} 입력 중 "
+                "품질검사를 통과한 FnGuide 보고서가 없습니다. "
+                "해당 섹터 수집 조건을 보완하고 다시 수집·품질검사해 주세요."
+            ),
+            "can_start": True,
+            "run": None,
+            "input_preflight": criteria,
+        }
+    if usable_count < 1:
+        return {
+            "ok": False,
+            "status": 422,
+            "message": (
+                f"{theme} 품질 통과 보고서 {quality_count}건의 PDF가 "
+                "현재 컴퓨터에 없습니다. FnGuide 수집을 다시 실행해 "
+                "이전 컴퓨터 경로의 파일을 복구해 주세요."
+            ),
+            "can_start": True,
+            "run": None,
+            "input_preflight": criteria,
+        }
+    return None
+
+def _dispatch_worker(run_id: str) -> None:
+    if durable_workers_enabled():
+        return
+    _spawn_worker(run_id)
 
 def start_run(
     *,
@@ -703,6 +768,9 @@ def start_run(
             "can_start": False,
             "run": None,
         }
+    preflight = _theme_start_preflight(theme)
+    if preflight is not None:
+        return preflight
     reconcile_stale_runs()
     open_row = _get_open_row()
     if open_row:
@@ -758,7 +826,7 @@ def start_run(
 
     run_id = str(row["id"])
     try:
-        _spawn_worker(run_id)
+        _dispatch_worker(run_id)
     except Exception as exc:
         with connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -914,7 +982,7 @@ def continue_run(
             "run": _serialize_run(row),
         }
     try:
-        _spawn_worker(run_id)
+        _dispatch_worker(run_id)
     except Exception as exc:
         with connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -1036,7 +1104,7 @@ def _continue_from_select_only(
             "run": _serialize_run(row),
         }
     try:
-        _spawn_worker(run_id)
+        _dispatch_worker(run_id)
     except Exception as exc:
         with connect() as conn, conn.cursor() as cur:
             cur.execute(

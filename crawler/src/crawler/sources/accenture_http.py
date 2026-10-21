@@ -54,10 +54,10 @@ CATALOGS: dict[str, AccentureCatalog] = {
         hub_url="https://www.accenture.com/us-en/insights",
         index_url="https://www.accenture.com/us-en/insights-index",
         resource_path=(
-            "/content/acom/us-en/insights-index/jcr:content/"
+            "/content/acom/en/insights-index/jcr:content/"
             "root/container_main/filtercardv2"
         ),
-        geo_tag="universal:country-codes/core-multi-market/us-en",
+        geo_tag="",
         locale="us-en",
         page_size=PAGE_SIZE,
     ),

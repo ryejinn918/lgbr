@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from lgbr_api.external_review_api import review_external_docs
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -37,6 +38,14 @@ from lgbr_api.consensus_api import (
     request_stop as consensus_request_stop,
     start_run,
 )
+
+from lgbr_api.external_links_api import (
+    delete_external_link,
+    external_candidates,
+    external_links,
+    save_external_link,
+)
+
 from lgbr_api.consensus_chat import iter_compare_chat_sse
 from lgbr_api.consensus_eval import get_eval as consensus_get_eval
 from lgbr_api.consensus_eval import iter_eval_sse
@@ -821,6 +830,29 @@ def create_app() -> Starlette:
                 "/api/consensus/runs/{run_id}/eval/stream",
                 consensus_eval_stream,
                 methods=["POST"],
+            ),
+            Route(
+                "/api/consensus/runs/{run_id}/external-docs/candidates",
+                external_candidates,
+            ),
+            Route(
+                "/api/consensus/runs/{run_id}/external-docs",
+                external_links,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/consensus/runs/{run_id}/external-docs",
+                save_external_link,
+                methods=["POST"],
+            ),
+            Route(
+                "/api/consensus/runs/{run_id}/external-docs",
+                delete_external_link,
+                methods=["DELETE"],
+            ),
+            Route(
+                "/api/consensus/runs/{run_id}/external-docs/review",
+                review_external_docs,
             ),
         ],
         middleware=[Middleware(ApiKeyMiddleware)],

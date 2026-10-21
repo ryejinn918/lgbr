@@ -190,6 +190,7 @@ async def fill_frame(
     out_dir: Path,
     model: str = DEFAULT_MODEL,
     compress_cards: list[dict[str, Any]] | None = None,
+    external_evidence: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     out_dir.mkdir(parents=True, exist_ok=True)
     cards = compress_cards or []
@@ -229,7 +230,7 @@ async def fill_frame(
             {
                 "role": "user",
                 "content": (
-                    f"Question: {question}\n\n"
+                    f"Question: {question}\\n\\n"
                     f"## Frame structure (titles to preserve)\n{structure_frame}\n\n"
                     f"## TARGET SLOTS to fill\n{slots_block}\n\n"
                     "Reopen index (compress candidates + valid slice_ids).\n"
@@ -340,6 +341,9 @@ The output must be a **standalone, self-contained document**. Forbidden shorthan
 (unchanged), same as above, as in locked frame, 중략, 생략, and similar.
 
 Question: {question}
+
+## External evidence (FnGuide is primary; classify as corroboration, dissent, or supplement)
+{external_evidence or '(none)'}
 
 ## Frame structure (titles to preserve; rewrite fully)
 {structure_frame}

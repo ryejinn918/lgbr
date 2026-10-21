@@ -21,6 +21,7 @@ from uuid import UUID
 
 from lgbr_api.asset_id import LIMITED_MODES, make_asset_id
 from lgbr_api.db import CRAWL_STATE_LABELS, connect, database_url
+from lgbr_api.processes import durable_workers_enabled, pid_is_alive
 from lgbr_api.sessions import get_current_session, request_logout
 from lgbr_api.source_registry import (
     FNGUIDE_MODES,
@@ -40,15 +41,33 @@ def _now() -> datetime:
 
 
 def _pid_alive(pid: int | None) -> bool:
-    if pid is None or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+    return pid_is_alive(pid)
+
+
+def _worker_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
+    return env
+
+
+def _popen_worker(
+    cmd: list[str], *, log_f: Any, env: dict[str, str]
+) -> subprocess.Popen[bytes]:
+    kwargs: dict[str, Any] = {
+        "cwd": str(ROOT),
+        "stdin": subprocess.DEVNULL,
+        "stdout": log_f,
+        "stderr": subprocess.STDOUT,
+        "env": env,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+    else:
+        kwargs["start_new_session"] = True
+    return subprocess.Popen(cmd, **kwargs)
 
 
 def reconcile_stale_crawls() -> list[dict[str, Any]]:
@@ -583,7 +602,7 @@ def start_crawl(
             "label": "오류",
             "message": (
                 "이전 크롤이 error 상태라 재실행할 수 없습니다. "
-                "점검 후 DB에 접속해 fnguide_crawls.state 를 ended 로 바꾸세요."
+                "FnGuide 설정 화면에서 원인을 확인한 뒤 오류 해제를 누르세요."
             ),
             "crawl": crawl,
             "session": _status_session_for_mode(mode),
@@ -637,19 +656,29 @@ def start_crawl(
             "can_start": False,
         }
 
+    if durable_workers_enabled() and mode in FNGUIDE_MODES:
+        return {
+            "ok": True,
+            "status": 202,
+            "label": crawl["label"],
+            "message": "크롤 작업을 워커 대기열에 등록했습니다.",
+            "crawl": crawl,
+            "session": _status_session_for_mode(mode),
+            "can_start": False,
+        }
     python = ROOT / ".venv" / "bin" / "python"
     if not python.is_file():
         python = Path(sys.executable)
 
     CRAWL_LOG.parent.mkdir(parents=True, exist_ok=True)
     log_f = open(CRAWL_LOG, "a", encoding="utf-8")  # noqa: SIM115
-    child_env = os.environ.copy()
+    child_env = _worker_env()
     if mode == "pwc":
         child_env["PWC_CATALOG"] = pwc_catalog
     try:
         log_f.write(f"\n--- crawl start {_now().isoformat()} id={crawl['id']} ---\n")
         log_f.flush()
-        subprocess.Popen(
+        _popen_worker(
             [
                 str(python),
                 "-m",
@@ -660,10 +689,7 @@ def start_crawl(
                 "--crawl-id",
                 crawl["id"],
             ],
-            cwd=str(ROOT),
-            stdout=log_f,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
+            log_f=log_f,
             env=child_env,
         )
     except Exception as exc:

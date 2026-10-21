@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from lgbr_api.db import connect
+from lgbr_api.processes import pid_is_alive
 
 ROOT = Path(__file__).resolve().parents[3]
 FEED_LOG = ROOT / ".crawler" / "feed.log"
@@ -66,6 +67,28 @@ CAPABILITY_LABELS = {
 }
 
 
+
+def _worker_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
+    return env
+
+def _popen_worker(cmd: list[str], *, log_f: Any) -> subprocess.Popen[bytes]:
+    kwargs: dict[str, Any] = {
+        "cwd": str(ROOT),
+        "stdin": subprocess.DEVNULL,
+        "stdout": log_f,
+        "stderr": subprocess.STDOUT,
+        "env": _worker_env(),
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+    else:
+        kwargs["start_new_session"] = True
+    return subprocess.Popen(cmd, **kwargs)
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -81,15 +104,7 @@ def _conflict_open_job(source: str) -> dict[str, Any] | None:
 
 
 def _pid_alive(pid: int | None) -> bool:
-    if pid is None or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+    return pid_is_alive(pid)
 
 
 def reconcile_stale_jobs() -> list[dict[str, Any]]:
@@ -169,7 +184,7 @@ def get_current_job(
             "label": job["label"],
             "job": job,
             "progress": job.get("progress") or {},
-            "can_start": other_open is None and job["state"] != "error",
+            "can_start": other_open is None,
         }
     return {
         "state": "ended",
@@ -301,14 +316,7 @@ def start_feed(
         ]
         if section_s:
             cmd.extend(["--section", section_s])
-        subprocess.Popen(
-            cmd,
-            cwd=str(ROOT),
-            stdout=log_f,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=os.environ.copy(),
-        )
+        _popen_worker(cmd, log_f=log_f)
     except Exception as exc:
         log_f.close()
         try:
@@ -632,14 +640,7 @@ def start_search(
             f"item_delay_seconds={delay} ---\n"
         )
         log_f.flush()
-        subprocess.Popen(
-            cmd,
-            cwd=str(ROOT),
-            stdout=log_f,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=os.environ.copy(),
-        )
+        _popen_worker(cmd, log_f=log_f)
     except Exception as exc:
         log_f.close()
         try:
@@ -775,8 +776,7 @@ def start_fetch_body(
             f"limit={lim} delay={delay} ---\n"
         )
         log_f.flush()
-        subprocess.Popen(
-            [
+        _popen_worker([
                 str(python),
                 "-m",
                 "crawler",
@@ -788,13 +788,7 @@ def start_fetch_body(
                 str(lim),
                 "--delay",
                 str(delay),
-            ],
-            cwd=str(ROOT),
-            stdout=log_f,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=os.environ.copy(),
-        )
+            ], log_f=log_f)
     except Exception as exc:
         log_f.close()
         try:

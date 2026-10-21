@@ -1,7 +1,8 @@
-/** FnGuide / Deloitte crawl-profile mode ids (no macroeconomy crawl). */
+/** FnGuide / Deloitte crawl-profile mode ids. */
 export const SEARCH_PROFILE_MODES = [
   'ai',
   'datacenter',
+  'macroeconomy',
   'physical_ai',
   'appliance',
   'display',
@@ -42,6 +43,7 @@ export const THEME_LABEL: Record<string, string> = {
 export const PROFILE_MODE_LABEL: Record<SearchProfileMode, string> = {
   ai: 'AI',
   datacenter: '데이터센터',
+  macroeconomy: '거시경제',
   physical_ai: '피지컬 AI',
   appliance: '가전',
   display: '디스플레이',

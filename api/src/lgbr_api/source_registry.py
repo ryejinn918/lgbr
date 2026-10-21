@@ -126,6 +126,7 @@ FNGUIDE_MODES = frozenset(
         "adhoc",
         "ai",
         "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",

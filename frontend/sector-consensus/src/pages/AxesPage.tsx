@@ -381,7 +381,6 @@ export function AxesPage() {
           </p>
         </section>
       )}
-
       <SelectPanels />
     </>
   )

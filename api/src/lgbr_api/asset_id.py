@@ -13,6 +13,7 @@ def _mode_abbrev() -> dict[str, str]:
 
     base = {
         "datacenter": "dc",
+        "macroeconomy": "me",
         "ai": "ai",
         "physical_ai": "pai",
         "appliance": "ap",
@@ -32,6 +33,7 @@ LIMITED_MODES = frozenset(
     {
         "ai",
         "datacenter",
+        "macroeconomy",
         "physical_ai",
         "appliance",
         "display",
