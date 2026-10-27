@@ -101,10 +101,7 @@ export function SelectPanels() {
               ? d.evidence_notice_note
               : typeof d.criteria?.evidence_notice_note === 'string'
                 ? d.criteria.evidence_notice_note
-                : d.criteria?.evidence_notice === true &&
-                    (theme === 'appliance' || theme === 'display')
-                  ? '산업 전체를 다루는 자료가 제한적입니다. 확보된 기업·제품 중심 자료를 보완적으로 활용합니다.'
-                  : null
+                : null
           setPoolEvidenceNotice(notice)
           setInputError(null)
         }
