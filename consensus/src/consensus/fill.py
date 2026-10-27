@@ -191,6 +191,7 @@ async def fill_frame(
     model: str = DEFAULT_MODEL,
     compress_cards: list[dict[str, Any]] | None = None,
     external_evidence: str | None = None,
+    evidence_note: str | None = None
 ) -> tuple[str, dict[str, Any]]:
     out_dir.mkdir(parents=True, exist_ok=True)
     cards = compress_cards or []
@@ -320,19 +321,9 @@ async def fill_frame(
         for d in dossiers
     )
 
-    evidence_notice = ""
-    theme_hint = str(question or "").lower()
-
-    if any(
-        marker in theme_hint
-        for marker in ("appliance", "display", "가전", "디스플레이")
-    ):
-        evidence_notice = (
-            "자료 유의사항\n"
-            "본 분석은 FnGuide 및 확보 가능한 보완 자료를 기준으로 작성되었습니다. "
-            "산업 전체를 직접 다루는 보고서가 제한적이어서 "
-            "기업·제품·기술 중심 자료를 보완적으로 활용했습니다.\n\n"
-        )
+    evidence_notice = (
+        f"자료 유의사항\n{evidence_note}\n\n" if evidence_note else ""
+    )
 
     prompt = f"""Preserve the locked skeleton's Executive Summary and 주제 titles.
 Thicken each 주제 using **only** sentences/numbers that actually appear in the
@@ -421,6 +412,12 @@ Output (section headers exactly as below; Korean body OK for Korean sources):
     )
 
     content, stripped = strip_pillar_slots_from_filled(content)
+    if evidence_note and evidence_note not in content:
+        notice_block = f"## 분석 범위 및 커버리지\n- {evidence_note}\n\n"
+        if "## 분석 범위 및 커버리지" in content:
+            content = content.replace("## 분석 범위 및 커버리지", notice_block, 1)
+        else:
+            content = notice_block + content
     if stripped:
         log("fill: warning — stripped per-topic 추후 보강 from output")
 

@@ -24,6 +24,7 @@ from consensus.corpus import (
 )
 from consensus.fill import fill_frame
 from consensus.external_evidence import format_external_evidence, load_external_evidence
+from consensus.evidence_policy import evidence_assessment
 from consensus.frame import build_consensus
 from consensus.llm import DEFAULT_MODEL, log
 from consensus.paths import doc_cache_dir, make_asset_id, run_dir
@@ -515,6 +516,10 @@ async def run_pipeline(run_id: str) -> None:
             frame_cards = cards
 
         external_evidence = format_external_evidence(load_external_evidence(run_id))
+        evidence_note = criteria.get("evidence_note") if criteria.get("evidence_notice") else None
+        if not evidence_note:
+            assessment = evidence_assessment(selected, theme=theme)
+            evidence_note = assessment.get("report_note") if assessment.get("notice") else None
 
         with log_c.stage("consensus", reports=len(frame_cards)):
             frame = await build_consensus(
@@ -526,7 +531,7 @@ async def run_pipeline(run_id: str) -> None:
                 cut_logic=str(criteria.get("cut_logic") or "") or None,
                 pillar_sketch=list(criteria.get("pillar_sketch") or []),
                 external_evidence=external_evidence,
-                evidence_note=(criteria.get("evidence_note") if criteria.get("evidence_notice") else None),
+                evidence_note=evidence_note,
             )
             runs_store.save_output(run_id, kind="consensus_frame", body_md=frame)
             log_c.emit(stage="consensus", event="frame_validated", chars=len(frame))
@@ -541,6 +546,7 @@ async def run_pipeline(run_id: str) -> None:
                 model=model,
                 compress_cards=cards,
                 external_evidence=external_evidence,
+                evidence_note=evidence_note,
             )
             runs_store.save_output(
                 run_id, kind="fill_plan", body_json=plan_meta, body_md=None
@@ -617,6 +623,8 @@ async def _refill_run_async(run_id: str, *, model: str | None = None) -> dict[st
 
     question = str(run.get("question") or "")
     use_model = model or str(run.get("model") or DEFAULT_MODEL)
+    run_criteria = dict(run.get("criteria") or {})
+    evidence_note = run_criteria.get("evidence_note") if run_criteria.get("evidence_notice") else None
     asset_id = str(run["asset_id"])
     consensus_dir = run_dir(asset_id) / "_consensus"
     consensus_dir.mkdir(parents=True, exist_ok=True)
@@ -624,7 +632,9 @@ async def _refill_run_async(run_id: str, *, model: str | None = None) -> dict[st
     docs = runs_store.list_selected_docs_for_refill(run_id)
     if not docs:
         raise RuntimeError(f"run {run_id} has no selected docs")
-
+    if not evidence_note:
+        assessment = evidence_assessment(docs, theme=str(run.get("theme") or ""))
+        evidence_note = assessment.get("report_note") if assessment.get("notice") else None
     cards: list[dict[str, Any]] = []
     slug_dirs: dict[str, Path] = {}
     for d in docs:
@@ -692,6 +702,7 @@ async def _refill_run_async(run_id: str, *, model: str | None = None) -> dict[st
             out_dir=consensus_dir,
             model=use_model,
             compress_cards=cards,
+            evidence_note=evidence_note,
         )
         runs_store.save_output(
             run_id, kind="fill_plan", body_json=plan_meta, body_md=None
