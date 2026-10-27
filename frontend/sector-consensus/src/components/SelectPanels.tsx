@@ -209,7 +209,7 @@ export function SelectPanels() {
           </div>
         )}
         {docsError && <p className="error-line">{docsError}</p>}
-        {(poolEvidenceNotice || packCriteria?.evidence_notice_note) && (
+        {hasPackReview && (poolEvidenceNotice || packCriteria?.evidence_notice_note) && (
           <p className="notice-line">
             {packCriteria?.evidence_notice_note || poolEvidenceNotice}
           </p>
