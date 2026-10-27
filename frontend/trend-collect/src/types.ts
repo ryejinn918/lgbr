@@ -188,6 +188,8 @@ export type QualityExtractMeta = {
 }
 
 export type QualityJson = {
+  evidence_status?: string
+  evidence_note?: string
   pass?: boolean
   confidence?: number
   has_coherent_framework?: boolean

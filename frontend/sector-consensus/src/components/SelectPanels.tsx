@@ -27,6 +27,7 @@ export function SelectPanels() {
   const runFromUrl = searchParams.get('run')
   const [inputs, setInputs] = useState<InputReport[]>([])
   const [poolQpCount, setPoolQpCount] = useState<number | null>(null)
+  const [poolEvidenceNotice, setPoolEvidenceNotice] = useState<string | null>(null)
   const [inputError, setInputError] = useState<string | null>(null)
   const [packRunId, setPackRunId] = useState<string | null>(runFromUrl)
   const [runDocs, setRunDocs] = useState<RunDoc[]>([])
@@ -79,6 +80,7 @@ export function SelectPanels() {
 
   useEffect(() => {
     setPoolQpCount(null)
+    setPoolEvidenceNotice(null)
     setPackRunId(runFromUrl)
     setRunDocs([])
     setDocsError(null)
@@ -94,6 +96,16 @@ export function SelectPanels() {
           setInputs(d.items ?? [])
           const qp = d.criteria?.quality_pass_count
           setPoolQpCount(typeof qp === 'number' ? qp : null)
+          const notice =
+            typeof d.evidence_notice_note === 'string'
+              ? d.evidence_notice_note
+              : typeof d.criteria?.evidence_notice_note === 'string'
+                ? d.criteria.evidence_notice_note
+                : d.criteria?.evidence_notice === true &&
+                    (theme === 'appliance' || theme === 'display')
+                  ? '산업 전체를 다루는 자료가 제한적입니다. 확보된 기업·제품 중심 자료를 보완적으로 활용합니다.'
+                  : null
+          setPoolEvidenceNotice(notice)
           setInputError(null)
         }
       })
@@ -200,7 +212,11 @@ export function SelectPanels() {
           </div>
         )}
         {docsError && <p className="error-line">{docsError}</p>}
-        {hasPackReview && (
+        {(poolEvidenceNotice || packCriteria?.evidence_notice_note) && (
+          <p className="notice-line">
+            {packCriteria?.evidence_notice_note || poolEvidenceNotice}
+          </p>
+        )}{hasPackReview && (
           <div className="select-review">
             <h3>선별 이유</h3>
             {packCriteria?.coverage_notes ? (
@@ -355,8 +371,10 @@ export function SelectPanels() {
                   </td>
                   <td className="col-pages">{r.page_count ?? '—'}</td>
                   <td className="col-quality">
-                    {r.quality_pass === true
-                      ? '통과'
+                    {r.evidence_status === 'insufficient'
+                      ? '자료 부족'
+                      : r.quality_pass === true
+                        ? '통과'
                       : r.quality_pass === false
                         ? (
                             <>

@@ -410,7 +410,16 @@ def normalize_media_result(raw: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_for_source(raw: dict[str, Any], source: str) -> dict[str, Any]:
     if is_fnguide_source(source):
-        return normalize_result(raw)
+        result = normalize_result(raw)
+        if (
+            not result.get("pass")
+            and set(result.get("themes") or ()) & {"appliance", "display"}
+        ):
+            result["evidence_status"] = "insufficient"
+            result["evidence_note"] = (
+                "산업 전체를 다루는 자료가 부족하여 확보된 자료를 기준으로 분석합니다."
+            )
+        return result
     return normalize_media_result(raw)
 
 
@@ -588,6 +597,18 @@ def save_quality(
     themes = [str(t) for t in themes if str(t) in VALID_THEMES]
     with connect() as conn:
         with conn.cursor() as cur:
+            if error is None and not result.get("pass"):
+                cur.execute(
+                    "SELECT attrs->'themes' AS themes FROM reports WHERE id = %s",
+                    [report_id],
+                )
+                existing = cur.fetchone() or {}
+                existing_themes = existing.get("themes") or []
+                if set(str(t) for t in existing_themes) & {"appliance", "display"}:
+                    payload["evidence_status"] = "insufficient"
+                    payload["evidence_note"] = (
+                        "산업 전체를 다루는 자료가 부족하여 확보된 자료를 기준으로 분석합니다."
+                    )
             if error is None:
                 cur.execute(
                     """

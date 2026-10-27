@@ -1,27 +1,73 @@
 import { useState } from 'react'
 
-type Props = { runId: string; axes: string[]; onComplete?: () => void }
+type Props = {
+  runId: string
+  axes: string[]
+  onComplete?: () => void
+}
 
-export function ExternalReviewLauncher({ runId, axes, onComplete }: Props) {
+export function ExternalReviewLauncher({
+  runId,
+  axes,
+  onComplete,
+}: Props) {
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState('')
 
   async function runReview() {
-    if (running || axes.length === 0) return
+    if (running) return
+
+    if (axes.length === 0) {
+      setMessage('분석 축이 없어 외부 자료를 분석할 수 없습니다.')
+      return
+    }
+
     setRunning(true)
-    setMessage('\uC678\uBD80 \uC790\uB8CC\uB97C AI\uAC00 \uBD84\uC11D\uD558\uB294 \uC911...')
+    setMessage('외부 자료 분석을 시작했습니다.')
+
     try {
       for (const [index, axis] of axes.entries()) {
+        setMessage(
+          `외부 자료를 분석 중입니다. (${index + 1}/${axes.length})`,
+        )
+
         const response = await fetch(
           `/api/consensus/runs/${runId}/external-docs/review?axis_index=${index}&axis_label=${encodeURIComponent(axis)}`,
         )
-        const data = await response.json()
-        if (!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`)
+
+        const responseText = await response.text()
+
+        let data: { ok?: boolean; message?: string } = {}
+
+        if (responseText.trim()) {
+          try {
+            data = JSON.parse(responseText)
+          } catch {
+            throw new Error(
+              '외부 자료 분석 결과를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.',
+            )
+          }
+        }
+
+        if (!response.ok || !data.ok) {
+          throw new Error(
+            data.message ||
+              `외부 자료 분석에 실패했습니다. (HTTP ${response.status})`,
+          )
+        }
       }
-      setMessage('\uC678\uBD80 \uC790\uB8CC AI \uBD84\uB958\uAC00 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uC544\uB798 \uACB0\uACFC\uB97C \uD655\uC778\uD574\uC8FC\uC138\uC694.')
+
+      setMessage(
+        '외부 자료 분석 요청이 완료되었습니다. 추천 자료가 바로 보이지 않으면 잠시 후 새로고침해 주세요.',
+      )
+
       onComplete?.()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : '외부 자료 분석에 실패했습니다. 잠시 후 다시 눌러 주세요.',
+      )
     } finally {
       setRunning(false)
     }
@@ -29,14 +75,27 @@ export function ExternalReviewLauncher({ runId, axes, onComplete }: Props) {
 
   return (
     <div className="select-review">
-      <h3>{'\uC678\uBD80 \uC790\uB8CC AI \uBD84\uB958'}</h3>
+      <h3>외부 자료 AI 분류</h3>
+
       <p className="section-note">
-        {'FnGuide \uBD84\uC11D \uCD95\uC744 \uAE30\uC900\uC73C\uB85C \uC678\uBD80 \uBCF4\uACE0\uC11C\uB97C AI\uAC00 \uC9C0\uC9C0\u00B7\uC0C1\uBC18\u00B7\uBCF4\uC644\uC73C\uB85C \uBD84\uB958\uD569\uB2C8\uB2E4. \uC0AC\uB78C\uC774 \uBCF4\uACE0\uC11C\uB97C \uD558\uB098\uC529 \uC120\uD0DD\uD560 \uD544\uC694\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.'}
+        FnGuide 분석 축을 기준으로 외부 보고서를 AI가 지지·상반·보완으로
+        분류합니다. 분석이 완료되면 추천 자료를 확인할 수 있습니다.
       </p>
-      <button type="button" className="btn" disabled={running} onClick={() => void runReview()}>
-        {running ? 'AI \uBD84\uC11D \uC9C4\uD589 \uC911...' : 'AI \uC678\uBD80 \uC790\uB8CC \uC804\uCCB4 \uBD84\uC11D'}
+
+      <button
+        type="button"
+        className="btn"
+        disabled={running}
+        onClick={() => void runReview()}
+      >
+        {running ? 'AI 분석 진행 중...' : 'AI 외부 자료 전체 분석'}
       </button>
-      {message ? <p className="section-note">{message}</p> : null}
+
+      {message ? (
+        <p className="section-note" aria-live="polite">
+          {message}
+        </p>
+      ) : null}
     </div>
   )
 }

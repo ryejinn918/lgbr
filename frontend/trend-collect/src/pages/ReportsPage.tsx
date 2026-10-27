@@ -195,6 +195,13 @@ export function ReportsPage({
     if (ok) void reports.refresh()
   }
 
+  async function onReauditTheme() {
+    const ok = await audit.startReaudit({
+      theme: filters.theme !== 'all' ? filters.theme : undefined,
+      source: source !== 'all' ? source : undefined,
+    })
+    if (ok) void reports.refresh()
+  }
   async function onReauditSelected() {
     if (!selectedId) return
     const ok = await audit.startOne(selectedId)
@@ -366,7 +373,17 @@ export function ReportsPage({
               }
             >
               {audit.busy ? busyWord : `${pendingWord} 일괄 실행`}
-            </button>
+            </button>            {filters.theme !== 'all' ? (
+              <button
+                type="button"
+                className="run-btn"
+                disabled={audit.busy}
+                onClick={() => void onReauditTheme()}
+                title={`${THEME_LABEL[filters.theme]} 자료의 품질검사를 다시 실행`}
+              >
+                {audit.busy ? busyWord : '현재 섹터 재검사'}
+              </button>
+            ) : null}
           </div>
         </div>
         {audit.error ? <p className="warn">{audit.error}</p> : null}
@@ -555,7 +572,7 @@ export function ReportsPage({
                         </td>
                         <td className="col-quality">
                           <span className={`status-pill quality-${q}`}>
-                            {qualityLabelForReport(q, item.source, sourceKey)}
+                            {qualityLabelForReport(q, item.source, sourceKey, item.quality_json)}
                           </span>
                         </td>
                         <td className="col-title report-title">

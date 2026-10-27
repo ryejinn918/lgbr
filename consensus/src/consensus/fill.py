@@ -319,6 +319,21 @@ async def fill_frame(
         f"{d['body']}"
         for d in dossiers
     )
+
+    evidence_notice = ""
+    theme_hint = str(question or "").lower()
+
+    if any(
+        marker in theme_hint
+        for marker in ("appliance", "display", "가전", "디스플레이")
+    ):
+        evidence_notice = (
+            "자료 유의사항\n"
+            "본 분석은 FnGuide 및 확보 가능한 보완 자료를 기준으로 작성되었습니다. "
+            "산업 전체를 직접 다루는 보고서가 제한적이어서 "
+            "기업·제품·기술 중심 자료를 보완적으로 활용했습니다.\n\n"
+        )
+
     prompt = f"""Preserve the locked skeleton's Executive Summary and 주제 titles.
 Thicken each 주제 using **only** sentences/numbers that actually appear in the
 OPEN bodies below.
@@ -354,6 +369,8 @@ Question: {question}
 ## Opened slice bodies
 {dossier_txt}
 
+{evidence_notice}
+
 Output (section headers exactly as below; Korean body OK for Korean sources):
 # 살 붙인 논지
 
@@ -377,6 +394,7 @@ Output (section headers exactly as below; Korean body OK for Korean sources):
 ## 참고 보고서
 ...
 """
+
     content, _ = await chat(
         [
             {
@@ -401,12 +419,17 @@ Output (section headers exactly as below; Korean body OK for Korean sources):
         label="fill",
         out_dir=out_dir,
     )
+
     content, stripped = strip_pillar_slots_from_filled(content)
     if stripped:
         log("fill: warning — stripped per-topic 추후 보강 from output")
 
     (out_dir / "06_filled_frame.md").write_text(content, encoding="utf-8")
-    log(f"fill DONE opens_used={len(dossiers)} slice_chars={sum(d['slice_chars'] for d in dossiers)}")
+    log(
+        f"fill DONE opens_used={len(dossiers)} "
+        f"slice_chars={sum(d['slice_chars'] for d in dossiers)}"
+    )
+
     return content, {
         "plan": plan,
         "raw": plan_raw,

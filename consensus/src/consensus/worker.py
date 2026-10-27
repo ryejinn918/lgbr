@@ -526,6 +526,7 @@ async def run_pipeline(run_id: str) -> None:
                 cut_logic=str(criteria.get("cut_logic") or "") or None,
                 pillar_sketch=list(criteria.get("pillar_sketch") or []),
                 external_evidence=external_evidence,
+                evidence_note=(criteria.get("evidence_note") if criteria.get("evidence_notice") else None),
             )
             runs_store.save_output(run_id, kind="consensus_frame", body_md=frame)
             log_c.emit(stage="consensus", event="frame_validated", chars=len(frame))

@@ -67,7 +67,9 @@ export function qualityLabelForReport(
   quality: string | null | undefined,
   reportSource: string | null | undefined,
   pageSource?: string | null,
+  qualityJson?: { evidence_status?: string },
 ): string {
+  if (qualityJson?.evidence_status === 'insufficient') return '보완 사용'
   const key = quality || 'pending'
   const sellSide =
     pageSource === 'fnguide' ||
@@ -75,7 +77,6 @@ export function qualityLabelForReport(
   const labels = sellSide ? QUALITY_LABEL : QUALITY_LABEL_SUMMARY
   return labels[key] || key
 }
-
 export type AuditStatsMode = 'sell_side' | 'summary' | 'all'
 
 /** 품질검사·요약 잡 stats → 현업용 한 줄 */

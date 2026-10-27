@@ -31,6 +31,13 @@ export type SelectCriteria = {
   core_max?: number
   quality_pass_count?: number
   pool_count?: number
+  evidence_notice?: boolean
+  evidence_note?: string | null
+  evidence_notice_note?: string | null
+  evidence_reason_codes?: string[]
+  industry_wide_count?: number
+  supplemental_count?: number
+  mostly_company_product_focused?: boolean
 }
 
 export type ConsensusRun = {
@@ -92,6 +99,8 @@ export type InputReport = {
   published_at?: string | null
   quality_pass?: boolean | null
   quality_scope?: string | null
+  evidence_status?: string | null
+  evidence_note?: string | null
   /** @deprecated prefer themes */
   theme_tag?: string | null
   themes?: string[]

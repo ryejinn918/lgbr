@@ -20,6 +20,7 @@ async def build_consensus(
     cut_logic: str | None = None,
     pillar_sketch: list[str] | None = None,
     external_evidence: str | None = None,
+    evidence_note: str | None = None,
 ) -> str:
     out_dir.mkdir(parents=True, exist_ok=True)
     joined = "\n\n========\n\n".join(
@@ -59,6 +60,11 @@ Pack facts (use these numbers; do not invent coverage %%):
 {locked_block}
 External evidence (FnGuide remains the primary view; use these only as corroboration, dissent, or supplement):
 {external_evidence or '(none)'}
+
+Evidence limitation:
+{evidence_note or '(none)'}
+If an evidence limitation is provided, state it briefly under the analysis scope/coverage section.
+Do not present the limited evidence as representative of the entire industry.
 
 In scope / out of scope:
 - In scope: Executive Summary + 2–4 topics (주제) where views converge.
@@ -140,6 +146,12 @@ Output (section headers exactly as below; Korean body OK for Korean sources):
         label="consensus",
         out_dir=out_dir,
     )
+    if evidence_note and evidence_note not in content:
+        notice_block = f"## 분석 범위 및 커버리지\n- {evidence_note}\n\n"
+        if "## 분석 범위 및 커버리지" in content:
+            content = content.replace("## 분석 범위 및 커버리지", notice_block, 1)
+        else:
+            content = notice_block + content
     if "주제별 Deep Dive" not in content or "Executive Summary" not in content:
         (out_dir / "04_consensus_frame.partial.md").write_text(content, encoding="utf-8")
         raise RuntimeError("consensus incomplete; saved partial")

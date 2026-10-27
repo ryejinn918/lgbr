@@ -18,6 +18,11 @@ export type AuditView = {
     source?: string
     limit?: number
   }) => Promise<boolean>
+  startReaudit: (opts?: {
+    theme?: string
+    source?: string
+    limit?: number
+  }) => Promise<boolean>
   startOne: (reportId: string) => Promise<boolean>
 }
 
@@ -98,13 +103,23 @@ export function useAudit(): AuditView {
     [start],
   )
 
+  const startReaudit = useCallback(
+    async (opts?: { theme?: string; source?: string; limit?: number }) => {
+      const body: Record<string, unknown> = { force: true }
+      if (opts?.theme && opts.theme !== 'all') body.theme = opts.theme
+      if (opts?.source && opts.source !== 'all') body.source = opts.source
+      if (opts?.limit != null) body.limit = opts.limit
+      return start(body)
+    },
+    [start],
+  )
+
   const startOne = useCallback(
     async (reportId: string) => {
       return start({ report_id: reportId, force: true })
     },
     [start],
   )
-
   const busy = state === 'starting' || state === 'active' || starting
 
   return {
@@ -118,6 +133,7 @@ export function useAudit(): AuditView {
     starting,
     refresh,
     startPending,
+    startReaudit,
     startOne,
   }
 }

@@ -13,6 +13,11 @@ from consensus.cite import (
 )
 from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
 from consensus.runs_store import PERIOD_MONTHS_DEFAULT
+from consensus.evidence_policy import (
+    evidence_assessment,
+    is_evidence_eligible,
+    is_sparse_theme,
+)
 
 CORE_MAX = 10
 AI_POOL_THEMES = ("ai",)
@@ -333,17 +338,17 @@ async def select_for_theme(
 
     pool_themes = pool_themes_for(theme)
     all_docs = runs_store.list_pool_reports(themes=pool_themes)
-    qp = [r for r in all_docs if r.get("quality_pass") is True]
+    qp = [r for r in all_docs if is_evidence_eligible(r, theme=theme)]
     non_qp = [
         (
             r,
             f"quality_pass={r.get('quality_pass')} scope={r.get('quality_scope')}",
         )
         for r in all_docs
-        if r.get("quality_pass") is not True
+        if not is_evidence_eligible(r, theme=theme)
     ]
     if not qp:
-        raise RuntimeError(f"no quality_pass reports in {theme} pool")
+        raise RuntimeError(f"no eligible evidence reports in {theme} pool")
 
     cards = build_audit_cards(qp)
     core_pairs, biblio_pairs, sel_meta = await llm_select_pack(
@@ -371,8 +376,20 @@ async def select_for_theme(
     picked = {str(r["id"]) for r in selected}
     not_picked = [(r, "pack_omit") for r in qp if str(r["id"]) not in picked]
     excluded = non_qp + not_picked
+    evidence = evidence_assessment(all_docs, theme=theme)
     criteria = {
         "quality_pass": True,
+        "evidence_policy": "sparse_sector_allowed" if is_sparse_theme(theme) else "strict",
+        "insufficient_evidence_count": sum(
+            1 for r in qp if r.get("quality_pass") is not True
+        ),
+        "evidence_notice": evidence["notice"],
+        "evidence_note": evidence["report_note"],
+        "evidence_notice_note": evidence["ui_note"],
+        "evidence_reason_codes": evidence["reason_codes"],
+        "industry_wide_count": evidence["industry_wide_count"],
+        "supplemental_count": evidence["supplemental_count"],
+        "mostly_company_product_focused": evidence["mostly_company_product_focused"],
         "status": "downloaded",
         "theme": theme,
         "pool_themes": list(pool_themes),

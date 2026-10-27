@@ -453,6 +453,8 @@ def _input_row(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
         "published_at": pub.isoformat() if pub is not None else None,
         "quality_pass": r.get("quality_pass"),
         "quality_scope": r.get("quality_scope"),
+        "evidence_status": qj.get("evidence_status"),
+        "evidence_note": qj.get("evidence_note"),
         # theme_tag kept for older clients; prefer themes[].
         "theme_tag": themes[0] if themes else r.get("theme"),
         "themes": themes,
@@ -483,16 +485,31 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
         PERIOD_MONTHS_DEFAULT,
         list_pool_reports,
     )
+    from consensus.evidence_policy import (  # noqa: WPS433
+        evidence_assessment,
+        is_evidence_eligible,
+        is_sparse_theme,
+    )
     from consensus.select import pool_themes_for  # noqa: WPS433
 
     pool_themes = pool_themes_for(theme)
     pool = list_pool_reports(themes=pool_themes)
     items = [_input_row(r) for r in pool]
     qp_count = sum(1 for r in pool if r.get("quality_pass") is True)
+    evidence_eligible_count = sum(
+        1 for r in pool if is_evidence_eligible(r, theme=theme)
+    )
+    insufficient_evidence_count = sum(
+        1
+        for r in items
+        if r.get("quality_pass") is not True
+        and r.get("evidence_status") == "insufficient"
+    )
+    evidence = evidence_assessment(pool, theme=theme)
     usable_count = sum(
         1
         for r in pool
-        if r.get("quality_pass") is True
+        if is_evidence_eligible(r, theme=theme)
         and Path(str(r.get("file_path") or "")).is_file()
     )
     return {
@@ -502,6 +519,8 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
         "selected_count": 0,
         "secondary_count": 0,
         "total": len(items),
+        "evidence_notice": evidence["notice"],
+        "evidence_notice_note": evidence["ui_note"],
         "criteria": {
             "theme": theme,
             "pool_themes": list(pool_themes),
@@ -509,6 +528,15 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
             "quality_pass": True,
             "pool_count": len(items),
             "quality_pass_count": qp_count,
+            "evidence_eligible_count": evidence_eligible_count,
+            "insufficient_evidence_count": insufficient_evidence_count,
+            "evidence_policy": "sparse_sector_allowed" if is_sparse_theme(theme) else "strict",
+            "evidence_notice": evidence["notice"],
+            "evidence_note": evidence["report_note"],
+            "evidence_reason_codes": evidence["reason_codes"],
+            "industry_wide_count": evidence["industry_wide_count"],
+            "supplemental_count": evidence["supplemental_count"],
+            "mostly_company_product_focused": evidence["mostly_company_product_focused"],
             "usable_file_count": usable_count,
             "missing_quality_file_count": max(0, qp_count - usable_count),
             "select": "on_run_start",
@@ -708,8 +736,11 @@ def _theme_start_preflight(theme: str) -> dict[str, Any] | None:
         }
     criteria = inputs.get("criteria") or {}
     quality_count = int(criteria.get("quality_pass_count") or 0)
+    evidence_count = int(
+        criteria.get("evidence_eligible_count") or quality_count
+    )
     usable_count = int(criteria.get("usable_file_count") or 0)
-    if quality_count < 1:
+    if evidence_count < 1:
         return {
             "ok": False,
             "status": 422,
@@ -1304,9 +1335,8 @@ def compare_chat(
                 "content": (
                     "You answer using the consensus filled frame below as primary context. "
                     "Prefer facts and structure from the frame; say when something is not "
-                    "covered. Reply in Korean unless the user asks otherwise.\n\n"
-                    f"--- CONSENSUS FRAME ---\n{frame}\n--- END FRAME ---"
-                ),
+"covered. Reply in Korean unless the user asks otherwise.\n\n"
+                    f"--- CONSENSUS FRAME ---\n{frame}\n--- END FRAME ---"                ),
             }
         )
     else:

@@ -7,6 +7,7 @@ from typing import Any
 
 from consensus import runs_store
 from consensus.llm import DEFAULT_MODEL, chat, log, parse_json
+from consensus.evidence_policy import is_evidence_eligible
 from consensus.select import (
     THEME_LABEL_KO,
     THEME_SELECT_HINTS,
@@ -129,9 +130,9 @@ async def thesis_for_theme(
         raise RuntimeError(f"invalid theme: {theme}")
     pool_themes = pool_themes_for(theme)
     all_docs = runs_store.list_pool_reports(themes=pool_themes)
-    qp = [r for r in all_docs if r.get("quality_pass") is True]
+    qp = [r for r in all_docs if is_evidence_eligible(r, theme=theme)]
     if not qp:
-        raise RuntimeError(f"no quality_pass reports in {theme} pool")
+        raise RuntimeError(f"no eligible evidence reports in {theme} pool")
     cards = build_audit_cards(qp)
     cut = await llm_cut_axes(cards, theme=theme, model=model)
     return {
