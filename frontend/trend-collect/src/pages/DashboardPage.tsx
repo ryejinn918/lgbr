@@ -48,6 +48,8 @@ const SOURCE_LABEL: Record<string, string> = {
   nikkei: 'Nikkei',
   nikkeixtech: 'Nikkei xTECH',
   arg: 'ARG',
+  kea: 'KEA',
+  omdia: 'Omdia',
 }
 
 function sourceLabel(source: string | null | undefined) {
@@ -145,6 +147,8 @@ export function DashboardPage() {
     capability: 'search',
   })
   const kpmgSearch = useCollectionJob({ source: 'kpmg', capability: 'search' })
+  const keaSearch = useCollectionJob({ source: 'kea', capability: 'search' })
+  const omdiaSearch = useCollectionJob({ source: 'omdia', capability: 'search' })
   const eySearch = useCollectionJob({ source: 'ey', capability: 'search' })
   const deloitteSearch = useCollectionJob({
     source: 'deloitte',
@@ -165,6 +169,8 @@ export function DashboardPage() {
     'pwc:search': pwcSearch,
     'accenture:search': accentureSearch,
     'kpmg:search': kpmgSearch,
+    'kea:search': keaSearch,
+    'omdia:search': omdiaSearch,
     'ey:search': eySearch,
     'deloitte:search': deloitteSearch,
     'bain:search': bainSearch,
@@ -214,6 +220,8 @@ export function DashboardPage() {
   const countsPwc = useReports({ source: 'pwc', limit: 1, offset: 0, poll: true })
   const countsAc = useReports({ source: 'accenture', limit: 1, offset: 0, poll: true })
   const countsKp = useReports({ source: 'kpmg', limit: 1, offset: 0, poll: true })
+  const countsKea = useReports({ source: 'kea', limit: 1, offset: 0, poll: true })
+  const countsOmdia = useReports({ source: 'omdia', limit: 1, offset: 0, poll: true })
   const countsEy = useReports({ source: 'ey', limit: 1, offset: 0, poll: true })
   const countsDl = useReports({ source: 'deloitte', limit: 1, offset: 0, poll: true })
   const countsHk = useReports({ source: 'hbrkorea', limit: 1, offset: 0, poll: true })
@@ -226,6 +234,8 @@ export function DashboardPage() {
     pwc: countsPwc.items[0]?.last_seen_at ?? null,
     accenture: countsAc.items[0]?.last_seen_at ?? null,
     kpmg: countsKp.items[0]?.last_seen_at ?? null,
+    kea: countsKea.items[0]?.last_seen_at ?? null,
+    omdia: countsOmdia.items[0]?.last_seen_at ?? null,
     ey: countsEy.items[0]?.last_seen_at ?? null,
     deloitte: countsDl.items[0]?.last_seen_at ?? null,
     hbrkorea: countsHk.items[0]?.last_seen_at ?? null,

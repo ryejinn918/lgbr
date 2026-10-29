@@ -76,6 +76,22 @@ export const MEDIA_SOURCES: MediaSource[] = [
     hasCatalogs: false,
   },
   {
+    id: 'kea',
+    label: 'KEA',
+    hubUrl: 'https://www.gokea.org/core/?cid=53',
+    hasSearch: true,
+    hasCatalogs: false,
+  },
+  {
+    id: 'omdia',
+    label: 'Omdia',
+    hubUrl: 'https://omdia.tech.informa.com/',
+    hasSearch: true,
+    hasCatalogs: true,
+    requiresLogin: true,
+    loginUrl: 'https://omdia.tech.informa.com/',
+  },
+  {
     id: 'hbr',
     label: 'HBR',
     hubUrl: 'https://hbr.org/',

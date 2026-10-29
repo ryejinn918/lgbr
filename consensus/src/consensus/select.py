@@ -94,7 +94,7 @@ def pool_themes_for(theme: str) -> tuple[str, ...]:
 def select_system_prompt(theme: str) -> str:
     sector = THEME_LABEL_KO.get(theme, theme)
     hint = THEME_SELECT_HINTS.get(theme, "Prefer structural industry analyses.")
-    return f"""You place quality-passed sell-side notes into a **fixed topic pack**
+    return f"""You place quality-passed FnGuide, KEA, and Omdia reports into a **fixed topic pack**
 for a {sector} industry consensus note.
 
 Topics are already decided (thesis + pillar_sketch as topic labels).

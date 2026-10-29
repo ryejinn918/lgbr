@@ -483,6 +483,7 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
 
     from consensus.runs_store import (  # noqa: WPS433
         PERIOD_MONTHS_DEFAULT,
+        SUPPLEMENT_PERIOD_MONTHS_DEFAULT,
         list_pool_reports,
     )
     from consensus.evidence_policy import (  # noqa: WPS433
@@ -525,6 +526,7 @@ def list_inputs(*, theme: str) -> dict[str, Any]:
             "theme": theme,
             "pool_themes": list(pool_themes),
             "period_months": PERIOD_MONTHS_DEFAULT,
+            "supplement_period_months": SUPPLEMENT_PERIOD_MONTHS_DEFAULT,
             "quality_pass": True,
             "pool_count": len(items),
             "quality_pass_count": qp_count,
@@ -745,9 +747,10 @@ def _theme_start_preflight(theme: str) -> dict[str, Any] | None:
             "ok": False,
             "status": 422,
             "message": (
-                f"최근 {criteria.get('period_months', 3)}개월 {theme} 입력 중 "
-                "품질검사를 통과한 FnGuide 보고서가 없습니다. "
-                "해당 섹터 수집 조건을 보완하고 다시 수집·품질검사해 주세요."
+                f"최근 {criteria.get('period_months', 3)}개월 FnGuide 및 "
+                f"최근 {criteria.get('supplement_period_months', 6)}개월 KEA·Omdia 중 "
+                f"{theme} 품질검사를 통과한 보고서가 없습니다. "
+                "세 자료원을 함께 다시 수집·품질검사해 주세요."
             ),
             "can_start": True,
             "run": None,
@@ -759,8 +762,7 @@ def _theme_start_preflight(theme: str) -> dict[str, Any] | None:
             "status": 422,
             "message": (
                 f"{theme} 품질 통과 보고서 {quality_count}건의 PDF가 "
-                "현재 컴퓨터에 없습니다. FnGuide 수집을 다시 실행해 "
-                "이전 컴퓨터 경로의 파일을 복구해 주세요."
+                "현재 컴퓨터에 없습니다. 수집을 다시 실행해 이전 컴퓨터 경로의 파일을 복구해 주세요."
             ),
             "can_start": True,
             "run": None,

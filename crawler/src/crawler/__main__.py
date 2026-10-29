@@ -38,6 +38,8 @@ from crawler.jobs.hbrkorea_report import run_hbrkorea_search_job
 from crawler.jobs.mckinsey_report import run_mckinsey_search_job
 from crawler.jobs.bcg_report import run_bcg_search_job
 from crawler.jobs.kpmg_report import run_kpmg_search_job
+from crawler.jobs.kea_report import run_kea_search_job
+from crawler.jobs.omdia_report import run_omdia_search_job
 from crawler.jobs.media_pace import DEFAULT_ITEM_DELAY_SECONDS
 from crawler.jobs.pwc_report import (
     DEFAULT_MAX_PAGES as PWC_DEFAULT_MAX_PAGES,
@@ -631,6 +633,10 @@ def main() -> None:
                     runner = run_mckinsey_search_job
                 elif source == "bcg":
                     runner = run_bcg_search_job
+                elif source == "kea":
+                    runner = run_kea_search_job
+                elif source == "omdia":
+                    runner = run_omdia_search_job
                 else:
                     runner = run_pwc_search_job
                 catalog = args.catalog

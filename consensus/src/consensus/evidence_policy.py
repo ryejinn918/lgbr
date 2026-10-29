@@ -71,7 +71,7 @@ def evidence_assessment(rows: list[dict[str, Any]], *, theme: str) -> dict[str, 
     notice = bool(reason_codes)
     sector = "가전" if theme == "appliance" else "디스플레이"
     report_note = (
-        f"본 분석은 FnGuide 및 확보 가능한 보완 자료를 기준으로 작성되었습니다. "
+        f"본 분석은 FnGuide·KEA·Omdia 및 확보 가능한 보완 자료를 기준으로 작성되었습니다. "
         f"분석 대상 기간 내 {sector} 산업 전체를 직접 다루는 보고서가 제한적이어서 "
         "일부 기업·제품 중심 자료를 함께 활용했습니다."
         if notice

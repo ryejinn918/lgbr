@@ -34,6 +34,7 @@ DEFAULT_QUESTION = {
 }
 # Consensus pool: only reports with published_at within this many calendar months.
 PERIOD_MONTHS_DEFAULT = 3
+SUPPLEMENT_PERIOD_MONTHS_DEFAULT = 6
 
 # Stable FK label for doc-compress artifact cache. Bump manually when toc /
 # compress / corpus slicing changes in a way that invalidates compress views.
@@ -372,6 +373,8 @@ def list_theme_reports(theme: str) -> list[dict[str, Any]]:
 
 # Consensus pack / ops pool: sell-side notes only (exclude Big4 HTTP media).
 POOL_SOURCE = "fnguide"
+CORE_SUPPLEMENT_SOURCES = frozenset({"kea", "omdia"})
+KEA_POOL_THEMES = frozenset({"appliance", "display"})
 
 
 def list_pool_reports(
@@ -379,7 +382,7 @@ def list_pool_reports(
     themes: tuple[str, ...],
     period_months: int = PERIOD_MONTHS_DEFAULT,
 ) -> list[dict[str, Any]]:
-    """Downloaded FnGuide reports whose PRIMARY theme is in ``themes`` (qp first).
+    """Downloaded FnGuide reports, plus KEA/Omdia for appliance/display, in ``themes``.
 
     Primary = ``attrs.themes[0]`` when the array is non-empty; otherwise legacy
     ``attrs.theme``. Secondary multi-labels are kept for display but do not put
@@ -402,33 +405,50 @@ def list_pool_reports(
                      attrs->>'theme'
                    ) AS theme
             FROM reports
-            WHERE source = %s
-              AND status = 'downloaded'
+            WHERE status = 'downloaded'
               AND (
                 (
-                  attrs ? 'themes'
-                  AND jsonb_typeof(attrs->'themes') = 'array'
-                  AND jsonb_array_length(attrs->'themes') > 0
-                  AND attrs->'themes'->>0 = ANY(%s)
+                  source = 'fnguide'
+                  AND (
+                    (
+                      attrs ? 'themes'
+                      AND jsonb_typeof(attrs->'themes') = 'array'
+                      AND jsonb_array_length(attrs->'themes') > 0
+                      AND attrs->'themes'->>0 = ANY(%s)
+                    )
+                    OR (
+                      (
+                        NOT (attrs ? 'themes')
+                        OR jsonb_typeof(attrs->'themes') <> 'array'
+                        OR jsonb_array_length(attrs->'themes') = 0
+                      )
+                      AND attrs->>'theme' = ANY(%s)
+                    )
+                  )
                 )
                 OR (
-                  (
-                    NOT (attrs ? 'themes')
-                    OR jsonb_typeof(attrs->'themes') <> 'array'
-                    OR jsonb_array_length(attrs->'themes') = 0
-                  )
-                  AND attrs->>'theme' = ANY(%s)
+                  source = ANY(%s)
+                   AND %s
                 )
               )
               AND coalesce(file_path, '') <> ''
               AND published_at IS NOT NULL
-              AND published_at >= (CURRENT_DATE - make_interval(months => %s))
+              AND published_at >= (
+                CURRENT_DATE - make_interval(
+                  months => CASE
+                    WHEN source = ANY(%s) THEN %s
+                    ELSE %s
+                  END
+                )
+              )
             ORDER BY
               CASE WHEN quality_pass IS TRUE THEN 0 ELSE 1 END,
               published_at DESC NULLS LAST,
               page_count DESC NULLS LAST
             """,
-            (POOL_SOURCE, theme_list, theme_list, months),
+            (theme_list, theme_list, list(CORE_SUPPLEMENT_SOURCES),
+             bool(set(theme_list) & KEA_POOL_THEMES), list(CORE_SUPPLEMENT_SOURCES),
+             SUPPLEMENT_PERIOD_MONTHS_DEFAULT, months),
         )
         return [dict(r) for r in cur.fetchall()]
 

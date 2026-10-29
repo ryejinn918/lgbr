@@ -56,6 +56,8 @@ SEARCH_ALLOWLIST = frozenset(
         "hbr",
         # "mckinsey",  # broken / disabled
         "bcg",
+        "kea",
+        "omdia",
     }
 )
 VALID_CAPABILITIES = frozenset({"feed", "search", "fetch_body", "download"})
@@ -378,6 +380,10 @@ MCKINSEY_CATALOGS = frozenset({"us"})
 DEFAULT_MCKINSEY_CATALOG = "us"
 BCG_CATALOGS = frozenset({"us"})
 DEFAULT_BCG_CATALOG = "us"
+KEA_CATALOGS = frozenset({"kr"})
+DEFAULT_KEA_CATALOG = "kr"
+OMDIA_CATALOGS = frozenset({"latest"})
+DEFAULT_OMDIA_CATALOG = "latest"
 DELOITTE_PROFILES = frozenset(
     {
         "report",
@@ -405,6 +411,8 @@ SOURCE_DEFAULT_CATALOG = {
     "hbr": DEFAULT_HBR_CATALOG,
     # "mckinsey": DEFAULT_MCKINSEY_CATALOG,  # broken / disabled
     "bcg": DEFAULT_BCG_CATALOG,
+    "kea": DEFAULT_KEA_CATALOG,
+    "omdia": DEFAULT_OMDIA_CATALOG,
 }
 SOURCE_CATALOGS = {
     "pwc": PWC_CATALOGS,
@@ -417,6 +425,8 @@ SOURCE_CATALOGS = {
     "hbr": HBR_CATALOGS,
     # "mckinsey": MCKINSEY_CATALOGS,  # broken / disabled
     "bcg": BCG_CATALOGS,
+    "kea": KEA_CATALOGS,
+    "omdia": OMDIA_CATALOGS,
 }
 
 
@@ -527,7 +537,12 @@ def start_search(
     # Deloitte: omit months so the worker applies the profile default.
     months: int | None
     if period_months is None:
-        months = None if source_s == "deloitte" else DEFAULT_PERIOD_MONTHS
+        if source_s == "deloitte":
+            months = None
+        elif source_s in {"kea", "omdia"}:
+            months = 6
+        else:
+            months = DEFAULT_PERIOD_MONTHS
     else:
         months = int(period_months)
     if months is not None and (

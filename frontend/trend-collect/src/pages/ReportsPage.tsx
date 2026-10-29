@@ -61,6 +61,8 @@ const SOURCE_LABEL: Record<string, string> = {
   bcg: 'BCG',
   hbr: 'HBR',
   hbrkorea: 'HBR Korea',
+  kea: 'KEA',
+  omdia: 'Omdia',
 }
 
 export function ReportsPage({
@@ -219,12 +221,13 @@ export function ReportsPage({
   const isAll = sourceKey === 'all'
   // 증권사 열은 FnGuide 단독 탭만. 통합 보기·Big4에는 숨김.
   const showProvider = sourceKey === 'fnguide'
-  const isSellSidePage = sourceKey === 'fnguide'
+  const isSellSidePage =
+    sourceKey === 'fnguide' || sourceKey === 'kea' || sourceKey === 'omdia'
   // 통합 탭: 적합 어휘 + pending=미완료; 매체 단독: 요약 라벨.
   const qualityFilterLabels = qualityLabelsForSource(sourceKey)
   const detailIsSellSide =
     isSellSidePage ||
-    (isAll && (detail?.source || '') === 'fnguide')
+    (isAll && ['fnguide', 'kea', 'omdia'].includes(detail?.source || ''))
   const detailSummary = String(
     qj.summary || qj.framework_summary || '',
   ).trim()

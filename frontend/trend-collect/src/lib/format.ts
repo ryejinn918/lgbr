@@ -57,7 +57,7 @@ export const QUALITY_LABEL_ALL: Record<string, string> = {
 export function qualityLabelsForSource(
   source: string | null | undefined,
 ): Record<string, string> {
-  if (source === 'fnguide') return QUALITY_LABEL
+  if (source === 'fnguide' || source === 'kea' || source === 'omdia') return QUALITY_LABEL
   if (source === 'all') return QUALITY_LABEL_ALL
   return QUALITY_LABEL_SUMMARY
 }
@@ -73,6 +73,8 @@ export function qualityLabelForReport(
   const key = quality || 'pending'
   const sellSide =
     pageSource === 'fnguide' ||
+    pageSource === 'kea' ||
+    pageSource === 'omdia' ||
     ((pageSource === 'all' || !pageSource) && reportSource === 'fnguide')
   const labels = sellSide ? QUALITY_LABEL : QUALITY_LABEL_SUMMARY
   return labels[key] || key

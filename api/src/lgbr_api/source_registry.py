@@ -78,6 +78,8 @@ SOURCES: dict[str, SourceDef] = {
         hub_url="https://www.bcg.com/",
         has_search=True,
     ),
+    "kea": SourceDef(id="kea", label="KEA", abbrev="kea", hub_url="https://www.gokea.org/core/?cid=53", has_search=True),
+    "omdia": SourceDef(id="omdia", label="Omdia", abbrev="omdia", hub_url="https://omdia.tech.informa.com/", has_search=True, requires_login=True, login_url="https://omdia.tech.informa.com/"),
     "hbr": SourceDef(
         id="hbr",
         label="HBR",

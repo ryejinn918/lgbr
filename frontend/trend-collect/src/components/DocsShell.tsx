@@ -26,6 +26,8 @@ export function DocsShell() {
         {/* <NavLink to="/docs/reports/mckinsey">McKinsey</NavLink> */}
         <NavLink to="/docs/reports/bain">Bain</NavLink>
         <NavLink to="/docs/reports/bcg">BCG</NavLink>
+        <NavLink to="/docs/reports/kea">KEA</NavLink>
+        <NavLink to="/docs/reports/omdia">Omdia</NavLink>
         <NavLink to="/docs/reports/hbr">HBR</NavLink>
         <NavLink to="/docs/reports/hbrkorea">HBR Korea</NavLink>
       </nav>

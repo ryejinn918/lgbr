@@ -20,6 +20,7 @@ import { EyRunPage } from './EyRunPage'
 import { HbrRunPage } from './HbrRunPage'
 import { HbrKoreaRunPage } from './HbrKoreaRunPage'
 import { KpmgRunPage } from './KpmgRunPage'
+import { KeaRunPage } from './KeaRunPage'
 import { PwcAdhocRunPage } from './PwcAdhocRunPage'
 import { SourceAdhocRunPage } from './SourceAdhocRunPage'
 
@@ -93,6 +94,9 @@ export function CollectRunRouter() {
   }
   if (ctx.source === 'bcg' && ctx.stage === 'list' && ctx.means === 'search') {
     return <BcgRunPage />
+  }
+  if (ctx.source === 'kea' && ctx.stage === 'list' && ctx.means === 'search') {
+    return <KeaRunPage />
   }
   if (ctx.source === 'hbr' && ctx.stage === 'list' && ctx.means === 'search') {
     return <HbrRunPage />

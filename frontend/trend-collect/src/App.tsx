@@ -100,6 +100,14 @@ function App() {
             element={<ReportsPage embedded source="bcg" />}
           />
           <Route
+            path="reports/kea"
+            element={<ReportsPage embedded source="kea" />}
+          />
+          <Route
+            path="reports/omdia"
+            element={<ReportsPage embedded source="omdia" />}
+          />
+          <Route
             path="reports/hbr"
             element={<ReportsPage embedded source="hbr" />}
           />

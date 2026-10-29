@@ -69,6 +69,28 @@ export const DASHBOARD_COLLECT_JOBS: DashboardCollectJobDef[] = [
     capability: 'search',
   },
   {
+    key: 'kea:search',
+    source: 'kea',
+    title: 'KEA',
+    jobLabel: '검색',
+    settingsPath: '/collect/kea/list/search',
+    docsPath: '/docs/reports/kea',
+    freshnessKind: 'report',
+    kind: 'collection_search',
+    capability: 'search',
+  },
+  {
+    key: 'omdia:search',
+    source: 'omdia',
+    title: 'Omdia',
+    jobLabel: '검색',
+    settingsPath: '/collect/omdia/list/search',
+    docsPath: '/docs/reports/omdia',
+    freshnessKind: 'report',
+    kind: 'collection_search',
+    capability: 'search',
+  },
+  {
     key: 'ey:search',
     source: 'ey',
     title: 'EY',
@@ -202,6 +224,10 @@ export function startArgsForJob(key: string): DashboardStartArgs {
       }
     case 'kpmg:search':
       return { maxPages: 20, periodMonths: 3, itemDelaySeconds: 2 }
+    case 'kea:search':
+      return { maxPages: 20, periodMonths: 6, catalog: 'kr', itemDelaySeconds: 2 }
+    case 'omdia:search':
+      return { maxPages: 20, periodMonths: 6, catalog: 'latest', itemDelaySeconds: 2 }
     case 'ey:search':
       return { maxPages: 20, periodMonths: 3, itemDelaySeconds: 2 }
     case 'deloitte:search':
