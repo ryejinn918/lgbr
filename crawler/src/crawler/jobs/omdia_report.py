@@ -118,6 +118,36 @@ def _login_if_needed(page: Any, username: str, password: str) -> Any:
     def frames(target: Any) -> list[Any]:
         return [target, *target.frames]
 
+    def find_visible(selectors: tuple[str, ...]) -> tuple[Any, Any, Any] | None:
+        for target in pages():
+            for frame in frames(target):
+                for selector in selectors:
+                    candidate = frame.locator(selector).first
+                    if candidate.count() and candidate.is_visible():
+                        return target, frame, candidate
+        return None
+
+    def click_action(scope: Any, pattern: re.Pattern[str]) -> bool:
+        controls = scope.locator('button, input[type="submit"], input[type="button"]')
+        for index in range(min(controls.count(), 20)):
+            control = controls.nth(index)
+            if not control.is_visible():
+                continue
+            label = " ".join(
+                filter(
+                    None,
+                    (
+                        control.inner_text().strip(),
+                        (control.get_attribute("value") or "").strip(),
+                        (control.get_attribute("aria-label") or "").strip(),
+                    ),
+                )
+            )
+            if pattern.search(label):
+                control.click()
+                return True
+        return False
+
     def has_session() -> bool:
         return any(
             frame.get_by_text("My Omdia", exact=False).count()
@@ -140,36 +170,42 @@ def _login_if_needed(page: Any, username: str, password: str) -> Any:
             continue
         break
 
-    login_page = page
-    email = secret = None
-    for target in pages():
-        for frame in frames(target):
-            candidate_email = frame.locator('input[type="text"]').first
-            if not candidate_email.count():
-                candidate_email = frame.locator('input[type="email"]').first
-            candidate_secret = frame.locator('input[type="password"]').first
-            if candidate_email.count() and candidate_secret.count():
-                login_page, email, secret = target, candidate_email, candidate_secret
-                break
-        if email is not None:
-            break
-
-    if email is None or secret is None:
+    email_result = find_visible(
+        (
+            'input[type="email"]',
+            'input[autocomplete="username"]',
+            'input[name*="email" i]',
+            'input[name*="user" i]',
+            'input[type="text"]',
+        )
+    )
+    if email_result is None:
         raise RuntimeError(
             "Omdia login form was not found; set OMDIA_LATEST_RELEASES_URL "
             "or log in once with the Omdia browser profile"
         )
 
+    login_page, email_scope, email = email_result
     email.fill(username)
+    secret_result = find_visible(('input[type="password"]',))
+    if secret_result is None:
+        next_step = re.compile(r"continue|next|proceed|sign\s*in|log\s*in", re.I)
+        if not click_action(email_scope, next_step):
+            email.press("Enter")
+        for _ in range(20):
+            page.wait_for_timeout(500)
+            secret_result = find_visible(('input[type="password"]',))
+            if secret_result is not None:
+                break
+
+    if secret_result is None:
+        raise RuntimeError("Omdia password step was not found after entering the username")
+
+    login_page, secret_scope, secret = secret_result
     secret.fill(password)
-    submit = login_page.locator('input[type="submit"], button[type="submit"]').first
-    if not submit.count():
-        submit = login_page.locator("button, input[type=submit]").filter(has_text=signin).first
-    if not submit.count():
-        raise RuntimeError("Omdia login submit button was not found")
-    submit.click()
-    login_page.wait_for_load_state("domcontentloaded")
-    login_page.wait_for_timeout(2_000)
+    if not click_action(secret_scope, signin):
+        secret.press("Enter")
+    login_page.wait_for_timeout(3_000)
     return login_page
 
 
