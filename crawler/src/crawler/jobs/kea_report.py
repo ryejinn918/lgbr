@@ -54,17 +54,9 @@ def run_kea_search_job(
             items = fetch_list_page(page, session=session)
             if not items:
                 break
-            items = [
-                item
-                for item in items
-                if item.published_at is None or item.published_at >= cutoff
-            ]
-            if not items:
-                continue
             for item in items:
                 if collection_jobs_store.stop_requested(job_id):
                     break
-                listed += 1
                 attrs = {
                     "provider": "KEA",
                     "themes": ["appliance", "display"],
@@ -78,6 +70,9 @@ def run_kea_search_job(
                     status=reports_store.STATUS_LISTED,
                     attrs=attrs,
                 )
+                if item.published_at is not None and item.published_at < cutoff:
+                    continue
+                listed += 1
                 if item.source_key in already:
                     continue
                 try:
