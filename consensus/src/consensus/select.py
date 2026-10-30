@@ -283,6 +283,99 @@ def source_guardrail_violations(
     return violations
 
 
+def repair_source_guardrail_selection(
+    core: list[tuple[str, str]],
+    biblio: list[tuple[str, str]],
+    *,
+    cards: list[dict[str, Any]],
+    guardrail: dict[str, Any] | None,
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Repair an otherwise valid LLM selection without discarding the run."""
+    if not guardrail:
+        return list(core), list(biblio)
+
+    repaired_core = list(core)
+    repaired_biblio = list(biblio)
+    source_by_id = {
+        str(card.get("report_id")): str(card.get("source") or "") for card in cards
+    }
+    card_by_id = {str(card.get("report_id")): card for card in cards}
+
+    def selected_ids() -> set[str]:
+        return {rid for rid, _why in repaired_core + repaired_biblio}
+
+    def fallback_why(report_id: str) -> str:
+        card = card_by_id[report_id]
+        return str(
+            card.get("framework_summary")
+            or card.get("topic")
+            or card.get("rationale")
+            or "분석 축을 보완하는 추가 근거"
+        )
+
+    def add_candidate(*, source: str | None = None) -> bool:
+        used = selected_ids()
+        for card in cards:
+            report_id = str(card.get("report_id") or "")
+            if not report_id or report_id in used:
+                continue
+            if source is not None and source_by_id.get(report_id) != source:
+                continue
+            repaired_biblio.append((report_id, fallback_why(report_id)))
+            return True
+        return False
+
+    minimum_per_source = int(guardrail["minimum_per_source"])
+    for source in guardrail["available_sources"]:
+        count = sum(
+            1
+            for report_id, _why in repaired_core + repaired_biblio
+            if source_by_id.get(report_id) == source
+        )
+        while count < minimum_per_source and add_candidate(source=source):
+            count += 1
+
+    core_min, core_max = guardrail["core_range"]
+    while len(repaired_core) > core_max:
+        repaired_biblio.insert(0, repaired_core.pop())
+    while len(repaired_core) < core_min:
+        if repaired_biblio:
+            repaired_core.append(repaired_biblio.pop(0))
+        elif not add_candidate():
+            break
+
+    selected_min, selected_max = guardrail["selected_range"]
+    while len(repaired_core) + len(repaired_biblio) < selected_min:
+        if not add_candidate():
+            break
+
+    while len(repaired_core) + len(repaired_biblio) > selected_max:
+        counts = {
+            source: sum(
+                1
+                for report_id, _why in repaired_core + repaired_biblio
+                if source_by_id.get(report_id) == source
+            )
+            for source in guardrail["available_sources"]
+        }
+        removable = next(
+            (
+                index
+                for index in range(len(repaired_biblio) - 1, -1, -1)
+                if source_by_id.get(repaired_biblio[index][0])
+                not in guardrail["available_sources"]
+                or counts[source_by_id[repaired_biblio[index][0]]]
+                > minimum_per_source
+            ),
+            None,
+        )
+        if removable is None:
+            break
+        repaired_biblio.pop(removable)
+
+    return repaired_core, repaired_biblio
+
+
 def _pick_ids(
     items: Any,
     *,
@@ -454,10 +547,25 @@ async def llm_select_pack(
             guardrail=guardrail,
         )
         if violations:
-            raise RuntimeError(
-                f"{theme} pack selection violated source guardrail after retry: "
-                + "; ".join(violations)
+            core, biblio = repair_source_guardrail_selection(
+                core,
+                biblio,
+                cards=cards,
+                guardrail=guardrail,
             )
+            violations = source_guardrail_violations(
+                core,
+                biblio,
+                cards=cards,
+                guardrail=guardrail,
+            )
+            if violations:
+                raise RuntimeError(
+                    f"{theme} pack selection violated source guardrail after repair: "
+                    + "; ".join(violations)
+                )
+            meta["source_guardrail_repaired"] = True
+            log(f"{theme}_pack_select: repaired source guardrail after retry")
     if not core:
         raise RuntimeError(f"{theme} pack selection returned empty core")
     meta["source_guardrail"] = guardrail

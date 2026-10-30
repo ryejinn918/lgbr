@@ -8,6 +8,7 @@ from consensus.select import (
     build_source_guardrail,
     parse_pack_selection,
     pool_themes_for,
+    repair_source_guardrail_selection,
     select_system_prompt,
     source_guardrail_violations,
 )
@@ -118,6 +119,38 @@ def test_source_guardrail_is_limited_to_appliance_and_display():
         )
         is None
     )
+
+
+def test_source_guardrail_repair_adds_missing_source_and_count_floor():
+    cards = [
+        {"report_id": f"f-{i}", "source": "fnguide"} for i in range(2)
+    ] + [
+        {"report_id": f"k-{i}", "source": "kea"} for i in range(2)
+    ] + [
+        {"report_id": f"o-{i}", "source": "omdia"} for i in range(2)
+    ]
+    guardrail = build_source_guardrail(
+        cards,
+        theme="appliance",
+        pillar_count=3,
+        core_max=CORE_MAX,
+    )
+
+    core, biblio = repair_source_guardrail_selection(
+        [("k-0", ""), ("o-0", ""), ("k-1", "")],
+        [("o-1", "")],
+        cards=cards,
+        guardrail=guardrail,
+    )
+
+    assert len(core) == 3
+    assert len(core) + len(biblio) == 6
+    assert source_guardrail_violations(
+        core,
+        biblio,
+        cards=cards,
+        guardrail=guardrail,
+    ) == []
 
 
 def test_build_audit_cards_prefers_quality_short_title():
