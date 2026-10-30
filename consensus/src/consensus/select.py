@@ -22,6 +22,8 @@ from consensus.evidence_policy import (
 CORE_MAX = 10
 AI_POOL_THEMES = ("ai",)
 COVERAGE_NOTES_MAX = 2500
+SOURCE_DIVERSITY_THEMES = {"appliance", "display"}
+SOURCE_FAMILIES = ("fnguide", "kea", "omdia")
 
 ROLE_CORE = "selected"
 ROLE_BIBLIO = "fill_extra"
@@ -127,6 +129,12 @@ Sector focus ({sector}):
 Placement goals:
 - For each locked topic, pick **주요문헌(core) 1–2 reports** that densest cover it;
   put reinforcing notes in bibliography as **보조문헌**.
+- When a source guardrail is provided, treat every available source as a distinct
+  evidence lens. Select at least one eligible report from each available source
+  across core + bibliography. After that minimum, let relevance and evidence
+  density determine the source mix; do not impose equal quotas.
+- Use the requested count ranges. Within them, prefer broader non-duplicate
+  evidence coverage over an unnecessarily small pack.
 - A topic covered uniquely/densely by a single report may still be 주요문헌
   (emerging trend / scarce mechanism) — do not require two hubs.
 - Do not force a hub onto every topic if the pool is thin.
@@ -183,6 +191,7 @@ def build_audit_cards(pool: list[dict[str, Any]]) -> list[dict[str, Any]]:
         cards.append(
             {
                 "report_id": str(r["id"]),
+                "source": str(r.get("source") or "").strip().lower(),
                 "provider": short_provider(str(r.get("provider") or "")),
                 "short_title": resolve_short_title(title, quality_json=qj),
                 "title": title,
@@ -195,6 +204,83 @@ def build_audit_cards(pool: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return cards
+
+
+def build_source_guardrail(
+    cards: list[dict[str, Any]],
+    *,
+    theme: str,
+    pillar_count: int,
+    core_max: int,
+) -> dict[str, Any] | None:
+    """Build deterministic source/count bounds for sparse-sector selection."""
+    if theme not in SOURCE_DIVERSITY_THEMES:
+        return None
+
+    source_counts = {
+        source: sum(1 for card in cards if card.get("source") == source)
+        for source in SOURCE_FAMILIES
+    }
+    available_sources = [source for source, count in source_counts.items() if count]
+    if not available_sources:
+        return None
+
+    card_count = len(cards)
+    core_min = min(card_count, core_max, max(pillar_count, len(available_sources)))
+    core_target_max = min(
+        card_count,
+        core_max,
+        max(core_min, pillar_count * 2),
+    )
+    selected_min = min(
+        card_count,
+        max(core_min, pillar_count + len(available_sources)),
+    )
+    selected_max = min(card_count, core_max + pillar_count)
+    return {
+        "available_sources": available_sources,
+        "candidate_counts": source_counts,
+        "minimum_per_source": 1,
+        "core_range": [core_min, core_target_max],
+        "selected_range": [selected_min, selected_max],
+    }
+
+
+def source_guardrail_violations(
+    core: list[tuple[str, str]],
+    biblio: list[tuple[str, str]],
+    *,
+    cards: list[dict[str, Any]],
+    guardrail: dict[str, Any] | None,
+) -> list[str]:
+    if not guardrail:
+        return []
+
+    source_by_id = {
+        str(card.get("report_id")): str(card.get("source") or "") for card in cards
+    }
+    selected_ids = [rid for rid, _why in core + biblio]
+    selected_counts = {
+        source: sum(1 for rid in selected_ids if source_by_id.get(rid) == source)
+        for source in guardrail["available_sources"]
+    }
+    violations = [
+        f"select at least one {source} report"
+        for source, count in selected_counts.items()
+        if count < guardrail["minimum_per_source"]
+    ]
+
+    core_min, core_max = guardrail["core_range"]
+    if not core_min <= len(core) <= core_max:
+        violations.append(f"core count must be {core_min}-{core_max}; got {len(core)}")
+    selected_min, selected_max = guardrail["selected_range"]
+    if not selected_min <= len(selected_ids) <= selected_max:
+        violations.append(
+            f"total selected count must be {selected_min}-{selected_max}; "
+            f"got {len(selected_ids)}"
+        )
+
+    return violations
 
 
 def _pick_ids(
@@ -262,8 +348,15 @@ async def llm_select_pack(
         raise RuntimeError("select requires locked thesis")
     allowed = {c["report_id"] for c in cards}
     sector = THEME_LABEL_KO.get(theme, theme)
+    guardrail = build_source_guardrail(
+        cards,
+        theme=theme,
+        pillar_count=len(pillars),
+        core_max=core_max,
+    )
     llm_cards = [
         {
+            "source": c.get("source"),
             "provider": c.get("provider"),
             "short_title": c.get("short_title"),
             "published_at": c.get("published_at"),
@@ -282,6 +375,19 @@ async def llm_select_pack(
         "cut_logic": cut_logic,
         "pillar_sketch": pillars,
     }
+    guardrail_text = (
+        "\nSource diversity guardrail (mandatory):\n"
+        f"{json.dumps(guardrail, ensure_ascii=False)}\n"
+        "- Include at least minimum_per_source report(s) from every available source "
+        "across core + bibliography.\n"
+        "- After that minimum, select freely by relevance and evidence density. "
+        "Do not equalize source counts or cap a strong source.\n"
+        "- Use bibliography for secondary but useful reinforcing evidence.\n"
+        "- Stay inside core_range and selected_range. Do not shrink the pack merely "
+        "because one report covers several topics.\n"
+        if guardrail
+        else ""
+    )
     user = (
         f"Place reports into the locked pack for {sector}. core_max={core_max}.\n"
         "Topics (pillar_sketch) are fixed — do not rename them.\n"
@@ -290,6 +396,7 @@ async def llm_select_pack(
         "brackets: `[provider]` if unambiguous, else `[provider, short_title]` or "
         "`[provider, short_title, published_at]`. "
         "In why: topic contribution only — do not name or cite the report.\n\n"
+        f"{guardrail_text}"
         f"Locked axes JSON:\n{json.dumps(locked, ensure_ascii=False)}\n\n"
         f"Cards JSON:\n{json.dumps(llm_cards, ensure_ascii=False)}"
     )
@@ -299,7 +406,7 @@ async def llm_select_pack(
             {"role": "user", "content": user},
         ],
         model=model,
-        temperature=0.2,
+        temperature=0.1,
         label=f"{theme}_pack_select",
     )
     parsed = parse_json(raw_text)
@@ -309,8 +416,51 @@ async def llm_select_pack(
         core_max=core_max,
         locked_pillars=pillars,
     )
+    violations = source_guardrail_violations(
+        core,
+        biblio,
+        cards=cards,
+        guardrail=guardrail,
+    )
+    if violations:
+        correction = (
+            f"{user}\n\n"
+            "Your previous JSON violated the mandatory guardrail:\n- "
+            + "\n- ".join(violations)
+            + "\nReturn a corrected full JSON selection. Preserve relevance, use "
+            "bibliography for secondary but useful evidence, and satisfy every "
+            "available source and count bound."
+        )
+        raw_text, _ = await chat(
+            [
+                {"role": "system", "content": select_system_prompt(theme)},
+                {"role": "user", "content": correction},
+            ],
+            model=model,
+            temperature=0.0,
+            label=f"{theme}_pack_select_guardrail_retry",
+        )
+        parsed = parse_json(raw_text)
+        core, biblio, meta = parse_pack_selection(
+            parsed,
+            allowed_ids=allowed,
+            core_max=core_max,
+            locked_pillars=pillars,
+        )
+        violations = source_guardrail_violations(
+            core,
+            biblio,
+            cards=cards,
+            guardrail=guardrail,
+        )
+        if violations:
+            raise RuntimeError(
+                f"{theme} pack selection violated source guardrail after retry: "
+                + "; ".join(violations)
+            )
     if not core:
         raise RuntimeError(f"{theme} pack selection returned empty core")
+    meta["source_guardrail"] = guardrail
     log(f"{theme}_pack_select: core={len(core)} biblio={len(biblio)}")
     return core, biblio, meta
 
@@ -401,6 +551,11 @@ async def select_for_theme(
         "selected_count": len(selected),
         "excluded_count": len(excluded),
         "coverage_notes": sel_meta.get("coverage_notes"),
+        "source_guardrail": sel_meta.get("source_guardrail"),
+        "selected_source_counts": {
+            source: sum(1 for row in selected if row.get("source") == source)
+            for source in SOURCE_FAMILIES
+        },
         "thesis": str(thesis or "").strip(),
         "cut_logic": str(cut_logic or "").strip(),
         "pillar_sketch": sel_meta.get("pillar_sketch") or list(pillar_sketch),

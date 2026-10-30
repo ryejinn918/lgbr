@@ -5,9 +5,11 @@ from __future__ import annotations
 from consensus.select import (
     CORE_MAX,
     build_audit_cards,
+    build_source_guardrail,
     parse_pack_selection,
     pool_themes_for,
     select_system_prompt,
+    source_guardrail_violations,
 )
 
 
@@ -49,6 +51,7 @@ def test_build_audit_cards_clips_quality_json():
         {
             "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "title": "T",
+            "source": "Omdia",
             "theme": "ai",
             "page_count": 10,
             "published_at": None,
@@ -62,7 +65,59 @@ def test_build_audit_cards_clips_quality_json():
     cards = build_audit_cards(pool)
     assert len(cards) == 1
     assert cards[0]["report_id"].startswith("aaaa")
+    assert cards[0]["source"] == "omdia"
     assert len(cards[0]["framework_summary"]) <= 500
+
+
+def test_sparse_sector_source_guardrail_requires_each_available_source():
+    cards = [
+        {"report_id": f"f-{i}", "source": "fnguide"} for i in range(2)
+    ] + [
+        {"report_id": f"k-{i}", "source": "kea"} for i in range(2)
+    ] + [
+        {"report_id": f"o-{i}", "source": "omdia"} for i in range(2)
+    ]
+    guardrail = build_source_guardrail(
+        cards,
+        theme="appliance",
+        pillar_count=3,
+        core_max=CORE_MAX,
+    )
+
+    assert guardrail is not None
+    assert guardrail["available_sources"] == ["fnguide", "kea", "omdia"]
+    assert guardrail["core_range"] == [3, 6]
+    assert guardrail["selected_range"] == [6, 6]
+
+    balanced_core = [("f-0", ""), ("k-0", ""), ("o-0", "")]
+    balanced_biblio = [("f-1", ""), ("k-1", ""), ("o-1", "")]
+    assert source_guardrail_violations(
+        balanced_core,
+        balanced_biblio,
+        cards=cards,
+        guardrail=guardrail,
+    ) == []
+
+    violations = source_guardrail_violations(
+        [("f-0", ""), ("f-1", ""), ("k-0", "")],
+        [("k-1", "")],
+        cards=cards,
+        guardrail=guardrail,
+    )
+    assert any("omdia" in violation for violation in violations)
+
+
+def test_source_guardrail_is_limited_to_appliance_and_display():
+    cards = [{"report_id": "f-0", "source": "fnguide"}]
+    assert (
+        build_source_guardrail(
+            cards,
+            theme="ai",
+            pillar_count=3,
+            core_max=CORE_MAX,
+        )
+        is None
+    )
 
 
 def test_build_audit_cards_prefers_quality_short_title():

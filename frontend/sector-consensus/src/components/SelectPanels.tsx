@@ -65,6 +65,9 @@ export function SelectPanels() {
   const selectOnly =
     (packRun?.state === 'ended' && packCriteria?.until === 'select') ||
     (packRun?.state === 'error' && packDocs.length > 0)
+  const buildingConsensus =
+    continuingFull || (!!packRun && isLiveState(packRun.state) && !selectOnly)
+  const consensusComplete = packRun?.state === 'ended' && !selectOnly
   const sortedInputs = useMemo(() => {
     const rank = (r: InputReport) => (r.quality_pass === true ? 0 : 1)
     return [...inputs].sort((a, b) => {
@@ -142,38 +145,6 @@ export function SelectPanels() {
 
   return (
     <>
-      {selectOnly && packRun && packDocs.length > 0 && (
-        <section className="panel">
-          <button
-            type="button"
-            className="btn"
-            disabled={!status.can_start || continuingFull}
-            onClick={() => {
-              if (!packRun.id || !status.can_start) return
-              if (
-                !window.confirm(
-                  '이 선별 결과를 유지한 채 요약·개요·보고서를 이어서 만들까요?',
-                )
-              ) {
-                return
-              }
-              setContinuingFull(() => true)
-              void continueRun(packRun.id, { resume_from: 'doc' })
-                .then(() => refresh())
-                .catch((e) =>
-                  window.alert(e instanceof Error ? e.message : '계속 실패'),
-                )
-                .finally(() => setContinuingFull(() => false))
-            }}
-          >
-            {continuingFull ? '진행 중…' : '이 선별로 컨센서스까지 계속'}
-          </button>
-          {!status.can_start ? (
-            <p className="section-note">{BLOCKED_BY_OPEN_RUN}</p>
-          ) : null}
-        </section>
-      )}
-
       <section className="panel">
         {(theme === 'appliance' || theme === 'display') && (
           <p className="notice-line">
@@ -232,22 +203,6 @@ export function SelectPanels() {
             이유가 채워집니다.
           </p>
         )}
-        {packRun &&
-          packCriteria?.pillar_sketch &&
-          packCriteria.pillar_sketch.length > 0 && (
-            <>
-              <ExternalReviewLauncher
-                runId={packRun.id}
-                axes={packCriteria.pillar_sketch}
-                onComplete={() => window.location.reload()}
-              />
-
-              <ExternalLinksSummary
-                runId={packRun.id}
-                axes={packCriteria.pillar_sketch}
-              />
-            </>
-          )}
         {packDocs.length > 0 && (
           <table className="data-table">
             <thead>
@@ -388,6 +343,59 @@ export function SelectPanels() {
           </tbody>
         </table>
       </section>
+
+      {packRun &&
+        packCriteria?.pillar_sketch &&
+        packCriteria.pillar_sketch.length > 0 && (
+          <section className="panel">
+            <ExternalReviewLauncher
+              runId={packRun.id}
+              axes={packCriteria.pillar_sketch}
+              onComplete={() => window.location.reload()}
+            />
+
+            <ExternalLinksSummary
+              runId={packRun.id}
+              axes={packCriteria.pillar_sketch}
+            />
+          </section>
+        )}
+
+      {packRun && packDocs.length > 0 && (
+        <section className="panel">
+          <button
+            type="button"
+            className="btn"
+            disabled={!selectOnly || !status.can_start || continuingFull}
+            onClick={() => {
+              if (!packRun.id || !status.can_start) return
+              if (
+                !window.confirm(
+                  '이 선별 결과를 유지한 채 요약·개요·보고서를 이어서 만들까요?',
+                )
+              ) {
+                return
+              }
+              setContinuingFull(() => true)
+              void continueRun(packRun.id, { resume_from: 'doc' })
+                .then(() => refresh())
+                .catch((e) =>
+                  window.alert(e instanceof Error ? e.message : '계속 실패'),
+                )
+                .finally(() => setContinuingFull(() => false))
+            }}
+          >
+            {buildingConsensus
+              ? '컨센서스 생성 중…'
+              : consensusComplete
+                ? '컨센서스 생성 완료'
+                : '이 선별로 컨센서스까지 계속'}
+          </button>
+          {selectOnly && !status.can_start ? (
+            <p className="section-note">{BLOCKED_BY_OPEN_RUN}</p>
+          ) : null}
+        </section>
+      )}
     </>
   )
 }
